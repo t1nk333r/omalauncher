@@ -102,6 +102,8 @@ private fun DesktopScreen(
             state.sharing != null -> state.sharing = null
             state.appWidgetsOpen -> state.appWidgetsOpen = false
             runtime.widgets.openScreen != null -> runtime.widgets.openScreen = null
+            // Picking apps in the drawer: Back stops picking before it closes the drawer.
+            state.selection != null -> state.selection = null
             else -> state.close()
         }
     }
@@ -132,9 +134,16 @@ private fun DesktopScreen(
 
     // Only whether it shows is read here; the animation itself runs in the layer, without recomposing.
     val panelShown by remember(state) { derivedStateOf { state.drawer.value > 0.01f } }
-    // Closing it forgets the search, like stock drawers: the next swipe up shows every app, not the old results.
-    LaunchedEffect(panelShown) { if (!panelShown) state.query = "" }
-    val search by remember(runtime, state) { derivedStateOf { searchApps(runtime, state.query) } }
+    // Closing it forgets the search, like stock drawers: the next swipe up shows every app, not the old results. It also
+    // stops picking apps and hides the hidden ones again.
+    LaunchedEffect(panelShown) {
+        if (!panelShown) {
+            state.query = ""
+            state.selection = null
+            state.showHidden = false
+        }
+    }
+    val search by remember(runtime, state) { derivedStateOf { searchApps(runtime, state.query, state.showHidden) } }
     val highlighted = search.highlighted(state.picked)
 
     fun launch(hit: AppHit) {
@@ -152,12 +161,15 @@ private fun DesktopScreen(
         remember(runtime, state, context) {
             AppHandlers(
                 launch = ::launch,
-                // Pins to the page that's showing; the panel closes so the new tile is visible.
-                pin = { hit ->
-                    when (hit) {
-                        is AppHit.Linux -> runtime.widgets.shortcuts.addLinux(hit.app, state.currentPage)
-                        is AppHit.Android -> runtime.widgets.shortcuts.addAndroid(hit.app, state.currentPage)
-                        is AppHit.Shortcut -> runtime.widgets.shortcuts.addAndroidShortcut(hit.shortcut, state.currentPage)
+                // Pins to the page that's showing, the ones that don't fit there to the next pages with room; the panel
+                // closes so the new tiles are visible.
+                pin = { hits ->
+                    for (hit in hits) {
+                        when (hit) {
+                            is AppHit.Linux -> runtime.widgets.shortcuts.addLinux(hit.app, state.currentPage)
+                            is AppHit.Android -> runtime.widgets.shortcuts.addAndroid(hit.app, state.currentPage)
+                            is AppHit.Shortcut -> runtime.widgets.shortcuts.addAndroidShortcut(hit.shortcut, state.currentPage)
+                        }
                     }
                     state.close()
                 },
@@ -173,6 +185,13 @@ private fun DesktopScreen(
                 },
                 // Opening one leaves the drawer at once, as opening an app does; pinning one closes it to show the new tile, as pin does.
                 shortcuts = { app -> shortcutMenu(runtime, app, page = { state.currentPage }, onOpen = state::closeNow, onPinned = state::close) },
+                isHidden = { hit -> hit.key in runtime.hiddenApps },
+                // A result picked with Tab or the arrows is by index: hiding one would move the highlight to another app.
+                hide = { keys, hidden ->
+                    runtime.hiddenApps.set(keys, hidden)
+                    state.picked = null
+                },
+                select = { hit -> state.selection = setOf(hit.key) },
             )
         }
 

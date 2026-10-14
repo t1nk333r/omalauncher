@@ -19,6 +19,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -39,6 +40,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +65,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.IntOffset
@@ -78,6 +81,8 @@ import dev.omalauncher.AndroidShortcut
 import androidx.compose.runtime.collectAsState
 import dev.omalauncher.Runtime
 import dev.omalauncher.linux.LinuxState
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import dev.omalauncher.linux.LinuxApp
 
 /** One app in the bar's results. */
@@ -201,46 +206,95 @@ internal class BarSearch(
 private fun allApps(runtime: Runtime): List<AppHit> =
     runtime.linuxApps.map { AppHit.Linux(it) } + runtime.androidApps.apps.map { AppHit.Android(it) } + runtime.androidApps.shortcuts.map { AppHit.Shortcut(it) }
 
+/** The apps the drawer, search and the recent strip list: the [hidden] ones only while [showHidden]. */
+internal fun List<AppHit>.shown(
+    hidden: Set<String>,
+    showHidden: Boolean,
+) = if (showHidden) this else filterNot { it.key in hidden }
+
+/** The picked apps with [key] picked or unpicked; unpicking the last one stops picking (null). */
+internal fun toggled(
+    selection: Set<String>,
+    key: String,
+): Set<String>? = (if (key in selection) selection - key else selection + key).ifEmpty { null }
+
+/** The picked apps among [apps], in the order they were picked. */
+internal fun picked(
+    apps: List<AppHit>,
+    selection: Set<String>,
+): List<AppHit> {
+    val byKey = apps.associateBy { it.key }
+    return selection.mapNotNull { byKey[it] }
+}
+
+/** Whether the picked apps can be hidden (one of them shows) and shown again (one of them is hidden). */
+internal fun hideChoices(
+    selection: Set<String>,
+    hidden: Set<String>,
+) = selection.any { it !in hidden } to selection.any { it in hidden }
+
 internal fun searchApps(
     runtime: Runtime,
     query: String,
+    showHidden: Boolean = false,
 ): BarSearch {
     if (query.isBlank()) return BarSearch(emptyList(), false)
     val now = System.currentTimeMillis()
-    val ranked = rankMatches(allApps(runtime), query, { it.label }, boost = { (runtime.usage.score(it.key, now) * 10).toInt() }, alias = { it.alias })
+    val apps = allApps(runtime).shown(runtime.hiddenApps.keys, showHidden)
+    val ranked = rankMatches(apps, query, { it.label }, boost = { (runtime.usage.score(it.key, now) * 10).toInt() }, alias = { it.alias })
     return BarSearch(ranked.map { it.first }, ranked.firstOrNull()?.let { isStrongMatch(it.second, query) } == true)
 }
 
-/** What the app cells do: open, pin to home, the Android app's info and uninstall, and removing a shortcut. */
+/** What the app cells do: open, pin to home, the Android app's info and uninstall, removing a shortcut, and hiding. */
 internal class AppHandlers(
     val launch: (AppHit) -> Unit,
-    val pin: (AppHit) -> Unit,
+    /** Pins apps to home, several at once when picked together. */
+    val pin: (List<AppHit>) -> Unit,
     val info: (AndroidApp) -> Unit,
     val uninstall: (AndroidApp) -> Unit,
     val remove: (AndroidShortcut) -> Unit,
     /** An Android app's shortcuts, for its long-press menu. */
     val shortcuts: (AndroidApp) -> ShortcutMenu,
+    val isHidden: (AppHit) -> Boolean,
+    /** Hides the apps with these keys from the drawer, search and the recent strip, or shows them again. */
+    val hide: (Collection<String>, Boolean) -> Unit,
+    /** Starts picking several apps in the drawer, this one first. */
+    val select: (AppHit) -> Unit,
 )
 
 /** The shortcuts an Android app offers above its menu's actions; null for anything else. */
 private fun AppHit.shortcutMenu(handlers: AppHandlers): ShortcutMenu? = (this as? AppHit.Android)?.let { handlers.shortcuts(it.app) }
 
-/** The long-press menu of an app cell: pin to home, for Android apps their info and uninstall, and for shortcuts removing them. */
-private fun AppHit.actions(handlers: AppHandlers): List<Pair<String, () -> Unit>> =
-    when (this) {
-        is AppHit.Linux -> listOf("add to home" to { handlers.pin(this) })
-        is AppHit.Android ->
-            listOfNotNull(
-                "add to home" to { handlers.pin(this) },
-                "app info" to { handlers.info(app) },
-                if (app.system) null else "uninstall" to { handlers.uninstall(app) },
-            )
-        is AppHit.Shortcut ->
-            listOf(
-                "add to home" to { handlers.pin(this) },
-                "remove" to { handlers.remove(shortcut) },
-            )
-    }
+/**
+ * The long-press menu of an app cell: pin to home, for Android apps their info and uninstall, for shortcuts removing
+ * them, then hiding it (or showing it again) and, in the drawer ([selectable]), picking several apps.
+ */
+private fun AppHit.actions(
+    handlers: AppHandlers,
+    selectable: Boolean = false,
+): List<Pair<String, () -> Unit>> {
+    val own =
+        when (this) {
+            is AppHit.Linux -> listOf("add to home" to { handlers.pin(listOf(this)) })
+            is AppHit.Android ->
+                listOfNotNull(
+                    "add to home" to { handlers.pin(listOf(this)) },
+                    "app info" to { handlers.info(app) },
+                    if (app.system) null else "uninstall" to { handlers.uninstall(app) },
+                )
+            is AppHit.Shortcut ->
+                listOf(
+                    "add to home" to { handlers.pin(listOf(this)) },
+                    "remove" to { handlers.remove(shortcut) },
+                )
+        }
+    val hidden = handlers.isHidden(this)
+    return own +
+        listOfNotNull(
+            (if (hidden) "unhide" else "hide") to { handlers.hide(listOf(key), !hidden) },
+            if (selectable) "select several" to { handlers.select(this) } else null,
+        )
+}
 
 /** The app's icon and its silhouette, each null until loaded or if it has none. */
 private fun AppHit.icons(runtime: Runtime): Pair<ImageBitmap?, ImageBitmap?> =
@@ -256,9 +310,26 @@ private fun HitCell(
     hit: AppHit,
     handlers: AppHandlers,
     selected: Boolean = false,
+    /** Whether apps are being picked: then a tap picks or unpicks this one with [onToggle]. */
+    picking: Boolean = false,
+    checked: Boolean = false,
+    onToggle: (AppHit) -> Unit = {},
 ) {
     val (icon, mask) = hit.icons(runtime)
-    AppCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers) }, shortcuts = { hit.shortcutMenu(handlers) }, selected = selected, spoken = hit.spoken, paused = hit.paused(runtime))
+    AppCell(
+        hit.label,
+        icon,
+        mask,
+        onClick = { handlers.launch(hit) },
+        actions = { hit.actions(handlers, selectable = true) },
+        shortcuts = { hit.shortcutMenu(handlers) },
+        selected = selected,
+        spoken = hit.spoken,
+        paused = hit.paused(runtime),
+        onToggle = if (picking) ({ onToggle(hit) }) else null,
+        checked = checked,
+        hidden = hit.key in runtime.hiddenApps,
+    )
 }
 
 /** Height of the recent apps strip; home keeps this much room for it above the bar, even while it's empty. */
@@ -364,7 +435,7 @@ private fun recentApps(
     runtime: Runtime,
     limit: Int,
 ): List<AppHit> {
-    val byKey = allApps(runtime).associateBy { it.key }
+    val byKey = allApps(runtime).shown(runtime.hiddenApps.keys, showHidden = false).associateBy { it.key }
     return runtime.usage.recent.mapNotNull { byKey[it] }.take(limit)
 }
 
@@ -390,6 +461,13 @@ internal fun AppPanel(
     val apps = runtime.androidApps
     // With a work profile, the empty bar lists one profile's apps at a time, as stock drawers' tabs do.
     val (tabs, tab) = shownTabs(runtime, state)
+    val toggle = remember(state) { { hit: AppHit -> state.selection = state.selection?.let { toggled(it, hit.key) } } }
+    // Read as a yes or no here, so picking one more app only recomposes its row and the bar, not the whole panel.
+    val picking by remember(state) { derivedStateOf { state.selection != null } }
+    // Hidden apps still installed: one hidden and then removed from the phone isn't counted, or offered.
+    val hiddenCount by remember(runtime) { derivedStateOf { allApps(runtime).count { it.key in runtime.hiddenApps } } }
+    // Showing the last hidden app again turns showing hidden off, so the next one hidden goes out of sight.
+    LaunchedEffect(hiddenCount) { if (hiddenCount == 0) state.showHidden = false }
 
     val screenHeight = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     // Pulling down past the end of the list drags the panel closed, like stock drawers.
@@ -433,9 +511,20 @@ internal fun AppPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Typing searches every profile, so the tabs step aside.
-                if (tabs.size > 1 && query.isBlank()) {
-                    ProfileTabs(tabs, tab, onPick = { state.tab = it })
-                    Spacer(Modifier.weight(1f))
+                if (tabs.size > 1 && query.isBlank()) ProfileTabs(tabs, tab, onPick = { state.tab = it })
+                // Takes only the room the tabs and the settings button leave, so a long label never squeezes the button.
+                Box(Modifier.weight(1f).padding(end = 8.dp), contentAlignment = Alignment.CenterEnd) {
+                    // Lists the hidden apps too, dimmed, so they can be shown again; only while there are some.
+                    if (hiddenCount > 0) {
+                        BracketAction(
+                            if (state.showHidden) "hide hidden ($hiddenCount)" else "show hidden ($hiddenCount)",
+                            if (state.showHidden) Palette.accent else Palette.muted,
+                        ) {
+                            state.showHidden = !state.showHidden
+                            // Hidden apps picked while listed would otherwise stay picked out of sight.
+                            if (!state.showHidden) state.selection = state.selection?.let { (it - runtime.hiddenApps.keys).ifEmpty { null } }
+                        }
+                    }
                 }
                 Box(
                     Modifier
@@ -495,8 +584,21 @@ internal fun AppPanel(
                                 cells: List<AppHit>,
                                 selected: Int = -1,
                             ) = item(key = key) {
+                                val selection = state.selection
                                 Row(Modifier.fillMaxWidth()) {
-                                    cells.forEachIndexed { i, hit -> Box(Modifier.weight(1f)) { HitCell(runtime, hit, handlers, selected = i == selected) } }
+                                    cells.forEachIndexed { i, hit ->
+                                        Box(Modifier.weight(1f)) {
+                                            HitCell(
+                                                runtime,
+                                                hit,
+                                                handlers,
+                                                selected = i == selected,
+                                                picking = selection != null,
+                                                checked = selection?.contains(hit.key) == true,
+                                                onToggle = toggle,
+                                            )
+                                        }
+                                    }
                                     repeat(columns - cells.size) { Spacer(Modifier.weight(1f)) }
                                 }
                             }
@@ -507,13 +609,14 @@ internal fun AppPanel(
                                 hits: List<AppHit>,
                                 actions: List<Pair<String, () -> Unit>> = emptyList(),
                             ) {
-                                if (hits.isEmpty() && actions.isEmpty()) return
+                                val listed = hits.shown(runtime.hiddenApps.keys, state.showHidden)
+                                if (listed.isEmpty() && actions.isEmpty()) return
                                 item(key = "h:$title") { Section(title, actions) }
-                                hits.chunked(columns).forEachIndexed { r, cells -> row("$title:$r", cells) }
+                                listed.chunked(columns).forEachIndexed { r, cells -> row("$title:$r", cells) }
                             }
 
                             when (shown) {
-                                null -> search.hits.chunked(columns).forEachIndexed { r, cells -> row("q:$r", cells, highlighted - r * columns) }
+                                null -> search.hits.chunked(columns).forEachIndexed { r, cells -> row("q:$r", cells, if (picking) -1 else highlighted - r * columns) }
                                 DrawerTab.Work -> {
                                     // Above the apps, as on the personal tab.
                                     section("shortcuts", apps.shortcuts.filter { it.work }.map { AppHit.Shortcut(it) })
@@ -548,8 +651,62 @@ internal fun AppPanel(
                         }
                     }
                 }
-                if (query.isNotBlank()) AskRow(runtime, linuxState == LinuxState.Installed, query, highlighted == -1, onAsk)
+                if (picking) {
+                    SelectionBar(runtime, state, handlers)
+                } else if (query.isNotBlank()) {
+                    AskRow(runtime, linuxState == LinuxState.Installed, query, highlighted == -1, onAsk)
+                }
             }
+        }
+    }
+}
+
+/**
+ * While picking apps: how many, and what to do with them all. Adding to home skips the ones already there, which
+ * pinning again would move out of their spot or folder.
+ */
+@Composable
+private fun SelectionBar(
+    runtime: Runtime,
+    state: LauncherState,
+    handlers: AppHandlers,
+) {
+    val selection = state.selection ?: return
+    val (canHide, canShow) = hideChoices(selection, runtime.hiddenApps.keys)
+    val home = runtime.widgets.shortcuts
+    val onAdd = {
+        handlers.pin(
+            picked(allApps(runtime), selection).filterNot {
+                home.pinned(
+                    when (it) {
+                        is AppHit.Linux -> home.keyOf(it.app)
+                        is AppHit.Android -> home.keyOf(it.app)
+                        is AppHit.Shortcut -> home.keyOf(it.shortcut)
+                    },
+                )
+            },
+        )
+    }
+    val onHide = { hide: Boolean ->
+        handlers.hide(selection, hide)
+        state.selection = null
+    }
+    Column(
+        Modifier
+            .padding(bottom = 6.dp)
+            .fillMaxWidth()
+            .frame(2.dp, Palette.accent, Palette.background)
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText("${selection.size} picked", Modifier.weight(1f).padding(start = 8.dp), style = Mono.copy(color = Palette.foreground))
+            BracketAction("cancel", Palette.muted) { state.selection = null }
+        }
+        // Scrolls sideways rather than wrapping on a narrow screen.
+        Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+            BracketAction("add to home", Palette.accent, onAdd)
+            if (canHide) BracketAction("hide", Palette.accent) { onHide(true) }
+            if (canShow) BracketAction("unhide", Palette.accent) { onHide(false) }
         }
     }
 }
@@ -681,36 +838,40 @@ private fun AppCell(
     spoken: String = label,
     /** As in [AppHit.paused]: drawn dimmed, like stock launchers. */
     paused: Boolean = false,
+    /** While picking several apps: a tap or long-press picks or unpicks this one instead of opening it or its menu. */
+    onToggle: (() -> Unit)? = null,
+    /** Picked among several: framed and ticked. */
+    checked: Boolean = false,
+    /** Hidden, listed only while the drawer shows hidden apps: drawn dimmed. */
+    hidden: Boolean = false,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     Column(
         Modifier
             .fillMaxWidth()
-            .alpha(if (paused) PausedAlpha else 1f)
+            .alpha(if (paused || hidden) PausedAlpha else 1f)
             .clip(LauncherStyle.shape(16.dp))
-            .then(if (selected) Modifier.frame(2.dp, Palette.accent) else Modifier)
+            .then(if (selected || checked) Modifier.frame(2.dp, Palette.accent) else Modifier)
+            .then(if (onToggle != null) Modifier.semantics { this.selected = checked } else Modifier)
             .combinedClickable(
-                onClick = onClick,
+                onClick = onToggle ?: onClick,
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    menuOpen = true
+                    if (onToggle != null) onToggle() else menuOpen = true
                 },
             ).padding(horizontal = 4.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        val mono = LauncherStyle.monochromeIcons
-        // Badges are circles when rounded, squares with Omarchy's sharp edges.
-        val badge = LauncherStyle.shape(26.dp)
-        if (mono && mask != null) {
-            Box(Modifier.size(52.dp).clip(badge).background(Palette.surface), contentAlignment = Alignment.Center) {
-                Image(mask, spoken, Modifier.size(36.dp), colorFilter = ColorFilter.tint(Palette.accent))
-            }
-        } else if (!mono && icon != null) {
-            Image(icon, spoken, Modifier.size(52.dp))
-        } else {
-            Box(Modifier.size(52.dp).clip(badge).background(Palette.surface), contentAlignment = Alignment.Center) {
-                BasicText(initials(label), style = Mono.copy(color = Palette.accent, fontSize = TextSize.Title))
+        Box {
+            AppIcon(label, icon, mask, spoken)
+            if (checked) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).size(20.dp).background(Palette.accent, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    BasicText("✓", style = Mono.copy(color = Palette.background, fontSize = TextSize.Small))
+                }
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -724,6 +885,30 @@ private fun AppCell(
         )
         if (menuOpen) {
             AppActions(actions(), shortcuts, onDismiss = { menuOpen = false })
+        }
+    }
+}
+
+/** A drawer entry's 52dp icon: its silhouette or bitmap, or initials when it has none. */
+@Composable
+private fun AppIcon(
+    label: String,
+    icon: ImageBitmap?,
+    mask: ImageBitmap?,
+    spoken: String,
+) {
+    val mono = LauncherStyle.monochromeIcons
+    // Badges are circles when rounded, squares with Omarchy's sharp edges.
+    val badge = LauncherStyle.shape(26.dp)
+    if (mono && mask != null) {
+        Box(Modifier.size(52.dp).clip(badge).background(Palette.surface), contentAlignment = Alignment.Center) {
+            Image(mask, spoken, Modifier.size(36.dp), colorFilter = ColorFilter.tint(Palette.accent))
+        }
+    } else if (!mono && icon != null) {
+        Image(icon, spoken, Modifier.size(52.dp))
+    } else {
+        Box(Modifier.size(52.dp).clip(badge).background(Palette.surface), contentAlignment = Alignment.Center) {
+            BasicText(initials(label), style = Mono.copy(color = Palette.accent, fontSize = TextSize.Title))
         }
     }
 }
