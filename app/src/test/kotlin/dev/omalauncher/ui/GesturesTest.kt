@@ -70,9 +70,13 @@ class GesturesTest {
         assertFalse(homeSwipeFor(0f, downward, up = Drawer, down = Search).browses(0f))
     }
 
-    @Test fun withNothingSetOneWayTheDrawerStillFollowsASwipeThatTurnsBack() {
-        assertEquals(HomeSwipe(Drawer, -1f), homeSwipeFor(0f, downward, up = Drawer, down = None))
-        assertEquals(HomeSwipe(Drawer, 1f), homeSwipeFor(0f, upward, up = None, down = Drawer))
+    @Test fun withNothingForSwipingDownTheDrawerStillFollowsASwipeThatTurnsUp() {
+        val turnsUp = homeSwipeFor(0f, downward, up = Drawer, down = None)
+        assertEquals(HomeSwipe(Drawer, -1f), turnsUp)
+        assertTrue(turnsUp.dragsDrawer)
+        // Nothing follows the finger the other way round, so a swipe up set to nothing does nothing.
+        assertEquals(None, homeSwipeFor(0f, upward, up = None, down = Drawer).action)
+        assertEquals(None, homeSwipeFor(0f, upward, up = None, down = Search).action)
         assertEquals(None, homeSwipeFor(0f, downward, up = Search, down = None).action)
         assertEquals(None, homeSwipeFor(0f, upward, up = None, down = None).action)
     }

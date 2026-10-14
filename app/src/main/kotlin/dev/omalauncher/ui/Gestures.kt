@@ -167,12 +167,11 @@ internal fun homeSwipeFor(
 ): HomeSwipe {
     val way = if (dy > 0f) 1f else -1f
     val picked = if (dy > 0f) down else up
-    val other = if (dy > 0f) up else down
     return when {
         drawer > 0f -> HomeSwipe(GestureAction.Drawer, -1f)
         picked != GestureAction.None -> HomeSwipe(picked, way)
-        // With nothing set this way, the drawer still follows a swipe that starts this way and turns back.
-        other == GestureAction.Drawer -> HomeSwipe(GestureAction.Drawer, -way)
+        // With nothing set for swiping down, the drawer still follows a swipe that starts down and turns up.
+        dy > 0f && up == GestureAction.Drawer -> HomeSwipe(GestureAction.Drawer, -1f)
         else -> HomeSwipe(GestureAction.None, way)
     }
 }
