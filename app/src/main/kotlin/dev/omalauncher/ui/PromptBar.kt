@@ -202,13 +202,13 @@ internal fun PromptBar(
         }
         state.promptRequest = null
     }
-    // The panel and the bar open and close together: opening it (Super+Space, a widget) focuses the bar, closing it lets go.
-    LaunchedEffect(panelShown) {
+    // Search opens focus the bar; drawer gestures leave the keyboard down.
+    LaunchedEffect(panelShown, state.focusSearch) {
         // Opened to dictate, the keyboard stays down.
-        if (panelShown && !speech.listening) {
+        if (panelShown && state.focusSearch && !speech.listening) {
             focus.requestFocus()
             keyboard?.show()
-        } else if (!panelShown && focused) {
+        } else if ((!panelShown || !state.focusSearch) && focused) {
             focusManager.clearFocus()
             keyboard?.hide()
         }
