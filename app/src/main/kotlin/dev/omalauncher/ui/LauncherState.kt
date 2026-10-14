@@ -100,7 +100,13 @@ class LauncherState {
     ) = composeScope?.launch { drawer.animateTo(target, spring(stiffness = stiffness)) }
         ?: scope.launch { drawer.snapTo(target) }
 
-    fun open() = animate(1f, Spring.StiffnessMediumLow)
+    /** Drawer gestures leave the keyboard down; search and explicit opens focus the prompt. */
+    var focusSearch by mutableStateOf(true)
+
+    fun open(search: Boolean = true): kotlinx.coroutines.Job {
+        focusSearch = search
+        return animate(1f, Spring.StiffnessMediumLow)
+    }
 
     fun close() = animate(0f, Spring.StiffnessMedium)
 
@@ -122,11 +128,11 @@ class LauncherState {
     /** Settles after a drag; [velocity] is in px/s, negative = upwards. */
     fun settle(velocity: Float) {
         when {
-            velocity < -800f -> open()
+            velocity < -800f -> open(focusSearch)
             velocity > 800f -> close()
             // Compose sometimes reports 0 velocity for the first gesture after resuming.
-            velocity == 0f && drawer.value > 0.05f -> if (lastDragUp) open() else close()
-            drawer.value > 0.2f -> open()
+            velocity == 0f && drawer.value > 0.05f -> if (lastDragUp) open(focusSearch) else close()
+            drawer.value > 0.2f -> open(focusSearch)
             else -> close()
         }
     }
