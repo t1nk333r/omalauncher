@@ -55,7 +55,9 @@ fun agentInvocation(
     return when {
         agentBin == "opencode" -> "$agentBin --prompt $quoted"
         agentBin == "claude" && readOnly -> "$agentBin --permission-mode plan $quoted"
-        agentBin == "omp" && readOnly -> "$agentBin --tools read,grep,glob --approval-mode always-ask $quoted"
+        // Terminals start in ~ (/root), where Oh My Pi otherwise moves to a temp dir.
+        agentBin == "omp" && readOnly -> "$agentBin --allow-home --tools read,grep,glob --approval-mode always-ask $quoted"
+        agentBin == "omp" -> "$agentBin --allow-home $quoted"
         else -> "$agentBin $quoted"
     }
 }

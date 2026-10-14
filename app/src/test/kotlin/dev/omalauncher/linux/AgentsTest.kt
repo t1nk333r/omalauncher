@@ -20,9 +20,13 @@ class AgentsTest {
 
     @Test fun ohMyPiUsesReadOnlyToolsForSharedWidgets() {
         assertEquals(
-            "omp --tools read,grep,glob --approval-mode always-ask " + shellQuote("hi"),
+            "omp --allow-home --tools read,grep,glob --approval-mode always-ask " + shellQuote("hi"),
             agentInvocation("omp", "hi", readOnly = true),
         )
-        assertEquals("omp " + shellQuote("hi"), agentInvocation("omp", "hi"))
+    }
+
+    /** Terminals start in /root; without --allow-home Oh My Pi leaves it for a temp dir. */
+    @Test fun ohMyPiStaysInHome() {
+        assertEquals("omp --allow-home " + shellQuote("hi"), agentInvocation("omp", "hi"))
     }
 }
