@@ -33,7 +33,7 @@ has the themes, wallpapers, Android apps and the widgets that don't run commands
 
 ## Using it
 
-Swipe up on home to browse the app drawer without opening the keyboard. Swipe down to open search and the agent prompt with the keyboard. Change either action under settings › gestures.
+Swipe up on home to browse the app drawer without opening the keyboard. Swipe down to open search and the agent prompt with the keyboard. Settings › gestures sets either swipe to the app drawer, search, or nothing, and swiping down can pull down the notification shade instead.
 
 The bar: the one input at the bottom of the home screen opens apps and asks
 coding agents. Focusing it opens the list of Linux and Android apps; typing
