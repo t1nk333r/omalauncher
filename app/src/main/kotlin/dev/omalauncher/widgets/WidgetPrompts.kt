@@ -76,7 +76,7 @@ fun checkSecretsCommand(
 /**
  * A widget someone shared, before it's added: the agent reads it and says what it does, without running any of it.
  * Whoever sent it wrote the file the agent reads, so it may talk to the agent: it gets the copy without comments
- * ([dev.omalauncher.widgets.market.Shared.forReview]), is told the file is data to judge, and Claude Code can't act on it.
+ * ([dev.omalauncher.widgets.market.Shared.forReview]), is told the file is data to judge, and Claude Code and Oh My Pi can't act on it.
  */
 fun reviewSharedWidgetCommand(
     agentBin: String,

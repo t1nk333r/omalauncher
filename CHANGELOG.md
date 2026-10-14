@@ -6,6 +6,8 @@ Dates are when the build was uploaded to Play.
 
 ## 0.7.1 (versionCode 13) – 2026-10-13
 
+- Oh My Pi (omp), the Pi fork with subagents, LSP and a browser, is one of the
+  coding agents to install. Reviewing a shared widget runs it with only its read tools.
 - Websites installed from a browser (Install app, or Add to home screen) show up
   on the home screen and in the app drawer, like other apps' shortcuts to home.
   Browsers didn't offer to install them before.

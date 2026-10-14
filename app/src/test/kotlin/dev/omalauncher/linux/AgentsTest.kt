@@ -1,5 +1,6 @@
 package dev.omalauncher.linux
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -15,5 +16,13 @@ class AgentsTest {
             assertTrue("${agent.bin}: not labelled \"${agent.name}\"", "android:label=\"${agent.name}\"" in alias!!)
             assertTrue("${agent.bin}: no logo", "android:icon=\"@drawable/agent_${agent.bin.replace('-', '_')}\"" in alias)
         }
+    }
+
+    @Test fun ohMyPiUsesReadOnlyToolsForSharedWidgets() {
+        assertEquals(
+            "omp --tools read,grep,glob --approval-mode always-ask " + shellQuote("hi"),
+            agentInvocation("omp", "hi", readOnly = true),
+        )
+        assertEquals("omp " + shellQuote("hi"), agentInvocation("omp", "hi"))
     }
 }

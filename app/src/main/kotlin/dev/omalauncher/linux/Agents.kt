@@ -37,13 +37,14 @@ val AGENTS =
         Agent("cursor-agent", "Cursor CLI", "Cursor's agent for the terminal", "cursor-agent"),
         Agent("agy", "Antigravity", "Google's Gemini coding agent", "antigravity-cli"),
         Agent("pi", "Pi", "Minimal, extensible coding agent", "pi"),
+        Agent("omp", "Oh My Pi", "Pi fork with subagents, LSP and a browser", "oh-my-pi"),
     )
 
 /**
  * Starts [agentBin] with a first prompt; OpenCode takes it as --prompt, the others as an argument.
- * [readOnly], for reading something untrusted: Claude Code starts in plan mode, where it can read but not
- * run commands or change files whatever the user's settings say. The others have no flag for that we can
- * rely on inside proot, and only have the prompt.
+ * [readOnly], for reading something untrusted: Claude Code starts in plan mode, while Oh My Pi gets only
+ * its read tools and asks before writes or commands. Other agents have no flag for that we can rely on inside
+ * proot, and only have the prompt.
  */
 fun agentInvocation(
     agentBin: String,
@@ -54,6 +55,7 @@ fun agentInvocation(
     return when {
         agentBin == "opencode" -> "$agentBin --prompt $quoted"
         agentBin == "claude" && readOnly -> "$agentBin --permission-mode plan $quoted"
+        agentBin == "omp" && readOnly -> "$agentBin --tools read,grep,glob --approval-mode always-ask $quoted"
         else -> "$agentBin $quoted"
     }
 }
