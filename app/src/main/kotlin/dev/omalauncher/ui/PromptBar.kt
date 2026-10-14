@@ -202,13 +202,15 @@ internal fun PromptBar(
         }
         state.promptRequest = null
     }
-    // Search opens focus the bar; drawer gestures leave the keyboard down.
-    LaunchedEffect(panelShown, state.focusSearch) {
+    // Search opens focus the bar; drawer gestures leave the keyboard down. Keyed on what's wanted, not on focusSearch:
+    // tapping the bar after a swipe up flips focusSearch before the panel shows, and must not hide the keyboard meanwhile.
+    val keyboardWanted = panelShown && state.focusSearch
+    LaunchedEffect(panelShown, keyboardWanted) {
         // Opened to dictate, the keyboard stays down.
-        if (panelShown && state.focusSearch && !speech.listening) {
+        if (keyboardWanted && !speech.listening) {
             focus.requestFocus()
             keyboard?.show()
-        } else if ((!panelShown || !state.focusSearch) && focused) {
+        } else if (!keyboardWanted && focused) {
             focusManager.clearFocus()
             keyboard?.hide()
         }
