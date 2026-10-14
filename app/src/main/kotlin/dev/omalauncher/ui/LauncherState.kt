@@ -84,6 +84,12 @@ class LauncherState {
     /** The drawer's tab; it stays picked the next time the drawer opens. */
     var tab by mutableStateOf(DrawerTab.Personal)
 
+    /** Keys of the apps picked in the drawer to add to home or hide together; null when not picking. Closing forgets it. */
+    var selection by mutableStateOf<Set<String>?>(null)
+
+    /** Whether the drawer lists hidden apps too, dimmed, to show them again. Closing turns it off. */
+    var showHidden by mutableStateOf(false)
+
     private var typed by mutableStateOf("")
 
     /** What's in the bar: an app to find, or a prompt for the agent. */

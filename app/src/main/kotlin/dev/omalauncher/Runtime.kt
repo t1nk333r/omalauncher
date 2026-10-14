@@ -79,6 +79,7 @@ class Runtime(
     val style = StyleStore(context)
     val terminalFont = TerminalFont(proot, style)
     val gestures = Gestures(context)
+    val hiddenApps = HiddenApps(context)
     val linuxApps = mutableStateListOf<LinuxApp>()
 
     /** Icons of [linuxApps] by desktop id; apps without a PNG icon have no entry. */

@@ -206,12 +206,12 @@ class Shortcuts(
     fun addAndroid(
         app: AndroidApp,
         page: Int,
-    ) = add(Shortcut("app:" + app.key, page, app.label, component = app.component, profile = app.profile))
+    ) = add(Shortcut(keyOf(app), page, app.label, component = app.component, profile = app.profile))
 
     fun addLinux(
         app: LinuxApp,
         page: Int,
-    ) = add(Shortcut("linux:" + app.id, page, app.name, linux = app))
+    ) = add(Shortcut(keyOf(app), page, app.name, linux = app))
 
     fun addAndroidShortcut(
         shortcut: AndroidShortcut,
@@ -226,7 +226,15 @@ class Shortcuts(
         remove(key)
     }
 
-    private fun keyOf(shortcut: AndroidShortcut) = "shortcut:" + shortcut.key
+    /** The key an app or shortcut has on home once pinned. */
+    fun keyOf(app: AndroidApp) = "app:" + app.key
+
+    fun keyOf(app: LinuxApp) = "linux:" + app.id
+
+    fun keyOf(shortcut: AndroidShortcut) = "shortcut:" + shortcut.key
+
+    /** Whether the item with home [key] is on home already, on the grid or in a folder. */
+    fun pinned(key: String) = items.any { it.key == key }
 
     /** Pinning an app that's already on the home screen moves it to [Shortcut.page], out of its folder. */
     private fun add(shortcut: Shortcut) {

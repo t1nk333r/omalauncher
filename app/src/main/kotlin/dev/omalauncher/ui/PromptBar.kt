@@ -148,8 +148,9 @@ internal fun PromptBar(
         state.closeNow()
     }
 
-    /** Enter: the highlighted app, or the agent. */
+    /** Enter: the highlighted app, or the agent; nothing while apps are being picked in the drawer, so the picks stay. */
     fun submit() {
+        if (state.selection != null) return
         val hit = search.hits.getOrNull(highlighted)
         if (hit != null) onLaunch(hit) else send(text)
     }
@@ -316,7 +317,7 @@ internal fun PromptBar(
                         }
                     },
                 )
-                if (text.isNotBlank() && !listening) {
+                if (text.isNotBlank() && !listening && state.selection == null) {
                     // Says what Enter does, so opening an app instead of asking is never a surprise.
                     Box(
                         Modifier.clickable(onClick = ::submit).padding(horizontal = 10.dp, vertical = 12.dp),
