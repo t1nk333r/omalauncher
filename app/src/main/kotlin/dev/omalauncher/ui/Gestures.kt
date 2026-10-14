@@ -64,6 +64,12 @@ internal val SwipeUpChoices = listOf(GestureAction.Drawer, GestureAction.Search,
 /** What swiping down on home can do, the default first. */
 internal val SwipeDownChoices = listOf(GestureAction.Search, GestureAction.Notifications, GestureAction.Drawer, GestureAction.None)
 
+/** The action saved as [id] if [choices] offers it, else the first, the gesture's default. */
+internal fun pick(
+    id: String?,
+    choices: List<GestureAction>,
+) = GestureAction.of(id)?.takeIf { it in choices } ?: choices.first()
+
 /** The actions picked for home's gestures. */
 class Gestures(
     context: Context,
@@ -89,11 +95,10 @@ class Gestures(
             prefs.edit().putString(SWIPE_DOWN, action.id).apply()
         }
 
-    /** The action saved for [key] if the gesture offers it, else its default. */
     private fun saved(
         key: String,
         choices: List<GestureAction>,
-    ) = GestureAction.of(prefs.getString(key, null))?.takeIf { it in choices } ?: choices.first()
+    ) = pick(prefs.getString(key, null), choices)
 
     private companion object {
         const val SWIPE_UP = "gesture_swipe_up"
@@ -120,11 +125,35 @@ internal fun Modifier.drawerSwipe(
     )
 }
 
-/** What a swipe on home does, and the [way] it counts as going (-1 up, 1 down): the drawer opens that way, search is reached that way. */
+/** What a swipe on home does, and the [way] it counts as going: -1 up, 1 down. */
 internal data class HomeSwipe(
     val action: GestureAction,
     val way: Float,
-)
+) {
+    /**
+     * Whether the drawer follows the finger: only up, the way it opens. Swiped down to, it opens when let go, as search
+     * does, rather than rising against the finger.
+     */
+    val dragsDrawer get() = action == GestureAction.Drawer && way < 0f
+
+    /** How far a step, or a velocity, of [dy] (down positive) goes this swipe's way. */
+    fun along(dy: Float) = dy * way
+
+    /**
+     * Whether letting go opens the drawer or search: once the swipe has gone [threshold] its way, or is let go of
+     * moving that way as fast as a fling settles the drawer. [distance] is measured its way, [velocity] in px/s down.
+     */
+    fun opensOnRelease(
+        distance: Float,
+        velocity: Float,
+        threshold: Float,
+    ) = !dragsDrawer &&
+        (action == GestureAction.Search || action == GestureAction.Drawer) &&
+        (distance >= threshold || (distance > 0f && along(velocity) > 800f))
+
+    /** Whether it opens the drawer to browse, so the keyboard stays down: the drawer was closed when it started. */
+    fun browses(drawer: Float) = action == GestureAction.Drawer && drawer == 0f
+}
 
 /**
  * What a swipe on home does, from how far the drawer is open and the swipe's first step ([dy] > 0 is down). With
@@ -149,16 +178,6 @@ internal fun homeSwipeFor(
 }
 
 /**
- * Whether a swipe for search opens it: once it has gone [threshold] its way, or is let go of moving that way as fast
- * as a fling settles the drawer. [distance] and [velocity] are measured its way, so a swipe that turned back doesn't.
- */
-internal fun reachesSearch(
-    distance: Float,
-    velocity: Float,
-    threshold: Float,
-) = distance >= threshold || (distance > 0f && velocity > 800f)
-
-/**
  * Swiping on home (the pages, the recent apps strip, the bar) does what's picked in gesture settings: by default up
  * opens the drawer under the finger with the keyboard down, and down opens search with the keyboard up.
  */
@@ -175,10 +194,10 @@ internal fun Modifier.homeSwipe(
     // inline) each time the drawer opens or closes.
     val drags = gestures.swipeUp != GestureAction.None || gestures.swipeDown != GestureAction.None || drawerShown
     val screenHeight = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
-    val searchDistance = with(LocalDensity.current) { 56.dp.toPx() }
+    val openDistance = with(LocalDensity.current) { 56.dp.toPx() }
     // Picked by the swipe's first step, so one that starts down and turns up doesn't open the drawer under the shade.
     var swipe by remember { mutableStateOf<HomeSwipe?>(null) }
-    // How far the swipe has gone its way, for search.
+    // How far the swipe has gone its way, for what opens when it's let go.
     var distance by remember { mutableFloatStateOf(0f) }
     // One drag handler, only turned on or off: a new one mid-swipe (as the drawer starts to show) would drop the drag.
     return draggable(
@@ -189,15 +208,12 @@ internal fun Modifier.homeSwipe(
                 if (swipe == null && dy != 0f) {
                     val picked = homeSwipeFor(state.drawer.value, dy, gestures.swipeUp, gestures.swipeDown)
                     swipe = picked
-                    when {
-                        picked.action == GestureAction.Notifications -> expandNotifications(context)
-                        // Swiped open, the drawer is for browsing: the keyboard stays down.
-                        picked.action == GestureAction.Drawer && state.drawer.value == 0f -> state.focusSearch = false
-                    }
+                    if (picked.action == GestureAction.Notifications) expandNotifications(context)
+                    if (picked.browses(state.drawer.value)) state.focusSearch = false
                 }
                 swipe?.let {
-                    distance += dy * it.way
-                    if (it.action == GestureAction.Drawer) state.dragBy(dy * it.way / screenHeight)
+                    distance += it.along(dy)
+                    if (it.dragsDrawer) state.dragBy(-dy / screenHeight)
                 }
             },
         onDragStarted = {
@@ -206,10 +222,9 @@ internal fun Modifier.homeSwipe(
         },
         onDragStopped = { velocity ->
             swipe?.let {
-                when (it.action) {
-                    GestureAction.Drawer -> state.settle(velocity * -it.way)
-                    GestureAction.Search -> if (reachesSearch(distance, velocity * it.way, searchDistance)) state.open()
-                    else -> Unit
+                when {
+                    it.dragsDrawer -> state.settle(velocity)
+                    it.opensOnRelease(distance, velocity, openDistance) -> state.open(search = it.action == GestureAction.Search)
                 }
             }
         },
