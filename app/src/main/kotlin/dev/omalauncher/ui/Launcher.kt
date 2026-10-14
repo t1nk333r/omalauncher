@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import dev.omalauncher.Runtime
+import dev.omalauncher.linux.agentStart
 import dev.omalauncher.theme.Style
 import dev.omalauncher.theme.StyleStore
 import dev.omalauncher.widgets.checkSecretsCommand
@@ -363,7 +364,7 @@ private fun ThemesOverlay(
             onDismiss = { state.agentsOpen = false },
             onOpen = { agent ->
                 state.agentsOpen = false
-                runtime.terminal(agent.bin, agent.name, agent)
+                runtime.terminal(agentStart(agent.bin), agent.name, agent)
             },
         )
     }

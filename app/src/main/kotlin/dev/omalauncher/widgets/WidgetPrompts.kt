@@ -2,6 +2,7 @@ package dev.omalauncher.widgets
 
 import dev.omalauncher.linux.Agent
 import dev.omalauncher.linux.agentInvocation
+import dev.omalauncher.linux.agentStart
 
 /** What agents are told about dependencies when they write or change a widget. */
 private const val DEPENDENCIES =
@@ -117,6 +118,6 @@ fun agentWidget(agent: Agent) =
       meta { owl: 2; description: "${agent.name} in a terminal on the home screen" }
 
       // Tap to type; tap outside or press Back to let go. When ${agent.name} exits, the shell stays.
-      Terminal { command: 'cd ~ && ${agent.bin}; exec bash' }
+      Terminal { command: 'cd ~ && ${agentStart(agent.bin)}; exec bash' }
     }
     """.trimIndent() + "\n"

@@ -1,5 +1,6 @@
 package dev.omalauncher.linux
 
+import dev.omalauncher.widgets.agentWidget
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -25,8 +26,16 @@ class AgentsTest {
         )
     }
 
-    /** Terminals start in /root; without --allow-home Oh My Pi leaves it for a temp dir. */
+    /** Terminals start in /root; without --allow-home Oh My Pi leaves it for a temp dir, however it's opened. */
     @Test fun ohMyPiStaysInHome() {
         assertEquals("omp --allow-home " + shellQuote("hi"), agentInvocation("omp", "hi"))
+        assertEquals("omp --allow-home", agentStart("omp"))
+        val omp = AGENTS.first { it.bin == "omp" }
+        assertTrue("the home tile", "cd ~ && omp --allow-home; exec bash" in agentWidget(omp))
+    }
+
+    @Test fun otherAgentsStartAsTheyAre() {
+        for (agent in AGENTS.filter { it.bin != "omp" }) assertEquals(agent.bin, agentStart(agent.bin))
+        assertEquals("claude " + shellQuote("hi"), agentInvocation("claude", "hi"))
     }
 }

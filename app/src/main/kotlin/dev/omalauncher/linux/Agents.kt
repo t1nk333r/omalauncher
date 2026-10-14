@@ -40,6 +40,9 @@ val AGENTS =
         Agent("omp", "Oh My Pi", "Pi fork with subagents, LSP and a browser", "oh-my-pi"),
     )
 
+/** Starts [agentBin] in a terminal; Oh My Pi otherwise leaves ~, where terminals start, for a temp dir. */
+fun agentStart(agentBin: String) = if (agentBin == "omp") "$agentBin --allow-home" else agentBin
+
 /**
  * Starts [agentBin] with a first prompt; OpenCode takes it as --prompt, the others as an argument.
  * [readOnly], for reading something untrusted: Claude Code starts in plan mode, while Oh My Pi gets only
@@ -52,13 +55,12 @@ fun agentInvocation(
     readOnly: Boolean = false,
 ): String {
     val quoted = shellQuote(prompt)
+    val start = agentStart(agentBin)
     return when {
-        agentBin == "opencode" -> "$agentBin --prompt $quoted"
-        agentBin == "claude" && readOnly -> "$agentBin --permission-mode plan $quoted"
-        // Terminals start in ~ (/root), where Oh My Pi otherwise moves to a temp dir.
-        agentBin == "omp" && readOnly -> "$agentBin --allow-home --tools read,grep,glob --approval-mode always-ask $quoted"
-        agentBin == "omp" -> "$agentBin --allow-home $quoted"
-        else -> "$agentBin $quoted"
+        agentBin == "opencode" -> "$start --prompt $quoted"
+        agentBin == "claude" && readOnly -> "$start --permission-mode plan $quoted"
+        agentBin == "omp" && readOnly -> "$start --tools read,grep,glob --approval-mode always-ask $quoted"
+        else -> "$start $quoted"
     }
 }
 
@@ -144,7 +146,7 @@ class AgentStore(
     fun managed(): List<Managed> =
         installed.map { agent ->
             Managed.text(File(proot.applications, "agent-${agent.bin}.desktop"), Policy.Owned) {
-                "[Desktop Entry]\nType=Application\nName=${agent.name}\nTerminal=true\nExec=${agent.bin}\nIcon=${bundledIcon("agent-${agent.bin}")}\n"
+                "[Desktop Entry]\nType=Application\nName=${agent.name}\nTerminal=true\nExec=${agentStart(agent.bin)}\nIcon=${bundledIcon("agent-${agent.bin}")}\n"
             }
         } + codexConfig()
 
