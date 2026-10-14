@@ -37,6 +37,7 @@ val AGENTS =
         Agent("cursor-agent", "Cursor CLI", "Cursor's agent for the terminal", "cursor-agent"),
         Agent("agy", "Antigravity", "Google's Gemini coding agent", "antigravity-cli"),
         Agent("pi", "Pi", "Minimal, extensible coding agent", "pi"),
+        Agent("omp", "OMP", "Oh My Pi coding agent", "npm:@oh-my-pi/pi-coding-agent"),
     )
 
 /**
@@ -54,6 +55,7 @@ fun agentInvocation(
     return when {
         agentBin == "opencode" -> "$agentBin --prompt $quoted"
         agentBin == "claude" && readOnly -> "$agentBin --permission-mode plan $quoted"
+        agentBin == "omp" -> "$agentBin --allow-home $quoted"
         else -> "$agentBin $quoted"
     }
 }
