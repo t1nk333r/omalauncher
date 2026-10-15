@@ -15,8 +15,10 @@ widget "today" {
   state kept = null
   state tick = 0
   state retried = 0
-  let offline = wx != null && !wx.ok
-  let data = wx.ok ? wx.out : kept
+  // Offline is no answer at all (code -1); a city wttr.in turns down is an answer, shown as its error, not as the
+  // last city's forecast.
+  let offline = wx != null && !wx.ok && wx.code < 0
+  let data = wx.ok ? wx.out : offline ? kept : null
   let cur = data.current_condition[0]
   let day = data.weather[0]
   let area = data.nearest_area[0]
@@ -166,7 +168,7 @@ widget "today" {
     Input {
       text: city
       placeholder: "city · empty = auto"
-      onSubmit: { city = trim(value); refresh() }
+      onSubmit: { city = trim(value); kept = null; refresh() }
     }
     if cur == null {
       Column {

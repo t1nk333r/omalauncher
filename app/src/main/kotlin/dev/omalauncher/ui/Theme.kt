@@ -114,6 +114,9 @@ object LauncherStyle {
     /** The strip holds the dock rather than the apps used lately. */
     val dock get() = style[Style.DOCK]
 
+    /** The dock is on home: the strip shows, and holds it. What adds to or arranges the dock waits for this. */
+    val dockShown get() = recentApps && dock
+
     /** The pill above the strip that does what swiping down does. */
     val homePill get() = style[Style.HOME_PILL]
 

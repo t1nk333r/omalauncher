@@ -106,10 +106,14 @@ internal fun PromptBar(
     /** What Enter acts on: an index into the search hits, or -1 for the agent. */
     highlighted: Int,
     onLaunch: (AppHit) -> Unit,
+    /** Whether the bar shows; off home it collapses with the panel, see [barOnHome]. */
+    shown: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val speech = remember { Speech(context.applicationContext) }
+    // Collapsed mid-dictation (the panel swiped shut): stop listening, or the words would land in a bar nobody sees.
+    LaunchedEffect(shown) { if (!shown && speech.listening) speech.cancel() }
     DisposableEffect(speech) { onDispose { speech.cancel() } }
     val focus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current

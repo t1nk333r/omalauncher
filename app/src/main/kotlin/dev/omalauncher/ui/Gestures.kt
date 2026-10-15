@@ -72,6 +72,12 @@ internal val SwipeUpChoices = listOf(GestureAction.Drawer, GestureAction.Search,
 /** What swiping down on home can do, the default first. */
 internal val SwipeDownChoices = listOf(GestureAction.Search, GestureAction.Notifications, GestureAction.Drawer, GestureAction.None)
 
+/** Whether swiping [up] or [down] opens the app panel: the drawer, or search. */
+internal fun reachesPanel(
+    up: GestureAction,
+    down: GestureAction,
+) = listOf(up, down).any { it == GestureAction.Drawer || it == GestureAction.Search }
+
 /** The action saved as [id] if [choices] offers it, else the first, the gesture's default. */
 internal fun pick(
     id: String?,
@@ -102,6 +108,9 @@ class Gestures(
             down = action
             prefs.edit().putString(SWIPE_DOWN, action.id).apply()
         }
+
+    /** Whether a swipe opens the app panel (the drawer or search); the pill does what swiping down does. */
+    val reachPanel get() = reachesPanel(swipeUp, swipeDown)
 
     private fun saved(
         key: String,
@@ -263,9 +272,10 @@ internal fun HomePill(
     val action = runtime.gestures.swipeDown
     val label = pillLabel(action) ?: return
     val context = LocalContext.current
-    Box(modifier.fillMaxWidth().height(PillHeight), contentAlignment = Alignment.Center) {
+    // Only the pill takes touches: beside it, long-presses and swipes are home's as anywhere else.
+    Box(Modifier.fillMaxWidth().height(PillHeight), contentAlignment = Alignment.Center) {
         Row(
-            Modifier
+            modifier
                 .fillMaxHeight()
                 // Home's glass, as round as the theme's corners allow: a pill with round corners, a box with Omarchy's.
                 .frame(LauncherStyle.borderWidth, LauncherStyle.tileBorder, Palette.glass, radius = PillHeight / 2, frosted = true)

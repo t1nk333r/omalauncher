@@ -85,6 +85,7 @@ import dev.omalauncher.Runtime
 import dev.omalauncher.linux.LinuxState
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import dev.omalauncher.linux.LinuxApp
 
 /** One app in the bar's results. */
@@ -276,6 +277,8 @@ private fun AppHit.shortcutMenu(handlers: AppHandlers): ShortcutMenu? = (this as
 private fun AppHit.actions(
     handlers: AppHandlers,
     selectable: Boolean = false,
+    /** Opened from the dock itself, standing up beside landscape's grid when [DockCell.vertical]. */
+    inDock: DockCell? = null,
 ): List<Pair<String, () -> Unit>> {
     val own =
         when (this) {
@@ -294,30 +297,47 @@ private fun AppHit.actions(
         }
     val hidden = handlers.isHidden(this)
     return own +
-        dockActions(handlers.dock) +
+        dockActions(handlers.dock, inDock) +
         listOfNotNull(
             (if (hidden) "unhide" else "hide") to { handlers.hide(listOf(key), !hidden) },
             if (selectable) "select several" to { handlers.select(this) } else null,
         )
 }
 
+/** An app's menu opened from the dock; [vertical] when the dock stands beside landscape's grid. */
+internal class DockCell(
+    val vertical: Boolean,
+)
+
 /**
- * While home's strip is the dock: an app in it moves left or right or leaves it, any other joins it while there's
- * room. Nothing while the strip shows the apps used lately, where a dock would be out of sight.
+ * While the dock shows: an app in it leaves it, and from the dock itself moves along it; any other joins it while
+ * there's room. Nothing while the strip shows the apps used lately, or nothing, where a dock would be out of sight.
  */
-private fun AppHit.dockActions(dock: Dock): List<Pair<String, () -> Unit>> {
-    if (!LauncherStyle.dock) return emptyList()
+private fun AppHit.dockActions(
+    dock: Dock,
+    from: DockCell?,
+): List<Pair<String, () -> Unit>> {
+    if (!LauncherStyle.dockShown) return emptyList()
     val at = dock.keys.indexOf(key)
     return when {
-        at >= 0 ->
-            listOfNotNull(
-                if (at > 0) "move left" to { dock.move(key, -1) } else null,
-                if (at < dock.keys.lastIndex) "move right" to { dock.move(key, 1) } else null,
-                "remove from dock" to { dock.remove(key) },
-            )
+        at >= 0 -> dockMoves(dock, key, from) + ("remove from dock" to { dock.remove(key) })
         dock.full -> emptyList()
         else -> listOf("add to dock" to { dock.add(listOf(key)) })
     }
+}
+
+/** Moving the app at [key] along the dock, offered only from the dock, where its neighbours are in sight. */
+private fun dockMoves(
+    dock: Dock,
+    key: String,
+    from: DockCell?,
+): List<Pair<String, () -> Unit>> {
+    if (from == null) return emptyList()
+    val at = dock.keys.indexOf(key)
+    return listOfNotNull(
+        if (at > 0) (if (from.vertical) "move up" else "move left") to { dock.move(key, -1) } else null,
+        if (at < dock.keys.lastIndex) (if (from.vertical) "move down" else "move right") to { dock.move(key, 1) } else null,
+    )
 }
 
 /** The app's icon and its silhouette, each null until loaded or if it has none. */
@@ -397,12 +417,18 @@ private fun DockStrip(
             )
             return@Box
         }
+        val from = remember(vertical) { DockCell(vertical) }
         val cells: @Composable (Modifier) -> Unit = { slot ->
             for (i in 0 until DOCK_SLOTS) {
                 Box(slot, contentAlignment = Alignment.Center) {
-                    slots.getOrNull(i)?.let { hit ->
-                        val (icon, mask) = hit.icons(runtime)
-                        StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
+                    val key = runtime.dock.keys.getOrNull(i)
+                    val hit = slots.getOrNull(i)
+                    when {
+                        hit != null -> {
+                            val (icon, mask) = hit.icons(runtime)
+                            StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
+                        }
+                        key != null -> MissingDockCell { runtime.dock.remove(key) }
                     }
                 }
             }
@@ -454,6 +480,26 @@ internal fun RecentStrip(
         } else {
             LazyRow(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically, content = cells)
         }
+    }
+}
+
+/**
+ * A dock slot whose app isn't on the phone (uninstalled, or a Linux app still loading): a faint mark that a tap or
+ * long-press offers to free, so a dock full of gone apps can be emptied again.
+ */
+@Composable
+private fun MissingDockCell(onRemove: () -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .size(48.dp)
+            .clip(LauncherStyle.shape(12.dp))
+            .combinedClickable(onClick = { menuOpen = true }, onLongClick = { menuOpen = true })
+            .semantics { contentDescription = "missing app" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(28.dp).alpha(PausedAlpha).frame(1.dp, Palette.border, radius = 14.dp))
+        if (menuOpen) AppActions(listOf("remove from dock" to onRemove), { null }, onDismiss = { menuOpen = false })
     }
 }
 
@@ -789,10 +835,12 @@ private fun SelectionBar(
             BasicText("${selection.size} picked", Modifier.weight(1f).padding(start = 8.dp), style = Mono.copy(color = Palette.foreground))
             BracketAction("cancel", Palette.muted) { state.selection = null }
         }
-        // Scrolls sideways rather than wrapping on a narrow screen.
+        // Adding and hiding on rows of their own, so all of them fit a narrow screen; each still scrolls at a large font.
         Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
             BracketAction("add to home", Palette.accent, onAdd)
-            if (LauncherStyle.dock && !dock.full) BracketAction("add to dock", Palette.accent, onDock)
+            if (LauncherStyle.dockShown && !dock.full) BracketAction("add to dock", Palette.accent, onDock)
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
             if (canHide) BracketAction("hide", Palette.accent) { onHide(true) }
             if (canShow) BracketAction("unhide", Palette.accent) { onHide(false) }
         }

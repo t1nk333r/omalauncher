@@ -510,9 +510,10 @@ private fun EditorKeyCap(
             presses { scope, _ ->
                 pressed = true
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                // The first stroke now, not in the launch: a tap lifted before the coroutine starts would cancel it.
+                key.action()
                 val press =
                     scope.launch {
-                        key.action()
                         if (!key.repeats) return@launch
                         delay(RepeatDelay)
                         while (true) {

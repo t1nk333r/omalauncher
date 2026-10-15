@@ -197,7 +197,7 @@ fun HomeScreen(
     val sideRoom = sideWidth()
     // Without the bar on home (home.prompt-bar), only the gap to the edge stays below the strip.
     val barRoom =
-        if (!LauncherStyle.promptBarOnHome) {
+        if (!barOnHome(runtime)) {
             EdgeGap
         } else {
             with(density) { state.barHeight.takeIf { it > 0 }?.toDp() ?: (PromptBarHeight + HomeGap + EdgeGap) }
@@ -457,7 +457,17 @@ fun HomeScreen(
 }
 
 
-/** The room below the grid for the strip (the dock or recent apps) and the pill above it, each only while it shows. */
+/**
+ * The room below the grid for the strip (the dock or recent apps) and the pill above it, each only while it shows.
+ * Added up in whole pixels, as the column drawing them rounds each part, so the pill can't reach into the grid's gap.
+ */
+@Composable
 internal fun homeStripRoom(runtime: Runtime): Dp =
-    (if (LauncherStyle.recentApps) RecentStripHeight else 0.dp) +
-        (if (LauncherStyle.homePill && pillLabel(runtime.gestures.swipeDown) != null) PillHeight + HomeGap else 0.dp)
+    with(LocalDensity.current) {
+        val strip = if (LauncherStyle.recentApps) RecentStripHeight.roundToPx() else 0
+        val pill = if (LauncherStyle.homePill && pillLabel(runtime.gestures.swipeDown) != null) PillHeight.roundToPx() + HomeGap.roundToPx() else 0
+        (strip + pill).toDp()
+    }
+
+/** Whether the prompt bar stays on home: style says so, or nothing else opens the app panel (no swipe, no pill). */
+internal fun barOnHome(runtime: Runtime) = LauncherStyle.promptBarOnHome || !runtime.gestures.reachPanel

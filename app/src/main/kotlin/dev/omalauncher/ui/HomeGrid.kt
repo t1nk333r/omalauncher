@@ -49,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -99,7 +100,7 @@ private class Grid(
     private val across = width - pad.left - pad.right + gap
     private val down = height - pad.top - pad.bottom + gap
 
-    val rows = gridRows(if (turned) portraitRows ?: squareRows(down, across) else fixedRows ?: squareRows(across, down), used)
+    val rows = gridRows(if (turned) fixedRows ?: portraitRows ?: squareRows(down, across) else fixedRows ?: squareRows(across, down), used)
 
     /** A screen cell's width and height, the gap after it included. */
     val cellW = across / (if (turned) rows else cols).toFloat()
@@ -347,9 +348,13 @@ internal fun HomeGrid(
         val windowSize = "${minOf(window.width, window.height)}x${maxOf(window.width, window.height)}"
         // Rows the tiles on every page reach down to (apps show as 1x1); the pages share one grid.
         // Derived, so moving or resizing a tile recomposes only its page, unless it changes how far down they reach.
-        val used by remember(pages, itemsOn, layout) {
+        val reached by remember(pages, itemsOn, layout) {
             derivedStateOf { pages.flatMap(itemsOn).maxOfOrNull { item -> layout.cell(item.key)?.let { if (item.resizable) it.bottom else it.y + 1 } ?: 0 } ?: 0 }
         }
+        // Held while a finger holds a tile: shrinking the lowest one would otherwise resize every row under the finger
+        // mid-gesture (with home.rows below what the tiles reach). The grid follows once the tile is let go.
+        var used by remember { mutableIntStateOf(reached) }
+        LaunchedEffect(reached, arrange.holding) { if (!arrange.holding || reached > used) used = reached }
         val fixedRows = LauncherStyle.homeRows
         val grid =
             remember(width, height, gap, pad, turned, windowSize, used, per, fixedRows) {

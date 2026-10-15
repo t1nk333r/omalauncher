@@ -109,4 +109,12 @@ class GesturesTest {
         // Swiping down does nothing: no pill.
         assertNull(pillLabel(None))
     }
+
+    /** With the bar off home, it comes back unless a swipe (or the pill, which swipes down) opens the panel. */
+    @Test fun somethingMustOpenThePanel() {
+        assertTrue(reachesPanel(up = Drawer, down = Notifications))
+        assertTrue(reachesPanel(up = None, down = Search))
+        assertFalse(reachesPanel(up = None, down = Notifications))
+        assertFalse(reachesPanel(up = None, down = None))
+    }
 }
