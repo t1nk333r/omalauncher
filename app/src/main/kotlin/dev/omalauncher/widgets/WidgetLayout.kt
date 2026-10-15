@@ -192,6 +192,16 @@ class WidgetLayout(
         return null
     }
 
+    /**
+     * Forgets where [names] sit on the grid, keeping their pages and glass: [place] gives each a free spot again,
+     * or leaves it for a page with room.
+     */
+    fun unplace(names: Collection<String>) {
+        if (names.isEmpty()) return
+        names.forEach(cells::remove)
+        save()
+    }
+
     /** Forgets everything about [name]: its cell and page. */
     fun remove(name: String) {
         cells.remove(name)

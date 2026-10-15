@@ -157,7 +157,7 @@ class Style(
         val DOCK = Setting.Flag("home.dock", true, "true: the strip holds a dock of up to 5 apps you pick (long-press an app, add to dock); false: the apps used lately.")
         val HOME_PILL = Setting.Flag("home.pill", true, "A pill above the strip that does what swiping down on home does, named after it: search, notifications or apps. None while swiping down does nothing.")
         val PROMPT_BAR = Setting.Flag("home.prompt-bar", false, "The prompt bar on home; false shows it only with the app panel open (a swipe or the pill), and home reaches further down.")
-        val HOME_ROWS = Setting.Number("home.rows", 9.0, 0.0..14.0, "Rows of the home grid in portrait: 0 as many square cells as fit, or a number to stretch or squeeze the cells to. Never fewer than the tiles reach down to.")
+        val HOME_ROWS = Setting.Number("home.rows", 9.0, 0.0..14.0, "Rows of the home grid in portrait: 0 as many square cells as fit, or a number to stretch or squeeze the cells to. Tiles below the last row move up, or to the next page with room.")
 
         val GAPS_IN = Setting.Number("widgets.gaps-in", 6.0, 0.0..24.0, "Space in dp between two of home's widgets (all of it, unlike Hyprland's gaps_in, which each window has on its side).")
         val GAPS_OUT = Setting.Number("widgets.gaps-out", 6.0, 0.0..48.0, "Space in dp from home's widgets, the strip and the prompt bar to the screen's edges.")

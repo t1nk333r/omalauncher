@@ -178,9 +178,16 @@ private fun squareRows(
     long: Int,
 ) = if (short <= 0) 1 else (long / (short / GRID_COLUMNS.toFloat())).toInt().coerceIn(1, MAX_SQUARE_ROWS)
 
+/** The row below the lowest one [cell] covers; an app shows 1x1 whatever an old saved cell says. */
+internal fun reachRow(
+    cell: Cell,
+    resizable: Boolean,
+) = if (resizable) cell.bottom else cell.y + 1
+
 /**
  * The grid's rows: [wanted] (home.rows, or as many square cells as fit), but never fewer than the [used] rows tiles
- * reach down to, so asking for fewer rows squeezes nothing on top of another.
+ * reach down to, so nothing is squeezed on top of another. With home.rows set, tiles below it move up instead, and
+ * this lasts only until they have.
  */
 internal fun gridRows(
     wanted: Int,
@@ -348,13 +355,20 @@ internal fun HomeGrid(
         // Rows the tiles on every page reach down to (apps show as 1x1); the pages share one grid.
         // Derived, so moving or resizing a tile recomposes only its page, unless it changes how far down they reach.
         val reached by remember(pages, itemsOn, layout) {
-            derivedStateOf { pages.flatMap(itemsOn).maxOfOrNull { item -> layout.cell(item.key)?.let { if (item.resizable) it.bottom else it.y + 1 } ?: 0 } ?: 0 }
+            derivedStateOf { pages.flatMap(itemsOn).maxOfOrNull { item -> layout.cell(item.key)?.let { reachRow(it, item.resizable) } ?: 0 } ?: 0 }
+        }
+        val fixedRows = LauncherStyle.homeRows
+        // home.rows is how tall the grid is: tiles placed lower (on a grid with more rows, before the setting) move to a
+        // free spot on their page, or to the next page with room, rather than the grid growing past what was asked.
+        LaunchedEffect(fixedRows, reached, arrange.holding) {
+            val rows = fixedRows ?: return@LaunchedEffect
+            if (arrange.holding || reached <= rows) return@LaunchedEffect
+            layout.unplace(pages.flatMap(itemsOn).filter { item -> layout.cell(item.key)?.let { reachRow(it, item.resizable) > rows } == true }.map { it.key })
         }
         // Held while a finger holds a tile: shrinking the lowest one would otherwise resize every row under the finger
         // mid-gesture (with home.rows below what the tiles reach). The grid follows once the tile is let go.
         val heldAt = remember(arrange.holding) { reached }
         val used = if (arrange.holding) maxOf(heldAt, reached) else reached
-        val fixedRows = LauncherStyle.homeRows
         val grid =
             remember(width, height, gap, pad, turned, windowSize, used, per, fixedRows) {
                 // Not seen in portrait yet: square cells across.
