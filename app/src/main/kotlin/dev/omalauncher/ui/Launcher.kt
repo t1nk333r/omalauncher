@@ -100,6 +100,7 @@ private fun DesktopScreen(
         when {
             state.shared != null -> state.shared = null
             state.sharing != null -> state.sharing = null
+            state.appWidgetsOpen -> state.appWidgetsOpen = false
             runtime.widgets.openScreen != null -> runtime.widgets.openScreen = null
             else -> state.close()
         }
@@ -276,6 +277,7 @@ private fun ThemesOverlay(
             WidgetScreenPanel(spec, inst, onDismiss = { runtime.widgets.openScreen = null })
         }
     }
+    if (state.appWidgetsOpen) AppWidgetPicker(runtime.widgets.appWidgets, state.currentPage, onDismiss = { state.appWidgetsOpen = false })
     state.shared?.let { link ->
         SharedWidgetScreen(
             runtime.widgets,

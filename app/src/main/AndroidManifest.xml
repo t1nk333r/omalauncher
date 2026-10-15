@@ -14,8 +14,11 @@
     <!-- Uninstall from the app drawer's long-press menu (ACTION_DELETE). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
-    <!-- Swiping down on home pulls down the notification shade (StatusBarManager). -->
+    <!-- Swiping down on home can pull down the notification shade (StatusBarManager), if gesture settings say so. -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+
+    <!-- Android widgets on home (AppWidgetSetupActivity); the user allows each app once in Android's dialog. -->
+    <uses-permission android:name="android.permission.BIND_APPWIDGET" />
 
     <uses-feature
         android:name="android.software.live_wallpaper"
@@ -80,6 +83,13 @@
                 <action android:name="android.content.pm.action.CONFIRM_PIN_SHORTCUT" />
             </intent-filter>
         </activity>
+
+        <!-- Binds and configures an Android widget, invisibly over home. -->
+        <activity
+            android:name=".AppWidgetSetupActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <activity
             android:name=".LinuxWindowActivity"

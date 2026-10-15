@@ -89,6 +89,10 @@ fun HomeMenu(
             state.homeMenuOpen = false
             state.show(SettingsPage.Store)
         }
+        MenuItem("android widget") {
+            state.homeMenuOpen = false
+            state.appWidgetsOpen = true
+        }
         MenuItem("AUR app store") {
             state.homeMenuOpen = false
             if (linux) state.show(SettingsPage.Packages) else state.show(SettingsPage.Linux)

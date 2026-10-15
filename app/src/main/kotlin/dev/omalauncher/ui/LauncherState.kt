@@ -23,6 +23,9 @@ class LauncherState {
     /** Opens a screen of the settings activity, set by the launcher activity; see [show]. */
     var onSettings: (SettingsPage, Int) -> Unit = { _, _ -> }
 
+    /** The Android widgets to pick from, from the home menu. */
+    var appWidgetsOpen by mutableStateOf(false)
+
     /** Opens settings, or one of its screens on its own; the store puts widgets on the page showing now. */
     fun show(page: SettingsPage = SettingsPage.Settings) = onSettings(page, currentPage)
 
@@ -37,10 +40,11 @@ class LauncherState {
 
     /** The open drawer or a full-screen panel hides the home screen; animated widgets stop ticking under it. */
     val homeCovered: Boolean
-        get() = drawer.value > 0.99f || shared != null || sharing != null
+        get() = drawer.value > 0.99f || appWidgetsOpen || shared != null || sharing != null
 
-    /** Closes every overlay screen (the home menu, widget sharing). */
+    /** Closes every overlay screen (the home menu, the Android widget picker, widget sharing). */
     fun closeScreens() {
+        appWidgetsOpen = false
         homeMenuOpen = false
         shared = null
         sharing = null
