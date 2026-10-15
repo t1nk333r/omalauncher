@@ -21,6 +21,8 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.zIndex
 import dev.omalauncher.widgets.reorderCells
 import dev.omalauncher.widgets.Cell
+import dev.omalauncher.widgets.FitTile
+import dev.omalauncher.widgets.fitIntoRows
 import dev.omalauncher.widgets.Folder
 import dev.omalauncher.widgets.Shortcut
 import dev.omalauncher.widgets.GRID_COLUMNS
@@ -320,6 +322,8 @@ internal fun HomeGrid(
     onLongPressEmpty: () -> Unit,
     onNoRoom: (HomeItem) -> Unit,
     onMove: (HomeItem, Int) -> Unit,
+    /** Puts a tile on another page without turning to it, as fitting home into its rows does. */
+    onRelocate: (HomeItem, Int) -> Unit,
     onGroup: (Shortcut, HomeItem) -> Unit,
     /** Moves an app within its folder to just before another of its apps, or with null to the end. */
     onReorder: (Shortcut, String?) -> Unit,
@@ -358,12 +362,25 @@ internal fun HomeGrid(
             derivedStateOf { pages.flatMap(itemsOn).maxOfOrNull { item -> layout.cell(item.key)?.let { reachRow(it, item.resizable) } ?: 0 } ?: 0 }
         }
         val fixedRows = LauncherStyle.homeRows
-        // home.rows is how tall the grid is: tiles placed lower (on a grid with more rows, before the setting) move to a
-        // free spot on their page, or to the next page with room, rather than the grid growing past what was asked.
+        // home.rows is how tall the grid is: tiles placed lower (on a grid with more rows, before the setting) move up, at
+        // their size, or to a later page with room, every page at once, rather than the grid growing past what was asked.
         LaunchedEffect(fixedRows, reached, arrange.holding) {
             val rows = fixedRows ?: return@LaunchedEffect
             if (arrange.holding || reached <= rows) return@LaunchedEffect
-            layout.unplace(pages.flatMap(itemsOn).filter { item -> layout.cell(item.key)?.let { reachRow(it, item.resizable) > rows } == true }.map { it.key })
+            val byKey = HashMap<String, HomeItem>()
+            val tiles =
+                pages.flatMap { page ->
+                    itemsOn(page).mapNotNull { item ->
+                        byKey[item.key] = item
+                        layout.cell(item.key)?.let { FitTile(item.key, page, it, item.resizable) }
+                    }
+                }
+            val moved = fitIntoRows(tiles, pages, GRID_COLUMNS, rows)
+            layout.setAll(moved.mapValues { it.value.second })
+            for ((key, to) in moved) {
+                val item = byKey[key] ?: continue
+                if (to.first != tiles.first { it.key == key }.page) onRelocate(item, to.first)
+            }
         }
         // Held while a finger holds a tile: shrinking the lowest one would otherwise resize every row under the finger
         // mid-gesture (with home.rows below what the tiles reach). The grid follows once the tile is let go.

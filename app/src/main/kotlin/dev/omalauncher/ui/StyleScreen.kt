@@ -119,7 +119,7 @@ fun StyleScreen(
             Flag("pill", "shown", "hidden", style, Style.HOME_PILL)
             Flag("prompt bar", "always", "with apps", style, Style.PROMPT_BAR)
             NumberOption("rows", listOf("auto" to 0.0) + (7..12).map { "$it" to it.toDouble() }, Style.HOME_ROWS, style)
-            OptionHint("tiles below the last row move up, or to the next page with room")
+            OptionHint("tiles below the last row move up at their size, or to a later page; more rows later won't move them back")
             NumberOption("corners", Corners.entries.map { it.label to it.scale.toDouble() }, Style.CORNER_SCALE, style)
             // Like Hyprland's gaps_in, gaps_out and border_size; the colors are in style.toml.
             Heading("widgets")

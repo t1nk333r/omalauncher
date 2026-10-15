@@ -438,6 +438,7 @@ fun HomeScreen(
                 engine.moveToPage(item, page)
                 showPage = page
             },
+            onRelocate = engine::moveToPage,
             onGroup = { app, target -> engine.shortcuts.group(app, target) },
             onReorder = { app, before -> engine.shortcuts.moveBefore(app.key, before) },
         )

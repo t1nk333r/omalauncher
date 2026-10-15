@@ -192,13 +192,10 @@ class WidgetLayout(
         return null
     }
 
-    /**
-     * Forgets where [names] sit on the grid, keeping their pages and glass: [place] gives each a free spot again,
-     * or leaves it for a page with room.
-     */
-    fun unplace(names: Collection<String>) {
-        if (names.isEmpty()) return
-        names.forEach(cells::remove)
+    /** Gives each of [moved] its cell at once and saves, as fitting the grid into fewer rows does. */
+    fun setAll(moved: Map<String, Cell>) {
+        if (moved.isEmpty()) return
+        cells.putAll(moved)
         save()
     }
 
@@ -266,3 +263,73 @@ class WidgetLayout(
         const val LEGACY_PAGES = "widget_pages"
     }
 }
+
+/** A tile on home as [fitIntoRows] sees it: its key, page and saved cell; an app ([resizable] false) shows 1x1. */
+internal data class FitTile(
+    val key: String,
+    val page: Int,
+    val cell: Cell,
+    val resizable: Boolean,
+) {
+    /** The cell it takes on the grid. */
+    val shown get() = if (resizable) cell else cell.copy(w = 1, h = 1)
+}
+
+/**
+ * Fits [tiles] on [pages] into [rows] of [cols]: a tile reaching below keeps its width and its height (cut to
+ * [rows]), moving up its own column as far as it can stay low, else to the first free spot of its size on its
+ * page, else to the first later page with room, or a new one after the last. Tiles that fit stay put. Returns the
+ * page and cell of each tile that moved; the rest of the layout is untouched.
+ */
+internal fun fitIntoRows(
+    tiles: List<FitTile>,
+    pages: List<Int>,
+    cols: Int,
+    rows: Int,
+): Map<String, Pair<Int, Cell>> {
+    val taken = HashMap<Int, MutableList<Cell>>()
+    val (fit, over) = tiles.partition { it.shown.bottom <= rows }
+    for (t in fit) taken.getOrPut(t.page) { mutableListOf() } += t.shown
+    val moved = LinkedHashMap<String, Pair<Int, Cell>>()
+
+    fun free(
+        page: Int,
+        c: Cell,
+    ) = taken[page].orEmpty().none { it.overlaps(c) }
+
+    fun firstFree(
+        page: Int,
+        w: Int,
+        h: Int,
+    ): Cell? {
+        for (y in 0..rows - h) for (x in 0..cols - w) Cell(x, y, w, h).takeIf { free(page, it) }?.let { return it }
+        return null
+    }
+
+    val carried = ArrayList<Pair<FitTile, Pair<Int, Int>>>()
+    for (t in over.sortedWith(compareBy({ it.page }, { it.shown.y }, { it.shown.x }))) {
+        val w = t.shown.w.coerceIn(1, cols)
+        val h = t.shown.h.coerceIn(1, rows)
+        val x = t.shown.x.coerceIn(0, cols - w)
+        // Up its own column, as low as it fits: the nearest spot to where it was.
+        val spot = (rows - h downTo 0).map { Cell(x, it, w, h) }.firstOrNull { free(t.page, it) } ?: firstFree(t.page, w, h)
+        if (spot != null) {
+            taken.getOrPut(t.page) { mutableListOf() } += spot
+            moved[t.key] = t.page to spot
+        } else {
+            carried += t to (w to h)
+        }
+    }
+    // Pages there are, and ones opened for overflow, which later overflow can share.
+    val known = (pages + tiles.map { it.page }).toSortedSet()
+    for ((t, size) in carried) {
+        val (w, h) = size
+        val later = known.filter { it > t.page } + ((known.lastOrNull() ?: 1) + 1)
+        val (page, spot) = later.firstNotNullOf { p -> firstFree(p, w, h)?.let { p to it } }
+        known += page
+        taken.getOrPut(page) { mutableListOf() } += spot
+        moved[t.key] = page to spot
+    }
+    return moved
+}
+
