@@ -429,7 +429,7 @@ private fun DockStrip(
                     when {
                         hit != null -> {
                             val (icon, mask) = hit.icons(runtime)
-                            StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
+                            StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime), bare = !LauncherStyle.dockBoxed)
                         }
                         // Only once its list has loaded is an app missing from it gone; until then its slot waits empty.
                         key != null && dockKeyKnown(runtime, key, linuxGone) -> MissingDockCell { runtime.dock.remove(key) }
@@ -537,11 +537,12 @@ private fun StripCell(
     spoken: String = label,
     /** As in [AppHit.paused]: drawn dimmed, like stock launchers. */
     paused: Boolean = false,
+    /** Drawn bare on the wallpaper (badges behind silhouettes and initials): home's apps' style, or the dock's own. */
+    bare: Boolean = LauncherStyle.bareAppIcons,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val mono = LauncherStyle.monochromeIcons
-    val bare = LauncherStyle.bareAppIcons
     val size = 40.dp
     Box(
         Modifier

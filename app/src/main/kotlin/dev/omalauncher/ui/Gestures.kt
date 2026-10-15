@@ -304,17 +304,26 @@ internal fun Modifier.homeSwipeAfterScroll(
             object : NestedScrollConnection {
                 var active = false
 
+                // Once home has the swipe, all of it is home's: moving back shrinks the swipe, not the list's scroll.
+                override fun onPreScroll(
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (!active || source != NestedScrollSource.UserInput || available.y == 0f) return Offset.Zero
+                    swiper.drag(available.y)
+                    return Offset(0f, available.y)
+                }
+
                 override fun onPostScroll(
                     consumed: Offset,
                     available: Offset,
                     source: NestedScrollSource,
                 ): Offset {
                     if (source != NestedScrollSource.UserInput || available.y == 0f) return Offset.Zero
-                    if (!active) {
-                        if (!on || !swiper.wants(available.y)) return Offset.Zero
-                        active = true
-                        swiper.start()
-                    }
+                    if (active) return Offset.Zero
+                    if (!on || !swiper.wants(available.y)) return Offset.Zero
+                    active = true
+                    swiper.start()
                     swiper.drag(available.y)
                     return Offset(0f, available.y)
                 }

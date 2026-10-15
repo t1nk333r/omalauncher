@@ -213,7 +213,7 @@ fun HomeScreen(
             // Sees every press first. The tile's own overlay never hears touches on its TextureView.
             // A still tap wakes an inert tile. A drag up or down scrolls it on that same press.
             // A sideways drag on an inert tile is left for the pager. One outside the active tile ends its turn.
-            .pointerInput(terminals) {
+            .pointerInput(terminals, swiper) {
                 val slop = viewConfiguration.touchSlop
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -252,6 +252,11 @@ fun HomeScreen(
                                     change.consume()
                                     swiper.start()
                                     swiper.drag(delta.y)
+                                    // A flick can cross the slop as it lifts: finish it here, or the drawer stays ajar.
+                                    if (!change.pressed) {
+                                        swiper.stop(tracker.calculateVelocity().y)
+                                        break
+                                    }
                                     continue
                                 }
                             }

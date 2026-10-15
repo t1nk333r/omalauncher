@@ -49,7 +49,14 @@ internal fun AppWidgetTile(
     val info = remember(item.id) { widgets.info(item.id) }
     val view = remember(item.id) { arrayOfNulls<View>(1) }
     val swipes by rememberUpdatedState(swiper)
-    BoxWithConstraints(modifier.handsSwipesToHome({ swipes }) { x, y, direction -> view[0]?.scrollsAt(x, y, direction) == true }) {
+    BoxWithConstraints(
+        modifier.handsSwipesToHome(
+            { swipes },
+            scrolls = { x, y, direction -> view[0]?.scrollsAt(x, y, direction) == true },
+            // As a scrolling view claims its own swipe: Compose then hands it the moves before home's drag can take them.
+            keep = { view[0]?.parent?.requestDisallowInterceptTouchEvent(true) },
+        ),
+    ) {
         if (info == null) {
             Box(Modifier.fillMaxSize().tile(focused).padding(8.dp), contentAlignment = Alignment.Center) {
                 BasicText("widget gone · its app was removed", style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
@@ -83,12 +90,14 @@ internal fun AppWidgetTile(
 
 /**
  * Takes an up or down swipe for home's [swiper] before the widget under it sees the moves, unless [scrolls] says the
- * widget can scroll that way at the press (x, y in px, direction as [View.canScrollVertically]). A sideways swipe, a
- * long-press home takes, or a swipe home does nothing with is left alone.
+ * widget can scroll that way at the press (x, y in px, direction as [View.canScrollVertically]); that swipe, or one
+ * home does nothing with, is the widget's, and [keep] claims it for it. A sideways swipe, or a long-press home takes,
+ * is left alone.
  */
 private fun Modifier.handsSwipesToHome(
     swiper: () -> HomeSwiper?,
     scrolls: (Float, Float, Int) -> Boolean,
+    keep: () -> Unit,
 ) = pointerInput(Unit) {
     val slop = viewConfiguration.touchSlop
     awaitEachGesture {
@@ -97,15 +106,24 @@ private fun Modifier.handsSwipesToHome(
         val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, down.position) }
         var homing = false
         while (true) {
-            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
+            if (change == null) {
+                if (homing) home.stop(0f)
+                break
+            }
             if (!homing) {
                 // Taken above (home lifting the tile after a long-press), or let go before it became a swipe.
                 if (change.isConsumed || !change.pressed) break
                 tracker.addPosition(change.uptimeMillis, change.position)
                 val d = change.position - down.position
                 if (d.getDistance() <= slop) continue
-                // Sideways is the pager's; one the widget scrolls, or home does nothing with, is the widget's.
-                if (abs(d.x) > abs(d.y) || !home.wants(d.y) || scrolls(down.position.x, down.position.y, if (d.y > 0) -1 else 1)) break
+                // Sideways is the pager's.
+                if (abs(d.x) > abs(d.y)) break
+                // One the widget scrolls, or home does nothing with, is the widget's.
+                if (!home.wants(d.y) || scrolls(down.position.x, down.position.y, if (d.y > 0) -1 else 1)) {
+                    keep()
+                    break
+                }
                 homing = true
                 change.consume()
                 home.start()
