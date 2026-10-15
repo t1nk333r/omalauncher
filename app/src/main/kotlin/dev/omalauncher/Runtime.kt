@@ -90,9 +90,6 @@ class Runtime(
     var linuxAppsListed by mutableStateOf(false)
         private set
 
-    /** Whether an app missing from [linuxApps] is gone: they've been listed, or there's no Linux to list them. */
-    val linuxAppsKnown get() = linuxAppsListed || !bootstrap.isInstalled
-
     /** Icons of [linuxApps] by desktop id; apps without a PNG icon have no entry. */
     val linuxIcons = mutableStateMapOf<String, ImageBitmap>()
 
@@ -266,6 +263,8 @@ class Runtime(
         linuxJob =
             scope.launch {
                 linux = false
+                // A reinstall lists them afresh; until then a docked Linux app isn't known to be gone.
+                linuxAppsListed = false
                 widgets.linuxChanged(false)
                 audio.stop()
                 withContext(Dispatchers.IO) { proot.killAll() }

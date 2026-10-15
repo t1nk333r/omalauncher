@@ -20,7 +20,7 @@ widget "today" {
   let failed = wx != null && !wx.ok
   let offline = failed && (wx.code < 0 || wx.code >= 500)
   let refused = failed && !offline
-  let place = city == "" ? "here" : city
+  let nowhere = city == "" ? "no weather here" : "no weather for ${city}"
   let data = wx.ok ? wx.out : offline ? kept : null
   let cur = data.current_condition[0]
   let day = data.weather[0]
@@ -158,7 +158,7 @@ widget "today" {
       Row {
         gap: 8
         align: center
-        Text { text: offline ? "weather offline" : refused ? "no weather for ${place}" : "weather…"; style: small; color: muted; weight: 1 }
+        Text { text: offline ? "weather offline" : refused ? nowhere : "weather…"; style: small; color: muted; weight: 1 }
         if failed {
           Text { text: "retry"; style: small; color: accent; width: 64; align: center; padding: [8, 2]; border: 1; borderColor: alpha(accent, 0.6); onTap: refresh() }
         }
@@ -176,7 +176,7 @@ widget "today" {
     if cur == null {
       Column {
         gap: 12
-        Text { text: offline ? "weather offline" : refused ? "no weather for ${place}" : "weather…"; style: body; color: muted }
+        Text { text: offline ? "weather offline" : refused ? nowhere : "weather…"; style: body; color: muted }
         if failed {
           Text { text: trim(wx.err ?? ""); style: small; color: muted; maxLines: 3 }
           Row {

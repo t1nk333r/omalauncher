@@ -400,6 +400,8 @@ private fun DockStrip(
     vertical: Boolean,
 ) {
     val byKey = allApps(runtime).associateBy { it.key }
+    val linuxState by runtime.bootstrap.state.collectAsState()
+    val linuxGone = linuxState == LinuxState.NotInstalled
     // In the dock's order; one uninstalled (or a Linux app not loaded yet) leaves its slot empty.
     val slots = runtime.dock.keys.map { byKey[it] }
     Box(
@@ -429,7 +431,7 @@ private fun DockStrip(
                             StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
                         }
                         // Only once its list has loaded is an app missing from it gone; until then its slot waits empty.
-                        key != null && dockKeyKnown(runtime, key) -> MissingDockCell { runtime.dock.remove(key) }
+                        key != null && dockKeyKnown(runtime, key, linuxGone) -> MissingDockCell { runtime.dock.remove(key) }
                     }
                 }
             }
@@ -485,14 +487,16 @@ internal fun RecentStrip(
 }
 
 /**
- * Whether the list a dock key's app comes from has loaded, so its absence means it's gone: Linux apps once listed,
- * shortcuts once Android lets the launcher list them (as the default home app), Android apps once listed.
+ * Whether the list a dock key's app comes from has loaded, so its absence means it's gone: Linux apps once listed
+ * (or with no Linux at all, [linuxGone]; while it's checked, installed or started they're still coming), shortcuts
+ * once Android lets the launcher list them (as the default home app), Android apps once listed.
  */
 private fun dockKeyKnown(
     runtime: Runtime,
     key: String,
+    linuxGone: Boolean,
 ) = when {
-    key.startsWith("l:") -> runtime.linuxAppsKnown
+    key.startsWith("l:") -> runtime.linuxAppsListed || linuxGone
     key.startsWith("s:") -> runtime.androidApps.loaded && runtime.androidApps.listsShortcuts
     else -> runtime.androidApps.loaded
 }
