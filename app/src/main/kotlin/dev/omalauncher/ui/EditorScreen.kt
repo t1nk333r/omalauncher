@@ -507,7 +507,7 @@ private fun EditorKeyCap(
     var pressed by remember { mutableStateOf(false) }
     KeyCap(
         modifier.pointerInput(key.label) {
-            presses { scope ->
+            presses { scope, _ ->
                 pressed = true
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 val press =
