@@ -73,8 +73,8 @@ fun LauncherRoot(
 ) {
     state.bindScope()
     val ready = runtime.launcherReady
-    // With our live wallpaper active the window is transparent and Android draws the wallpaper behind it.
-    val showOwnBackground = !ready || !runtime.themes.liveWallpaperActive
+    // With Android drawing the wallpaper (ours active, or the user's own) the window is transparent and needs no background.
+    val showOwnBackground = !ready || !runtime.themes.wallpaperBehind
     Box(
         Modifier
             .fillMaxSize()
@@ -115,7 +115,8 @@ private fun DesktopScreen(
 
     // Frosted glass: a blurred copy of the wallpaper the tiles draw their part of; see Backdrop.
     val blurDp = LauncherStyle.style[Style.WIDGET_BLUR]
-    val wallpaper = runtime.themes.wallpaper.takeUnless { runtime.themes.liveWallpaperActive }
+    // None while Android's own wallpaper shows behind home: there's no image of it to blur.
+    val wallpaper = runtime.themes.wallpaper.takeUnless { runtime.themes.wallpaperBehind }
     val density = LocalDensity.current.density
     LaunchedEffect(wallpaper, blurDp, density) {
         Backdrop.offset = { state.wallpaperOffset }
@@ -128,7 +129,7 @@ private fun DesktopScreen(
                 }
             }
     }
-    if (!runtime.themes.liveWallpaperActive) {
+    if (!runtime.themes.wallpaperBehind) {
         runtime.themes.wallpaper?.let { bmp ->
             // Read while drawing, so swiping pages only redraws this.
             Canvas(Modifier.fillMaxSize()) {
