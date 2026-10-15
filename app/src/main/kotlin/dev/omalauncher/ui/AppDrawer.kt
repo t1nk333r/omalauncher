@@ -564,27 +564,30 @@ private fun Modifier.dragsOutOfDock(
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 var dragging = false
-                while (true) {
-                    val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
-                    if (change == null) {
-                        if (dragging) state.dockDrag = null
-                        break
+                // However the drag ends (this icon leaving the screen mid-drag too), the dragged icon goes.
+                try {
+                    while (true) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                        if (!dragging) {
+                            if (!change.pressed) break
+                            if ((change.position - down.position).getDistance() <= slop) continue
+                            // Moved before the long-press: a swipe, home's or the tap's to settle.
+                            if (change.uptimeMillis - down.uptimeMillis < hold) break
+                            dragging = true
+                            state.dockDrag = hit
+                        }
+                        if (!change.pressed) {
+                            // A lift arrives here unconsumed; a cancel (the system taking the gesture) arrives consumed,
+                            // and only puts the icon back.
+                            if (!change.isConsumed) dropFromDock(runtime, state, hit, origin + change.position, dock())
+                            change.consume()
+                            break
+                        }
+                        change.consume()
+                        state.dockDragAt = origin + change.position
                     }
-                    if (!dragging) {
-                        if (!change.pressed) break
-                        if ((change.position - down.position).getDistance() <= slop) continue
-                        // Moved before the long-press: a swipe, home's or the tap's to settle.
-                        if (change.uptimeMillis - down.uptimeMillis < hold) break
-                        dragging = true
-                        state.dockDrag = hit
-                    }
-                    change.consume()
-                    state.dockDragAt = origin + change.position
-                    if (!change.pressed) {
-                        dropFromDock(runtime, state, hit, origin + change.position, dock())
-                        state.dockDrag = null
-                        break
-                    }
+                } finally {
+                    if (state.dockDrag === hit) state.dockDrag = null
                 }
             }
         }
