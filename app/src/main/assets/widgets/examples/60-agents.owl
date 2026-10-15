@@ -15,8 +15,7 @@ widget "agents" {
     Flow {
       gap: 6
       for agent in words(installed) {
-        // Terminals start in ~, which Oh My Pi otherwise leaves for a temp dir.
-        Button { text: agent; onTap: terminal(agent == "omp" ? "omp --allow-home" : agent) }
+        Button { text: agent; onTap: terminal(agent) }
       }
     }
     Button { text: "manage"; color: muted; onTap: launcher("agents") }

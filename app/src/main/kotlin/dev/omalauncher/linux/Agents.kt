@@ -39,7 +39,8 @@ val AGENTS =
         Agent("cursor-agent", "Cursor CLI", "Cursor's agent for the terminal", "cursor-agent"),
         Agent("agy", "Antigravity", "Google's Gemini coding agent", "antigravity-cli"),
         Agent("pi", "Pi", "Minimal, extensible coding agent", "pi"),
-        Agent("omp", "Oh My Pi", "Pi with tools and plugins built in", "github:can1357/oh-my-pi"),
+        // Terminals start in ~ (/root), which Oh My Pi otherwise leaves for a temp dir.
+        Agent("omp", "Oh My Pi", "Pi with tools and plugins built in", "github:can1357/oh-my-pi", command = "omp --allow-home"),
         Agent("ori", "Ori", "OpenRouter's coding agent", "github:OpenRouterLabs/ori-releases", command = "ori code"),
         Agent(
             "muse",
@@ -55,9 +56,11 @@ val AGENTS =
  * Starts [agentBin] with a first prompt; OpenCode takes it as --prompt, the others as an argument.
  * Ori's agent is `ori code`, which stays open only with --interactive. Kimi takes a prompt only in
  * print mode, so the session it ran in is continued after the answer.
+ * Oh My Pi stays in ~ with --allow-home, as its [Agent.command] does.
  * [readOnly], for reading something untrusted: Claude Code starts in plan mode, where it can read but not
- * run commands or change files whatever the user's settings say. The others have no flag for that we can
- * rely on inside proot, and only have the prompt.
+ * run commands or change files whatever the user's settings say, and Oh My Pi gets only its read tools and
+ * asks before writes or commands. The others have no flag for that we can rely on inside proot, and only
+ * have the prompt.
  */
 fun agentInvocation(
     agentBin: String,
@@ -68,6 +71,8 @@ fun agentInvocation(
     return when {
         agentBin == "opencode" -> "$agentBin --prompt $quoted"
         agentBin == "claude" && readOnly -> "$agentBin --permission-mode plan $quoted"
+        agentBin == "omp" && readOnly -> "omp --allow-home --tools read,grep,glob --approval-mode always-ask $quoted"
+        agentBin == "omp" -> "omp --allow-home $quoted"
         agentBin == "ori" -> "ori code --interactive --prompt $quoted"
         agentBin == "kimi" -> "kimi --prompt $quoted && kimi --continue"
         else -> "$agentBin $quoted"
