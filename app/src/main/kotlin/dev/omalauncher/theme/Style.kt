@@ -156,7 +156,8 @@ class Style(
         val RECENT_APPS = Setting.Flag("home.recent-apps", true, "The strip above the prompt bar: the dock (home.dock) or the apps used lately; false hides it.")
         val DOCK = Setting.Flag("home.dock", true, "true: the strip holds a dock of up to 5 apps you pick (long-press an app, add to dock); false: the apps used lately.")
         val DOCK_BOX = Setting.Flag("home.dock-box", true, "The dock on a box of the tiles' glass; false leaves its icons bare on the wallpaper.")
-        val HOME_PILL = Setting.Flag("home.pill", true, "A pill above the strip that does what swiping down on home does, named after it: search, notifications or apps. None while swiping down does nothing.")
+        val DOCK_HEIGHT = Setting.Number("home.dock-height", 100.0, 48.0..160.0, "The dock's height in dp; its icons grow to fill it, as wide as five fit across. 56 is the strip's own height, 100 takes the pill's row too.")
+        val HOME_PILL = Setting.Flag("home.pill", false, "A pill above the strip that does what swiping down on home does, named after it: search, notifications or apps. None while swiping down does nothing.")
         val PROMPT_BAR = Setting.Flag("home.prompt-bar", false, "The prompt bar on home; false shows it only with the app panel open (a swipe or the pill), and home reaches further down.")
         val HOME_ROWS = Setting.Number("home.rows", 9.0, 0.0..14.0, "Rows of the home grid in portrait: 0 as many square cells as fit, or a number to stretch or squeeze the cells to. Tiles below the last row move up, or to the next page with room.")
 
@@ -227,7 +228,7 @@ object StyleFile {
 
     val ALL: List<Setting<*>> =
         with(Style) {
-            listOf(THEME, BACKGROUND, ANDROID_WALLPAPER, APP_TILES, RECENT_APPS, DOCK, DOCK_BOX, HOME_PILL, PROMPT_BAR, HOME_ROWS, GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
+            listOf(THEME, BACKGROUND, ANDROID_WALLPAPER, APP_TILES, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, HOME_PILL, PROMPT_BAR, HOME_ROWS, GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, MONOCHROME_ICONS, CORNER_SCALE) +
                 STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, EXTRA_KEYS)
         }

@@ -499,7 +499,7 @@ fun HomeScreen(
 @Composable
 internal fun homeStripRoom(runtime: Runtime): Dp =
     with(LocalDensity.current) {
-        val strip = if (LauncherStyle.recentApps) RecentStripHeight.roundToPx() else 0
+        val strip = if (LauncherStyle.recentApps) stripHeight.roundToPx() else 0
         val pill = if (LauncherStyle.homePill && pillLabel(runtime.gestures.swipeDown) != null) PillHeight.roundToPx() + HomeGap.roundToPx() else 0
         (strip + pill).toDp()
     }

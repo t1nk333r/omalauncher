@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListScope
@@ -379,6 +380,18 @@ private fun HitCell(
 /** Height of the recent apps strip; home keeps this much room for it above the bar, even while it's empty. */
 val RecentStripHeight = 56.dp
 
+/** The strip's height on home in portrait: the dock's own (home.dock-height) while it holds the dock. */
+internal val stripHeight: Dp get() = if (LauncherStyle.dockShown) LauncherStyle.dockHeight else RecentStripHeight
+
+/**
+ * A dock app's cell for a dock [along] long and [across] deep: as deep as the dock with a margin, but never wider
+ * than its fifth of the length with a gap between, never below the recent strip's 48dp.
+ */
+internal fun dockCellSize(
+    along: Dp,
+    across: Dp,
+): Dp = minOf(across - 12.dp, along / DOCK_SLOTS - 8.dp).coerceAtLeast(48.dp)
+
 /** Home's strip above the bar: the dock, or the apps used lately, as style's home.dock says. */
 @Composable
 internal fun AppStrip(
@@ -404,9 +417,9 @@ private fun DockStrip(
     val linuxGone = linuxState == LinuxState.NotInstalled
     // In the dock's order; one uninstalled (or a Linux app not loaded yet) leaves its slot empty.
     val slots = runtime.dock.keys.map { byKey[it] }
-    Box(
+    BoxWithConstraints(
         modifier
-            .then(if (vertical) Modifier.fillMaxHeight().width(RecentStripHeight) else Modifier.padding(horizontal = EdgeGap).fillMaxWidth().height(RecentStripHeight))
+            .then(if (vertical) Modifier.fillMaxHeight().width(RecentStripHeight) else Modifier.padding(horizontal = EdgeGap).fillMaxWidth().height(LauncherStyle.dockHeight))
             // Boxed or bare as home.dock-box says, whatever home's own apps are.
             .then(if (LauncherStyle.dockBoxed) Modifier.tile() else Modifier),
         contentAlignment = Alignment.Center,
@@ -418,9 +431,11 @@ private fun DockStrip(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            return@Box
+            return@BoxWithConstraints
         }
         val from = remember(vertical) { DockCell(vertical) }
+        // As big as the dock is tall, but five must fit across (down, in landscape).
+        val cell = if (vertical) dockCellSize(maxHeight, maxWidth) else dockCellSize(maxWidth, maxHeight)
         val cells: @Composable (Modifier) -> Unit = { slot ->
             for (i in 0 until DOCK_SLOTS) {
                 Box(slot, contentAlignment = Alignment.Center) {
@@ -429,7 +444,7 @@ private fun DockStrip(
                     when {
                         hit != null -> {
                             val (icon, mask) = hit.icons(runtime)
-                            StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime), bare = !LauncherStyle.dockBoxed)
+                            StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime), bare = !LauncherStyle.dockBoxed, cell = cell)
                         }
                         // Only once its list has loaded is an app missing from it gone; until then its slot waits empty.
                         key != null && dockKeyKnown(runtime, key, linuxGone) -> MissingDockCell { runtime.dock.remove(key) }
@@ -539,14 +554,16 @@ private fun StripCell(
     paused: Boolean = false,
     /** Drawn bare on the wallpaper (badges behind silhouettes and initials): home's apps' style, or the dock's own. */
     bare: Boolean = LauncherStyle.bareAppIcons,
+    /** The cell's size; its icon takes five sixths of it. A big dock passes more. */
+    cell: Dp = 48.dp,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val mono = LauncherStyle.monochromeIcons
-    val size = 40.dp
+    val size = cell * 5 / 6
     Box(
         Modifier
-            .size(48.dp)
+            .size(cell)
             .alpha(if (paused) PausedAlpha else 1f)
             .clip(LauncherStyle.shape(12.dp))
             .combinedClickable(

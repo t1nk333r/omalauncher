@@ -117,6 +117,9 @@ object LauncherStyle {
     /** The dock sits on a box of glass rather than bare on the wallpaper. */
     val dockBoxed get() = style[Style.DOCK_BOX]
 
+    /** How tall the dock is on home (in portrait; beside landscape's grid it's as wide as the recent strip). */
+    val dockHeight: Dp get() = style[Style.DOCK_HEIGHT].toFloat().dp
+
     /** The dock is on home: the strip shows, and holds it. What adds to or arranges the dock waits for this. */
     val dockShown get() = recentApps && dock
 
