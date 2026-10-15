@@ -289,6 +289,7 @@ fun HomeScreen(
                                 state.sharing = item.spec
                             }
                         }
+                        if (item is WidgetItem) GlassActions(engine.layout, item.spec.file.name)
                         // An Android widget that lets its settings change later, in its own screen.
                         if (item is AppWidgetItem && engine.appWidgets.reconfigurable(item.id)) {
                             EditAction("settings") {
@@ -326,6 +327,7 @@ fun HomeScreen(
                             onInstall = { engine.installDependencies(item.spec) },
                             waitsForLinux = if (engine.waitsForLinux(item.spec)) linuxState else null,
                             onInstallLinux = { state.show(SettingsPage.Linux) },
+                            glass = engine.layout.glass(item.spec.file.name),
                             onFix = { log ->
                                 val agent = runtime.agents.default
                                 if (agent == null) {
