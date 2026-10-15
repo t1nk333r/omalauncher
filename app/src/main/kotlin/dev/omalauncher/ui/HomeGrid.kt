@@ -795,10 +795,11 @@ private fun TiledPage(
                 }
             }
         }
-        if (items.none { it.key != carried }) {
+        // Only while a tile is carried: an empty page otherwise just shows the wallpaper.
+        if (carried != null && items.none { it.key != carried }) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 BasicText(
-                    if (carried != null) "drop here" else "no widgets on this page · long-press for a new one",
+                    "drop here",
                     Modifier.background(Palette.background.copy(alpha = 0.8f)).padding(horizontal = 12.dp, vertical = 6.dp),
                     style = Mono,
                 )

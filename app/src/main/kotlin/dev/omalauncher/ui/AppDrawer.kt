@@ -407,7 +407,8 @@ private fun DockStrip(
     Box(
         modifier
             .then(if (vertical) Modifier.fillMaxHeight().width(RecentStripHeight) else Modifier.padding(horizontal = EdgeGap).fillMaxWidth().height(RecentStripHeight))
-            .then(if (LauncherStyle.bareAppIcons) Modifier else Modifier.tile()),
+            // Boxed or bare as home.dock-box says, whatever home's own apps are.
+            .then(if (LauncherStyle.dockBoxed) Modifier.tile() else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         if (slots.isEmpty()) {

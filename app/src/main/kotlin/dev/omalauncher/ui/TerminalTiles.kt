@@ -268,16 +268,24 @@ private class TileDrag(
 )
 
 /**
- * Where a drag past the touch slop goes. An inert tile gives a sideways drag to
- * the pager and keeps an up or down drag as scrolling. An active tile keeps both.
+ * Where a drag past the touch slop goes. An inert tile gives a sideways drag to the pager, and an up or down drag to
+ * home's swipes ([homeTakes]: search, the drawer, the shade) as other tiles do, or scrolls it when home does nothing
+ * that way. An active tile, being typed in, keeps both as scrolling.
  */
-internal enum class TerminalGesture { TurnPage, ScrollTile }
+internal enum class TerminalGesture { TurnPage, ScrollTile, Home }
 
 internal fun terminalGesture(
     tileActive: Boolean,
     dx: Float,
     dy: Float,
-): TerminalGesture = if (!tileActive && abs(dx) > abs(dy)) TerminalGesture.TurnPage else TerminalGesture.ScrollTile
+    homeTakes: Boolean = false,
+): TerminalGesture =
+    when {
+        tileActive -> TerminalGesture.ScrollTile
+        abs(dx) > abs(dy) -> TerminalGesture.TurnPage
+        homeTakes -> TerminalGesture.Home
+        else -> TerminalGesture.ScrollTile
+    }
 
 /** One tile's terminal. Its foot starts when the tile first shows and runs until the widget goes away. */
 class EmbeddedTerminal internal constructor(

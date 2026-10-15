@@ -31,6 +31,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.boundsInWindow
@@ -68,13 +69,14 @@ fun HomeScreen(
     val engine = runtime.widgets
     val linuxState by runtime.bootstrap.state.collectAsState()
     val arrange = remember { Arrange() }
-    // One empty page always waits after the last one, to drop tiles on or pin apps to. Pages only exist
-    // while they hold something, so it becomes a real page once used and a new empty one follows.
+    val swiper = rememberHomeSwiper(runtime, state)
+    // An empty page waits after the last one only while a tile is carried, to drop it on; otherwise home is just the
+    // pages that hold something. Pages only exist while they do, so a page a tile was dropped on stays.
     // Unfolded, pages show in pairs: the pager counts pairs, and an odd last page gets an empty partner.
     val per = if (showsTwoPages(LocalWindowInfo.current.containerSize)) 2 else 1
     val pageNumbers =
         engine.pages
-            .let { if (engine.itemsOn(it.last()).isEmpty()) it else it + (it.last() + 1) }
+            .let { if (arrange.carry == null || engine.itemsOn(it.last()).isEmpty()) it else it + (it.last() + 1) }
             .let { if (it.size % per == 0) it else it + (it.last() + 1) }
     val pager = rememberPagerState { pageNumbers.size / per }
     // A tile dropped on another page: show that page once the page list has caught up.
@@ -87,6 +89,8 @@ fun HomeScreen(
     var menuFor by remember { mutableStateOf<HomeItem?>(null) }
 
     val terminals = runtime.terminals
+    // Whether home's swipes are on: not while editing, in a folder or typing in a tile.
+    val swipesOn = terminals.active == null && state.editing == null && arrange.folder == null
     BackHandler(enabled = terminals.active != null) { terminals.deactivate() }
     BackHandler(enabled = state.homeMenuOpen) { state.homeMenuOpen = false }
     BackHandler(enabled = state.editing != null && !state.homeMenuOpen) { state.editing = null }
@@ -224,21 +228,44 @@ fun HomeScreen(
                     if (wasActive) down.consume()
                     var scrolling = false
                     var turnedPage = false
+                    // Handed to home's swipe (search, the drawer, the shade), as a swipe on any other tile would be.
+                    var homing = false
+                    val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, start) }
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val change = event.changes.firstOrNull { it.id == down.id }
                         if (change == null) {
                             if (scrolling) terminals.endDrag()
+                            if (homing) swiper.stop(0f)
                             break
                         }
                         val delta = change.position - start
-                        if (!scrolling && !turnedPage && term != null && delta.getDistance() > slop) {
-                            when (terminalGesture(wasActive, delta.x, delta.y)) {
+                        tracker.addPosition(change.uptimeMillis, change.position)
+                        if (!scrolling && !turnedPage && !homing && term != null && delta.getDistance() > slop) {
+                            // Read now, not when the press began: home's swipes stay off while a tile is in use.
+                            val homeTakes = terminals.active == null && state.editing == null && arrange.folder == null && swiper.wants(delta.y)
+                            when (terminalGesture(wasActive, delta.x, delta.y, homeTakes)) {
                                 TerminalGesture.TurnPage -> turnedPage = true
                                 TerminalGesture.ScrollTile -> scrolling = true
+                                TerminalGesture.Home -> {
+                                    homing = true
+                                    change.consume()
+                                    swiper.start()
+                                    swiper.drag(delta.y)
+                                    continue
+                                }
                             }
                         }
                         when {
+                            homing -> {
+                                change.consume()
+                                if (change.pressed) {
+                                    swiper.drag(change.position.y - change.previousPosition.y)
+                                } else {
+                                    swiper.stop(tracker.calculateVelocity().y)
+                                    break
+                                }
+                            }
                             scrolling && term != null -> {
                                 change.consume()
                                 if (change.pressed) {
@@ -277,7 +304,9 @@ fun HomeScreen(
             // Swiping up opens the drawer and down search, or what gesture settings say (the notification shade, say);
             // not while editing, in a folder or typing in a tile. A long-press drag takes its touches first, and the
             // pager only wants sideways ones.
-            .homeSwipe(runtime, state, enabled = terminals.active == null && state.editing == null && arrange.folder == null)
+            .homeSwipe(runtime, state, enabled = swipesOn)
+            // A widget's list at its end hands on the swipe, so pulling one down at its top still opens search.
+            .homeSwipeAfterScroll(swiper, enabled = swipesOn)
             // Typing in a terminal tile: lift the pages so the tile stays above the keyboard, but not under the status
             // bar; a tile too tall for both gives up the rest at its bottom.
             .graphicsLayer {
@@ -423,7 +452,7 @@ fun HomeScreen(
                             modifier = tile,
                             onTap = { arrange.folder = item.key },
                         )
-                    is AppWidgetItem -> AppWidgetTile(item, engine.appWidgets, highlighted, tile)
+                    is AppWidgetItem -> AppWidgetTile(item, engine.appWidgets, highlighted, tile, swiper.takeIf { swipesOn })
                 }
             },
             // The strip's room (the dock or recent apps) and the pill's above it: kept while they're empty, so tiles don't

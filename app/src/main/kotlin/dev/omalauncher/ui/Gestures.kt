@@ -21,7 +21,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,6 +46,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import dev.omalauncher.Runtime
 
 /** What a gesture on home does. */
@@ -194,6 +200,70 @@ internal fun homeSwipeFor(
 }
 
 /**
+ * One swipe on home, from its first step to letting go. Its first step picks what it does ([homeSwipeFor]): going up
+ * the drawer follows the finger, while search and the rest open when it's let go. [homeSwipe] drives it from a drag
+ * on home; tiles that hand a vertical swipe over to home drive it too: a terminal not in use, an Android widget that
+ * can't scroll that way, a widget's list already at its end.
+ */
+@Stable
+internal class HomeSwiper(
+    private val runtime: Runtime,
+    private val state: LauncherState,
+    private val context: Context,
+    private val screenHeight: Float,
+    private val openDistance: Float,
+) {
+    private var swipe: HomeSwipe? = null
+
+    // How far the swipe has gone its way, for what opens when it's let go.
+    private var distance = 0f
+
+    /** Whether a swipe starting [dy] (down positive) would do anything; when not, it's left to what's under it. */
+    fun wants(dy: Float) = homeSwipeFor(state.drawer.value, dy, runtime.gestures.swipeUp, runtime.gestures.swipeDown).action != GestureAction.None
+
+    fun start() {
+        swipe = null
+        distance = 0f
+    }
+
+    /** A step of [dy] px, down positive. */
+    fun drag(dy: Float) {
+        if (swipe == null && dy != 0f) {
+            val picked = homeSwipeFor(state.drawer.value, dy, runtime.gestures.swipeUp, runtime.gestures.swipeDown)
+            swipe = picked
+            if (picked.action == GestureAction.Notifications) expandNotifications(context)
+            if (picked.browses(state.drawer.value)) state.focusSearch = false
+        }
+        swipe?.let {
+            distance += it.along(dy)
+            if (it.dragsDrawer) state.dragBy(-dy / screenHeight)
+        }
+    }
+
+    /** Let go at [velocity] px/s, down positive. */
+    fun stop(velocity: Float) {
+        swipe?.let {
+            when {
+                it.dragsDrawer -> state.settle(velocity)
+                it.opensOnRelease(distance, velocity, openDistance) -> state.open(search = it.action == GestureAction.Search)
+            }
+        }
+        swipe = null
+    }
+}
+
+@Composable
+internal fun rememberHomeSwiper(
+    runtime: Runtime,
+    state: LauncherState,
+): HomeSwiper {
+    val context = LocalContext.current
+    val screenHeight = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val openDistance = with(LocalDensity.current) { 56.dp.toPx() }
+    return remember(runtime, state, context, screenHeight, openDistance) { HomeSwiper(runtime, state, context, screenHeight, openDistance) }
+}
+
+/**
  * Swiping on home (the pages, the recent apps strip, the bar) does what's picked in gesture settings: by default up
  * opens the drawer under the finger with the keyboard down, and down opens search with the keyboard up.
  */
@@ -203,48 +273,61 @@ internal fun Modifier.homeSwipe(
     state: LauncherState,
     enabled: Boolean = true,
 ): Modifier {
-    val context = LocalContext.current
     val gestures = runtime.gestures
     val drawerShown by remember(state) { derivedStateOf { state.drawer.value > 0f } }
     // Whether the drawer shows is only read when it matters: read here, it would recompose all of home (its Box is
     // inline) each time the drawer opens or closes.
     val drags = gestures.swipeUp != GestureAction.None || gestures.swipeDown != GestureAction.None || drawerShown
-    val screenHeight = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
-    val openDistance = with(LocalDensity.current) { 56.dp.toPx() }
-    // Picked by the swipe's first step, so one that starts down and turns up doesn't open the drawer under the shade.
-    var swipe by remember { mutableStateOf<HomeSwipe?>(null) }
-    // How far the swipe has gone its way, for what opens when it's let go.
-    var distance by remember { mutableFloatStateOf(0f) }
+    val swiper = rememberHomeSwiper(runtime, state)
     // One drag handler, only turned on or off: a new one mid-swipe (as the drawer starts to show) would drop the drag.
     return draggable(
         orientation = Orientation.Vertical,
         enabled = enabled && drags,
-        state =
-            rememberDraggableState { dy ->
-                if (swipe == null && dy != 0f) {
-                    val picked = homeSwipeFor(state.drawer.value, dy, gestures.swipeUp, gestures.swipeDown)
-                    swipe = picked
-                    if (picked.action == GestureAction.Notifications) expandNotifications(context)
-                    if (picked.browses(state.drawer.value)) state.focusSearch = false
+        state = rememberDraggableState { dy -> swiper.drag(dy) },
+        onDragStarted = { swiper.start() },
+        onDragStopped = { velocity -> swiper.stop(velocity) },
+    )
+}
+
+/**
+ * A widget's list scrolled to its end hands the rest of the swipe to home: pulled down at its top it opens search (or
+ * what swiping down does), pushed up at its bottom the drawer. Its fling goes to home too, so the list doesn't fling.
+ */
+@Composable
+internal fun Modifier.homeSwipeAfterScroll(
+    swiper: HomeSwiper,
+    enabled: Boolean,
+): Modifier {
+    val on by rememberUpdatedState(enabled)
+    val connection =
+        remember(swiper) {
+            object : NestedScrollConnection {
+                var active = false
+
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (source != NestedScrollSource.UserInput || available.y == 0f) return Offset.Zero
+                    if (!active) {
+                        if (!on || !swiper.wants(available.y)) return Offset.Zero
+                        active = true
+                        swiper.start()
+                    }
+                    swiper.drag(available.y)
+                    return Offset(0f, available.y)
                 }
-                swipe?.let {
-                    distance += it.along(dy)
-                    if (it.dragsDrawer) state.dragBy(-dy / screenHeight)
-                }
-            },
-        onDragStarted = {
-            swipe = null
-            distance = 0f
-        },
-        onDragStopped = { velocity ->
-            swipe?.let {
-                when {
-                    it.dragsDrawer -> state.settle(velocity)
-                    it.opensOnRelease(distance, velocity, openDistance) -> state.open(search = it.action == GestureAction.Search)
+
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    if (!active) return Velocity.Zero
+                    active = false
+                    swiper.stop(available.y)
+                    return available
                 }
             }
-        },
-    )
+        }
+    return nestedScroll(connection)
 }
 
 /** Height of the pill above the dock. */

@@ -114,6 +114,9 @@ object LauncherStyle {
     /** The strip holds the dock rather than the apps used lately. */
     val dock get() = style[Style.DOCK]
 
+    /** The dock sits on a box of glass rather than bare on the wallpaper. */
+    val dockBoxed get() = style[Style.DOCK_BOX]
+
     /** The dock is on home: the strip shows, and holds it. What adds to or arranges the dock waits for this. */
     val dockShown get() = recentApps && dock
 

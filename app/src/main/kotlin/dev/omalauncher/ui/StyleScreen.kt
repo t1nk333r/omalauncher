@@ -115,6 +115,7 @@ fun StyleScreen(
                     else -> 1
                 },
             ) { i -> style.update { if (i == 2) it.with(Style.RECENT_APPS, false) else it.with(Style.RECENT_APPS, true).with(Style.DOCK, i == 0) } }
+            Flag("dock", "boxed", "bare", style, Style.DOCK_BOX)
             // Does what swiping down does, as gestures set it.
             Flag("pill", "shown", "hidden", style, Style.HOME_PILL)
             Flag("prompt bar", "always", "with apps", style, Style.PROMPT_BAR)
