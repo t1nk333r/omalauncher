@@ -1,11 +1,14 @@
 package dev.omalauncher.ui
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -16,7 +19,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -24,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -43,6 +49,7 @@ enum class GestureAction(
 ) {
     Drawer("drawer", "app drawer"),
     Search("search", "search / agent prompt"),
+    Notifications("notifications", "notifications"),
     None("none", "nothing"),
     ;
 
@@ -51,15 +58,22 @@ enum class GestureAction(
     }
 }
 
-/** The saved actions for vertical gestures on home. */
+/** What swiping up on home can do, the default first. */
+internal val SwipeUpChoices = listOf(GestureAction.Drawer, GestureAction.Search, GestureAction.None)
+
+/** What swiping down on home can do, the default first. */
+internal val SwipeDownChoices = listOf(GestureAction.Search, GestureAction.Notifications, GestureAction.Drawer, GestureAction.None)
+
+/** The actions picked for home's gestures. */
 class Gestures(
     context: Context,
 ) {
     private val prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
 
-    private var up by mutableStateOf(GestureAction.of(prefs.getString(SWIPE_UP, null)) ?: GestureAction.Drawer)
+    private var up by mutableStateOf(saved(SWIPE_UP, SwipeUpChoices))
+    private var down by mutableStateOf(saved(SWIPE_DOWN, SwipeDownChoices))
 
-    /** The app drawer by default, like stock launchers. Saved as it's set. */
+    /** The app drawer by default, like stock launchers, with the keyboard down. Saved as it's set. */
     var swipeUp: GestureAction
         get() = up
         set(action) {
@@ -67,8 +81,7 @@ class Gestures(
             prefs.edit().putString(SWIPE_UP, action.id).apply()
         }
 
-    private var down by mutableStateOf(GestureAction.of(prefs.getString(SWIPE_DOWN, null)) ?: GestureAction.Search)
-
+    /** Search and the agent prompt by default, with the keyboard up. Saved as it's set. */
     var swipeDown: GestureAction
         get() = down
         set(action) {
@@ -76,9 +89,15 @@ class Gestures(
             prefs.edit().putString(SWIPE_DOWN, action.id).apply()
         }
 
+    /** The action saved for [key] if the gesture offers it, else its default. */
+    private fun saved(
+        key: String,
+        choices: List<GestureAction>,
+    ) = GestureAction.of(prefs.getString(key, null))?.takeIf { it in choices } ?: choices.first()
+
     private companion object {
-        const val SWIPE_DOWN = "gesture_swipe_down"
         const val SWIPE_UP = "gesture_swipe_up"
+        const val SWIPE_DOWN = "gesture_swipe_down"
     }
 }
 
@@ -101,9 +120,47 @@ internal fun Modifier.drawerSwipe(
     )
 }
 
+/** What a swipe on home does, and the [way] it counts as going (-1 up, 1 down): the drawer opens that way, search is reached that way. */
+internal data class HomeSwipe(
+    val action: GestureAction,
+    val way: Float,
+)
+
 /**
- * Vertical swipes on home (the pages, the recent apps strip, the bar) run their configured action. With
- * the drawer open, the swipe drags it whatever the setting, so it can still be pulled closed.
+ * What a swipe on home does, from how far the drawer is open and the swipe's first step ([dy] > 0 is down). With
+ * the drawer showing, the swipe drags it whatever the settings, so it can still be pulled closed.
+ */
+internal fun homeSwipeFor(
+    drawer: Float,
+    dy: Float,
+    up: GestureAction,
+    down: GestureAction,
+): HomeSwipe {
+    val way = if (dy > 0f) 1f else -1f
+    val picked = if (dy > 0f) down else up
+    val other = if (dy > 0f) up else down
+    return when {
+        drawer > 0f -> HomeSwipe(GestureAction.Drawer, -1f)
+        picked != GestureAction.None -> HomeSwipe(picked, way)
+        // With nothing set this way, the drawer still follows a swipe that starts this way and turns back.
+        other == GestureAction.Drawer -> HomeSwipe(GestureAction.Drawer, -way)
+        else -> HomeSwipe(GestureAction.None, way)
+    }
+}
+
+/**
+ * Whether a swipe for search opens it: once it has gone [threshold] its way, or is let go of moving that way as fast
+ * as a fling settles the drawer. [distance] and [velocity] are measured its way, so a swipe that turned back doesn't.
+ */
+internal fun reachesSearch(
+    distance: Float,
+    velocity: Float,
+    threshold: Float,
+) = distance >= threshold || (distance > 0f && velocity > 800f)
+
+/**
+ * Swiping on home (the pages, the recent apps strip, the bar) does what's picked in gesture settings: by default up
+ * opens the drawer under the finger with the keyboard down, and down opens search with the keyboard up.
  */
 @Composable
 internal fun Modifier.homeSwipe(
@@ -111,45 +168,71 @@ internal fun Modifier.homeSwipe(
     state: LauncherState,
     enabled: Boolean = true,
 ): Modifier {
+    val context = LocalContext.current
+    val gestures = runtime.gestures
+    val drawerShown by remember(state) { derivedStateOf { state.drawer.value > 0f } }
+    // Whether the drawer shows is only read when it matters: read here, it would recompose all of home (its Box is
+    // inline) each time the drawer opens or closes.
+    val drags = gestures.swipeUp != GestureAction.None || gestures.swipeDown != GestureAction.None || drawerShown
     val screenHeight = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
-    val threshold = with(LocalDensity.current) { 56.dp.toPx() }
-    var draggingDrawer by remember(state) { mutableStateOf(false) }
-    var action by remember(state) { mutableStateOf<GestureAction?>(null) }
-    var distance by remember(state) { mutableStateOf(0f) }
-    var direction by remember(state) { mutableStateOf(1f) }
-    // Keep the same handler when the panel appears mid-drag.
+    val searchDistance = with(LocalDensity.current) { 56.dp.toPx() }
+    // Picked by the swipe's first step, so one that starts down and turns up doesn't open the drawer under the shade.
+    var swipe by remember { mutableStateOf<HomeSwipe?>(null) }
+    // How far the swipe has gone its way, for search.
+    var distance by remember { mutableFloatStateOf(0f) }
+    // One drag handler, only turned on or off: a new one mid-swipe (as the drawer starts to show) would drop the drag.
     return draggable(
         orientation = Orientation.Vertical,
-        enabled = enabled,
+        enabled = enabled && drags,
+        state =
+            rememberDraggableState { dy ->
+                if (swipe == null && dy != 0f) {
+                    val picked = homeSwipeFor(state.drawer.value, dy, gestures.swipeUp, gestures.swipeDown)
+                    swipe = picked
+                    when {
+                        picked.action == GestureAction.Notifications -> expandNotifications(context)
+                        // Swiped open, the drawer is for browsing: the keyboard stays down.
+                        picked.action == GestureAction.Drawer && state.drawer.value == 0f -> state.focusSearch = false
+                    }
+                }
+                swipe?.let {
+                    distance += dy * it.way
+                    if (it.action == GestureAction.Drawer) state.dragBy(dy * it.way / screenHeight)
+                }
+            },
         onDragStarted = {
-            draggingDrawer = state.drawer.value > 0f
-            action = null
+            swipe = null
             distance = 0f
         },
-        state = rememberDraggableState { dy ->
-            if (draggingDrawer) {
-                state.dragBy(-dy / screenHeight)
-            } else {
-                if (action == null && dy != 0f) {
-                    direction = if (dy < 0f) -1f else 1f
-                    action = if (dy < 0f) runtime.gestures.swipeUp else runtime.gestures.swipeDown
-                    if (action == GestureAction.Drawer) state.focusSearch = false
-                }
-                distance += dy * direction
-                if (action == GestureAction.Drawer) state.dragBy(dy * direction / screenHeight)
-            }
-        },
         onDragStopped = { velocity ->
-            when {
-                draggingDrawer -> state.settle(velocity)
-                action == GestureAction.Drawer -> state.settle(-velocity * direction)
-                action == GestureAction.Search && distance >= threshold -> state.open()
+            swipe?.let {
+                when (it.action) {
+                    GestureAction.Drawer -> state.settle(velocity * -it.way)
+                    GestureAction.Search -> if (reachesSearch(distance, velocity * it.way, searchDistance)) state.open()
+                    else -> Unit
+                }
             }
         },
     )
 }
 
-/** Gesture settings for both vertical directions on home. */
+/**
+ * Pulls down Android's notification shade. There's no public call for it: launchers that aren't part of the system,
+ * like Lawnchair, call StatusBarManager's hidden expandNotificationsPanel, which needs EXPAND_STATUS_BAR.
+ */
+@SuppressLint("WrongConstant")
+private fun expandNotifications(context: Context) {
+    runCatching {
+        Class
+            .forName("android.app.StatusBarManager")
+            .getMethod("expandNotificationsPanel")
+            .invoke(context.getSystemService("statusbar"))
+    }.onFailure { Log.w(TAG, "cannot pull down the notification shade", it) }
+}
+
+private const val TAG = "gestures"
+
+/** Gesture settings: what swiping up and down on home do, each picked from a dropdown. */
 @Composable
 fun GesturesScreen(
     runtime: Runtime,
@@ -157,16 +240,19 @@ fun GesturesScreen(
 ) {
     val gestures = runtime.gestures
     OverlayPanel("gestures", onDismiss, contentWidth = ReadingWidth) {
-        GestureRow("swipe up", gestures.swipeUp) { gestures.swipeUp = it }
-        GestureRow("swipe down", gestures.swipeDown) { gestures.swipeDown = it }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GestureRow("swipe up", gestures.swipeUp, SwipeUpChoices) { gestures.swipeUp = it }
+            GestureRow("swipe down", gestures.swipeDown, SwipeDownChoices) { gestures.swipeDown = it }
+        }
     }
 }
 
-/** A gesture and the action it runs; tapping the action lists the others under it. */
+/** A gesture and the action it runs; tapping the action lists the gesture's [choices] under it. */
 @Composable
 private fun GestureRow(
     label: String,
     action: GestureAction,
+    choices: List<GestureAction>,
     onPick: (GestureAction) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
@@ -198,7 +284,7 @@ private fun GestureRow(
                             .frame(2.dp, Palette.accent, Palette.background)
                             .padding(4.dp),
                     ) {
-                        for (option in GestureAction.entries) {
+                        for (option in choices) {
                             val current = option == action
                             Row(
                                 Modifier

@@ -23,7 +23,7 @@ window opens as its own Android task, with its own card in Recents.
 - **Widgets** written in OWL, a small declarative language you can edit on the
   phone, plus a [widget store](https://github.com/SimonSchubert/omarchy-widgets)
 - **Linux, optional**: pacman and the AUR, Linux apps in their own windows,
-  terminal widgets, a file manager, and opt-in GPU acceleration on Mali GPUs
+  terminal widgets, a file manager, and opt-in GPU acceleration on Mali and Adreno 6xx+ GPUs
 - **Coding agents**: the bar at the bottom sends a prompt to Claude Code, Codex,
   Copilot, opencode and others, which open in a terminal
 - No account, no ads, no tracking
@@ -33,7 +33,7 @@ has the themes, wallpapers, Android apps and the widgets that don't run commands
 
 ## Using it
 
-Swipe up on home to browse the app drawer without opening the keyboard. Swipe down to open search and the agent prompt with the keyboard. Change either action under settings › gestures.
+Swipe up on home to browse the app drawer without opening the keyboard. Swipe down to open search and the agent prompt with the keyboard. Settings › gestures sets either swipe to the app drawer, search, or nothing, and swiping down can pull down the notification shade instead.
 
 The bar: the one input at the bottom of the home screen opens apps and asks
 coding agents. Focusing it opens the list of Linux and Android apps; typing
