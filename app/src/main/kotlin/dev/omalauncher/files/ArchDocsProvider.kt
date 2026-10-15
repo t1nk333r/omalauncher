@@ -66,9 +66,7 @@ class ArchDocsProvider : DocumentsProvider() {
 
     override fun getDocumentType(documentId: String) = mimeType(docs.fileFor(documentId))
 
-    override fun isChildDocument(parentDocumentId: String, documentId: String) =
-        documentId == parentDocumentId ||
-            documentId.startsWith("$parentDocumentId/")
+    override fun isChildDocument(parentDocumentId: String, documentId: String) = docs.isChild(parentDocumentId, documentId)
 
     override fun openDocument(documentId: String, mode: String, signal: CancellationSignal?): ParcelFileDescriptor {
         val file = docs.fileFor(documentId)

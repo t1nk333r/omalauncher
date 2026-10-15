@@ -58,6 +58,24 @@ class ArchDocs(val root: File) {
         return file
     }
 
+    /**
+     * Whether [docId] is [parentDocId] or under it, judged by where both resolve rather than how their ids are
+     * spelled: "proj/../.ssh" spells a child of "proj" but isn't one, and the root's children ("/a") aren't spelled
+     * under its id ("root"). A folder an app was granted gives it only what's really in that folder; a symlink there
+     * leading elsewhere doesn't count.
+     */
+    fun isChild(
+        parentDocId: String,
+        docId: String,
+    ): Boolean =
+        try {
+            val parent = fileFor(parentDocId).canonicalFile.path
+            val child = fileFor(docId).canonicalFile.path
+            child == parent || child.startsWith(parent + File.separator)
+        } catch (e: FileNotFoundException) {
+            false
+        }
+
     /** A file's display name, decoded from the last id segment; the root itself shows as the guest home. */
     fun displayNameFor(docId: String): String =
         if (docId == rootDocId) "/" else URLDecoder.decode(docId.substringAfterLast('/'), Charsets.UTF_8)
