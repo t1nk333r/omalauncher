@@ -97,6 +97,10 @@ fun HomeMenu(
             state.homeMenuOpen = false
             if (linux) state.show(SettingsPage.Packages) else state.show(SettingsPage.Linux)
         }
+        MenuItem("wallpaper") {
+            state.homeMenuOpen = false
+            state.show(SettingsPage.Style)
+        }
         Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) { ThemeStrip(
                 runtime.themes,
                 gutter = 20.dp,
