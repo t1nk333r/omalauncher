@@ -296,7 +296,7 @@ private fun DesktopScreen(
     }
 
     // A dock app being dragged out, over everything on home.
-    state.dockDrag?.let { DockDragIcon(runtime, it) }
+    state.dockDrag?.let { DockDragIcon(runtime, state, it) }
 
     // Full-screen panels draw over the bar.
     ThemesOverlay(runtime, state)

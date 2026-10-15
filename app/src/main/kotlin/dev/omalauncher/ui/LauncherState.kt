@@ -74,8 +74,11 @@ class LauncherState {
     /** The dock slot an app carried on home is over, for the dock to show where it would go; null otherwise. */
     var dockHover by mutableStateOf<Int?>(null)
 
-    /** A dock app being dragged out, and where the finger is in the window; null while none is. */
-    internal var dockDrag by mutableStateOf<DockDrag?>(null)
+    /** A dock app being dragged out; null while none is. Set as the drag starts and ends, not as it moves. */
+    internal var dockDrag by mutableStateOf<AppHit?>(null)
+
+    /** Where the finger dragging [dockDrag] is in the window; read only where the dragged icon is placed. */
+    var dockDragAt by mutableStateOf(androidx.compose.ui.geometry.Offset.Zero)
 
     /** The page and 1x1 cell of home under a point in the window, as the grid last laid out; null off the grid. */
     var homeCellAt: (androidx.compose.ui.geometry.Offset) -> Pair<Int, dev.omalauncher.widgets.Cell>? = { null }
@@ -157,9 +160,4 @@ class LauncherState {
     }
 }
 
-/** A dock app on its way out of the dock: [hit] under the finger at [at] in the window. */
-internal data class DockDrag(
-    val hit: AppHit,
-    val at: androidx.compose.ui.geometry.Offset,
-)
 

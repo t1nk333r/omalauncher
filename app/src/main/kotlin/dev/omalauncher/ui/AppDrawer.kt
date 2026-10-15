@@ -93,9 +93,11 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.composed
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.offset
 import kotlin.math.roundToInt
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
 
 /** One app in the bar's results. */
 internal sealed interface AppHit {
@@ -464,7 +466,7 @@ private fun DockStrip(
                     when {
                         hit != null -> {
                             val (icon, mask) = hit.icons(runtime)
-                            val dragged = state.dockDrag?.hit?.key == hit.key
+                            val dragged = state.dockDrag?.key == hit.key
                             Box(Modifier.dragsOutOfDock(runtime, state, hit) { bounds }) {
                                 StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime) || dragged, bare = !LauncherStyle.dockBoxed, cell = cell, dragged = dragged)
                             }
@@ -543,7 +545,10 @@ private fun dockKeyKnown(
 /**
  * Long-press a dock app and drag: it follows the finger ([LauncherState.dockDrag], drawn by [DockDragIcon]) and, let go,
  * lands on home in the cell under the finger, leaving the dock, or back on the dock in the slot under it. A long-press
- * without a drag keeps its menu.
+ * without a drag keeps its menu, and a swipe before the long-press is home's.
+ *
+ * Watched on the Initial pass, ahead of the icon's own tap and long-press and of home's swipe: once the press has
+ * lasted a long-press and then moves past the slop, the moves are taken here, so neither sees them.
  */
 private fun Modifier.dragsOutOfDock(
     runtime: Runtime,
@@ -555,27 +560,33 @@ private fun Modifier.dragsOutOfDock(
         var origin by remember { mutableStateOf(Offset.Zero) }
         onGloballyPositioned { origin = it.positionInWindow() }.pointerInput(hit.key) {
             val slop = viewConfiguration.touchSlop
-            var start = Offset.Zero
-            var at = Offset.Zero
-            var dragging = false
-            detectDragGesturesAfterLongPress(
-                onDragStart = { p ->
-                    start = origin + p
-                    at = start
-                    dragging = false
-                },
-                onDrag = { change, amount ->
+            val hold = viewConfiguration.longPressTimeoutMillis
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                var dragging = false
+                while (true) {
+                    val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
+                    if (change == null) {
+                        if (dragging) state.dockDrag = null
+                        break
+                    }
+                    if (!dragging) {
+                        if (!change.pressed) break
+                        if ((change.position - down.position).getDistance() <= slop) continue
+                        // Moved before the long-press: a swipe, home's or the tap's to settle.
+                        if (change.uptimeMillis - down.uptimeMillis < hold) break
+                        dragging = true
+                        state.dockDrag = hit
+                    }
                     change.consume()
-                    at += amount
-                    if (!dragging && (at - start).getDistance() > slop) dragging = true
-                    if (dragging) state.dockDrag = DockDrag(hit, at)
-                },
-                onDragEnd = {
-                    if (dragging) dropFromDock(runtime, state, hit, at, dock())
-                    state.dockDrag = null
-                },
-                onDragCancel = { state.dockDrag = null },
-            )
+                    state.dockDragAt = origin + change.position
+                    if (!change.pressed) {
+                        dropFromDock(runtime, state, hit, origin + change.position, dock())
+                        state.dockDrag = null
+                        break
+                    }
+                }
+            }
         }
     }
 
@@ -588,8 +599,14 @@ private fun dropFromDock(
     dock: Rect,
 ) {
     if (dock.contains(at)) {
-        val slot = ((at.x - dock.left) / (dock.width / DOCK_SLOTS)).toInt().coerceIn(0, DOCK_SLOTS - 1)
-        runtime.dock.insert(hit.key, slot)
+        // Along the dock: across it in portrait, down it beside landscape's grid.
+        val slot =
+            if (dock.height > dock.width) {
+                ((at.y - dock.top) / (dock.height / DOCK_SLOTS)).toInt()
+            } else {
+                ((at.x - dock.left) / (dock.width / DOCK_SLOTS)).toInt()
+            }
+        runtime.dock.insert(hit.key, slot.coerceIn(0, DOCK_SLOTS - 1))
         return
     }
     // Let go off home's grid (over the bar, past the edge): it stays in the dock.
@@ -597,10 +614,26 @@ private fun dropFromDock(
     val home = runtime.widgets.shortcuts
     val key =
         when (hit) {
-            is AppHit.Linux -> home.keyOf(hit.app).also { home.addLinux(hit.app, page) }
-            is AppHit.Android -> home.keyOf(hit.app).also { home.addAndroid(hit.app, page) }
-            is AppHit.Shortcut -> home.keyOf(hit.shortcut).also { home.addAndroidShortcut(hit.shortcut, page) }
+            is AppHit.Linux -> home.keyOf(hit.app)
+            is AppHit.Android -> home.keyOf(hit.app)
+            is AppHit.Shortcut -> home.keyOf(hit.shortcut)
         }
+    val there = home.items.firstOrNull { it.key == key }
+    when {
+        // On home in a folder already: it stays there, and only leaves the dock.
+        there?.folder != null -> {
+            runtime.dock.remove(hit.key)
+            return
+        }
+        // On home on its own already: that tile moves to the drop.
+        there != null -> if (there.page != page) home.move(key, page)
+        else ->
+            when (hit) {
+                is AppHit.Linux -> home.addLinux(hit.app, page)
+                is AppHit.Android -> home.addAndroid(hit.app, page)
+                is AppHit.Shortcut -> home.addAndroidShortcut(hit.shortcut, page)
+            }
+    }
     val layout = runtime.widgets.layout
     val taken = runtime.widgets.itemsOn(page).filter { it.key != key }.mapNotNull { item -> layout.cell(item.key)?.let { if (item.resizable) it else it.copy(w = 1, h = 1) } }
     // The cell under the finger if it's free; otherwise the first free one, found as for any new tile.
@@ -613,16 +646,22 @@ private fun dropFromDock(
     runtime.dock.remove(hit.key)
 }
 
-/** The dock app being dragged out, under the finger above everything else. */
+/** The dock app being dragged out, under the finger above everything else; it follows without recomposing. */
 @Composable
 internal fun DockDragIcon(
     runtime: Runtime,
-    drag: DockDrag,
+    state: LauncherState,
+    hit: AppHit,
 ) {
-    val (icon, mask) = drag.hit.icons(runtime)
+    val (icon, mask) = hit.icons(runtime)
     val half = with(LocalDensity.current) { 32.dp.roundToPx() }
-    Box(Modifier.offset { IntOffset(drag.at.x.roundToInt() - half, drag.at.y.roundToInt() - half) }) {
-        StripCell(drag.hit.label, icon, mask, onClick = {}, actions = { emptyList() }, spoken = drag.hit.spoken, bare = !LauncherStyle.dockBoxed, cell = 64.dp)
+    Box(
+        Modifier.offset {
+            val at = state.dockDragAt
+            IntOffset(at.x.roundToInt() - half, at.y.roundToInt() - half)
+        },
+    ) {
+        StripCell(hit.label, icon, mask, onClick = {}, actions = { emptyList() }, spoken = hit.spoken, bare = !LauncherStyle.dockBoxed, cell = 64.dp)
     }
 }
 

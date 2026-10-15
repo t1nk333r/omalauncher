@@ -345,12 +345,13 @@ internal fun HomeGrid(
     onRelocate: (HomeItem, Int) -> Unit,
     /** The dock's height at the bottom of this area (portrait, with the dock showing), or 0 for none to drop on. */
     dockHeight: Dp = 0.dp,
-    /** Whether [Shortcut] can join the dock: it's in it already, or there's room. */
-    canDock: (Shortcut) -> Boolean = { false },
+    /**
+     * The slot a [Shortcut] carried over dock slot [Int] would land in (after the apps there, for a new one), or null
+     * when it can't join: not an app, or the dock is full.
+     */
+    dockSlotFor: (Shortcut, Int) -> Int? = { _, _ -> null },
     /** Moves an app from home into the dock at a slot; false when it can't (the dock is full). */
     onDock: (Shortcut, Int) -> Boolean = { _, _ -> false },
-    /** The dock slot a carried app is over, as it moves, for the dock to show where it would go; null off it. */
-    onDockHover: (Int?) -> Unit = {},
     /** Hands out a way to find the page and cell under a point in the window, for dropping a dock app on home. */
     onCellAt: ((Offset) -> Pair<Int, Cell>?) -> Unit = {},
     onGroup: (Shortcut, HomeItem) -> Unit,
@@ -436,7 +437,7 @@ internal fun HomeGrid(
             onCellAt { window ->
                 val (shownPages, g) = current
                 val p = window - windowOrigin
-                if (p.y < 0f || p.y > g.height || p.x < 0f) {
+                if (p.y < 0f || p.y > g.height || p.x < 0f || p.x > g.width * g.per) {
                     null
                 } else {
                     val side = g.side(p)
@@ -445,8 +446,9 @@ internal fun HomeGrid(
                 }
             }
         }
-        val dockPx = with(density) { dockHeight.toPx() }
-        val edgePx = with(density) { EdgeGap.toPx() }
+        // Read as they are now from the gesture, which outlives a rotation or a change of the dock's size.
+        val dockPx by rememberUpdatedState(with(density) { dockHeight.toPx() })
+        val edgePx by rememberUpdatedState(with(density) { EdgeGap.toPx() })
 
         fun placedOn(
             page: Int,
@@ -562,11 +564,8 @@ internal fun HomeGrid(
                                 }
                             }
                             // Over the dock, an app joins it where it's dropped; the grid's preview steps aside.
-                            val dockSlot = (item as? Shortcut)?.takeIf { canDock(it) }?.let { dockSlotAt(position) }
-                            if (dockSlot != arrange.dockSlot) {
-                                arrange.dockSlot = dockSlot
-                                onDockHover(dockSlot)
-                            }
+                            val dockSlot = (item as? Shortcut)?.let { app -> dockSlotAt(position)?.let { dockSlotFor(app, it) } }
+                            if (dockSlot != arrange.dockSlot) arrange.dockSlot = dockSlot
                             if (dockSlot != null) {
                                 arrange.preview = null
                                 arrange.displaced = emptyMap()
@@ -614,7 +613,6 @@ internal fun HomeGrid(
                         val displaced = arrange.displaced
                         val dockSlot = arrange.dockSlot
                         arrange.drop()
-                        if (dockSlot != null) onDockHover(null)
                         when {
                             // Refused (the dock filled meanwhile): it stays where it was.
                             dockSlot != null && moved && item is Shortcut -> onDock(item, dockSlot)

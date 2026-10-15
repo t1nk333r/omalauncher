@@ -93,3 +93,19 @@ fun dockKeyOf(homeKey: String): String? =
         else -> null
     }
 
+/**
+ * Where [key] carried over dock slot [over] would land: that slot for one already in [current] (kept within it), after
+ * the apps there for a new one, or null when [current] is full and it isn't in.
+ */
+internal fun landingSlot(
+    current: List<String>,
+    key: String,
+    over: Int,
+    slots: Int = DOCK_SLOTS,
+): Int? =
+    when {
+        key in current -> over.coerceIn(0, current.lastIndex)
+        current.size >= slots -> null
+        else -> over.coerceIn(0, current.size)
+    }
+

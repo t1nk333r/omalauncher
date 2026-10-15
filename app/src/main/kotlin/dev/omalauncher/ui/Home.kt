@@ -59,6 +59,7 @@ import androidx.compose.runtime.collectAsState
 import dev.omalauncher.Runtime
 import dev.omalauncher.widgets.editWidgetCommand
 import dev.omalauncher.widgets.fixDependenciesCommand
+import dev.omalauncher.landingSlot
 
 /** Home pages of JSON widgets on a snap grid, bordered and gapped like Omarchy windows. */
 @Composable
@@ -71,6 +72,8 @@ fun HomeScreen(
     val linuxState by runtime.bootstrap.state.collectAsState()
     val arrange = remember { Arrange() }
     val swiper = rememberHomeSwiper(runtime, state)
+    // The dock frames the slot a carried app would take: cleared with the carry, however it ends.
+    LaunchedEffect(arrange) { snapshotFlow { arrange.dockSlot }.collect { state.dockHover = it } }
     // An empty page waits after the last one only while a tile is carried, to drop it on; otherwise home is just the
     // pages that hold something. Pages only exist while they do, so a page a tile was dropped on stays.
     // Unfolded, pages show in pairs: the pager counts pairs, and an odd last page gets an empty partner.
@@ -476,7 +479,7 @@ fun HomeScreen(
             onRelocate = engine::moveToPage,
             // An app carried down onto the dock moves into it: off home, into the slot it's dropped on.
             dockHeight = if (side == null && LauncherStyle.dockShown) stripHeight else 0.dp,
-            canDock = { app -> dockKeyOf(app.key)?.let { it in runtime.dock || !runtime.dock.full } == true },
+            dockSlotFor = { app, slot -> dockKeyOf(app.key)?.let { landingSlot(runtime.dock.keys, it, slot) }?.takeIf { LauncherStyle.dockShown } },
             onDock = { app, slot ->
                 val key = dockKeyOf(app.key)
                 if (key == null || (key !in runtime.dock && runtime.dock.full)) {
@@ -487,7 +490,6 @@ fun HomeScreen(
                     true
                 }
             },
-            onDockHover = { state.dockHover = it },
             onCellAt = { state.homeCellAt = it },
             onGroup = { app, target -> engine.shortcuts.group(app, target) },
             onReorder = { app, before -> engine.shortcuts.moveBefore(app.key, before) },

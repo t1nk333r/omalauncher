@@ -48,4 +48,15 @@ class DockTest {
         assertEquals(null, dockKeyOf("folder:1"))
         assertEquals(null, dockKeyOf("10-today.owl"))
     }
+
+    /** The frame shows where a carried app will land, which is where dropping puts it. */
+    @Test fun aNewAppLandsAfterTheAppsThere() {
+        assertEquals(2, landingSlot(listOf("a", "b"), "x", over = 4))
+        assertEquals(1, landingSlot(listOf("a", "b"), "x", over = 1))
+        // One already in moves within the apps there.
+        assertEquals(1, landingSlot(listOf("a", "b"), "a", over = 4))
+        // Full, a new one can't land.
+        assertEquals(null, landingSlot(listOf("a", "b", "c", "d", "e"), "x", over = 2))
+        assertEquals(inserted(listOf("a", "b"), "x", 4), inserted(listOf("a", "b"), "x", landingSlot(listOf("a", "b"), "x", 4)!!))
+    }
 }
