@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import dev.omalauncher.R
 import dev.omalauncher.theme.ColorSpec
 import dev.omalauncher.theme.Style
+import kotlin.math.roundToInt
 
 /** `#rrggbb` or `#aarrggbb` as a color; null if it isn't one. */
 fun hexColor(hex: String?): Color? {
@@ -107,8 +108,20 @@ object LauncherStyle {
     /** Home screen apps as bare icons on the wallpaper instead of framed tiles. */
     val bareAppIcons get() = !style[Style.APP_TILES]
 
-    /** The strip of recently used apps above the bar on home. */
+    /** The strip above the bar on home: the dock or the apps used lately, see [dock]. */
     val recentApps get() = style[Style.RECENT_APPS]
+
+    /** The strip holds the dock rather than the apps used lately. */
+    val dock get() = style[Style.DOCK]
+
+    /** The pill above the strip that does what swiping down does. */
+    val homePill get() = style[Style.HOME_PILL]
+
+    /** The prompt bar shows on home, not only with the app panel open. */
+    val promptBarOnHome get() = style[Style.PROMPT_BAR]
+
+    /** Rows of the home grid in portrait, or null for as many square cells as fit. */
+    val homeRows: Int? get() = style[Style.HOME_ROWS].roundToInt().takeIf { it > 0 }
 
     /** The outline of tiles, the prompt bar and the rails. */
     val tileBorder: Color get() = color(style[Style.TILE_BORDER], Palette.border)

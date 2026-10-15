@@ -89,6 +89,8 @@ private class Grid(
     portraitRows: Int? = null,
     used: Int = 0,
     val per: Int = 1,
+    /** Rows wanted in portrait (style's home.rows), or null for square cells. */
+    fixedRows: Int? = null,
 ) {
     val cols = GRID_COLUMNS
     val height = height
@@ -97,7 +99,7 @@ private class Grid(
     private val across = width - pad.left - pad.right + gap
     private val down = height - pad.top - pad.bottom + gap
 
-    val rows = maxOf(if (turned) portraitRows ?: squareRows(down, across) else squareRows(across, down), used)
+    val rows = gridRows(if (turned) portraitRows ?: squareRows(down, across) else fixedRows ?: squareRows(across, down), used)
 
     /** A screen cell's width and height, the gap after it included. */
     val cellW = across / (if (turned) rows else cols).toFloat()
@@ -175,6 +177,15 @@ private fun squareRows(
     short: Int,
     long: Int,
 ) = if (short <= 0) 1 else (long / (short / GRID_COLUMNS.toFloat())).toInt().coerceIn(1, MAX_SQUARE_ROWS)
+
+/**
+ * The grid's rows: [wanted] (home.rows, or as many square cells as fit), but never fewer than the [used] rows tiles
+ * reach down to, so asking for fewer rows squeezes nothing on top of another.
+ */
+internal fun gridRows(
+    wanted: Int,
+    used: Int,
+) = maxOf(wanted, used, 1)
 
 /** Cells four times as tall as wide: far past any phone's shape (20:9 makes 13 rows). */
 private const val MAX_SQUARE_ROWS = 4 * GRID_COLUMNS
@@ -339,10 +350,11 @@ internal fun HomeGrid(
         val used by remember(pages, itemsOn, layout) {
             derivedStateOf { pages.flatMap(itemsOn).maxOfOrNull { item -> layout.cell(item.key)?.let { if (item.resizable) it.bottom else it.y + 1 } ?: 0 } ?: 0 }
         }
+        val fixedRows = LauncherStyle.homeRows
         val grid =
-            remember(width, height, gap, pad, turned, windowSize, used, per) {
+            remember(width, height, gap, pad, turned, windowSize, used, per, fixedRows) {
                 // Not seen in portrait yet: square cells across.
-                Grid(width, height, gap, pad, turned, if (turned) layout.portraitRows(windowSize) else null, used, per)
+                Grid(width, height, gap, pad, turned, if (turned) layout.portraitRows(windowSize) else null, used, per, fixedRows)
             }
         if (!turned) SideEffect { layout.setPortraitRows(windowSize, grid.rows) }
         // Previews draw tiles at the size they have here.

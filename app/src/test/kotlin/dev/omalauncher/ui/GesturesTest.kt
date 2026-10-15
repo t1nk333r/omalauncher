@@ -6,6 +6,7 @@ import dev.omalauncher.ui.GestureAction.Notifications
 import dev.omalauncher.ui.GestureAction.Search
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -99,5 +100,13 @@ class GesturesTest {
         assertEquals(12f, HomeSwipe(Search, 1f).along(downward), 0f)
         assertEquals(12f, HomeSwipe(Search, -1f).along(upward), 0f)
         assertEquals(-12f, HomeSwipe(Search, 1f).along(upward), 0f)
+    }
+
+    @Test fun thePillIsNamedAfterWhatSwipingDownDoes() {
+        assertEquals("search", pillLabel(Search))
+        assertEquals("notifications", pillLabel(Notifications))
+        assertEquals("apps", pillLabel(Drawer))
+        // Swiping down does nothing: no pill.
+        assertNull(pillLabel(None))
     }
 }

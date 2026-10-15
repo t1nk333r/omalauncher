@@ -105,7 +105,20 @@ fun StyleScreen(
             val style = runtime.style
             Flag("icons", "monochrome", "colored", style, Style.MONOCHROME_ICONS)
             Flag("home apps", "boxed", "icon only", style, Style.APP_TILES)
-            Flag("recent apps", "shown", "hidden", style, Style.RECENT_APPS)
+            // The strip above the bar: the dock you fill, the apps used lately, or neither.
+            StyleOption(
+                "strip",
+                listOf("dock", "recent", "hidden"),
+                when {
+                    !style.style[Style.RECENT_APPS] -> 2
+                    style.style[Style.DOCK] -> 0
+                    else -> 1
+                },
+            ) { i -> style.update { if (i == 2) it.with(Style.RECENT_APPS, false) else it.with(Style.RECENT_APPS, true).with(Style.DOCK, i == 0) } }
+            // Does what swiping down does, as gestures set it.
+            Flag("pill", "shown", "hidden", style, Style.HOME_PILL)
+            Flag("prompt bar", "always", "with apps", style, Style.PROMPT_BAR)
+            NumberOption("rows", listOf("auto" to 0.0) + (7..12).map { "$it" to it.toDouble() }, Style.HOME_ROWS, style)
             NumberOption("corners", Corners.entries.map { it.label to it.scale.toDouble() }, Style.CORNER_SCALE, style)
             // Like Hyprland's gaps_in, gaps_out and border_size; the colors are in style.toml.
             Heading("widgets")

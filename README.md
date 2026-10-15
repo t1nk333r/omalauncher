@@ -35,6 +35,8 @@ has the themes, wallpapers, Android apps and the widgets that don't run commands
 
 Swipe up on home to browse the app drawer without opening the keyboard. Swipe down to open search and the agent prompt with the keyboard. Settings › gestures sets either swipe to the app drawer, search, or nothing, and swiping down can pull down the notification shade instead.
 
+Home's bottom holds a dock of up to five apps (long-press an app › add to dock, or select several and add them to the dock) and, above it, a pill that does what swiping down does: search, notifications or apps. The prompt bar appears with the app panel. Settings › style › home screen switches the strip between the dock, recent apps and nothing, shows or hides the pill, keeps the prompt bar on home, and sets the grid's rows (9 by default, or auto).
+
 Long-press an app in the drawer to hide it or to select several, then add them all to home or hide them together. Hidden apps leave the drawer, search and the recent apps strip; the drawer's show hidden switch lists them again, dimmed, to unhide.
 
 The bar: the one input at the bottom of the home screen opens apps and asks

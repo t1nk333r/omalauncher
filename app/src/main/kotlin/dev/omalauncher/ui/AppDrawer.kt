@@ -76,6 +76,8 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.graphics.ColorFilter
+import dev.omalauncher.Dock
+import dev.omalauncher.DOCK_SLOTS
 import dev.omalauncher.AndroidApp
 import dev.omalauncher.AndroidShortcut
 import androidx.compose.runtime.collectAsState
@@ -260,6 +262,8 @@ internal class AppHandlers(
     val hide: (Collection<String>, Boolean) -> Unit,
     /** Starts picking several apps in the drawer, this one first. */
     val select: (AppHit) -> Unit,
+    /** The dock above the bar: what the menus add to, remove from and move within. */
+    val dock: Dock,
 )
 
 /** The shortcuts an Android app offers above its menu's actions; null for anything else. */
@@ -290,10 +294,30 @@ private fun AppHit.actions(
         }
     val hidden = handlers.isHidden(this)
     return own +
+        dockActions(handlers.dock) +
         listOfNotNull(
             (if (hidden) "unhide" else "hide") to { handlers.hide(listOf(key), !hidden) },
             if (selectable) "select several" to { handlers.select(this) } else null,
         )
+}
+
+/**
+ * While home's strip is the dock: an app in it moves left or right or leaves it, any other joins it while there's
+ * room. Nothing while the strip shows the apps used lately, where a dock would be out of sight.
+ */
+private fun AppHit.dockActions(dock: Dock): List<Pair<String, () -> Unit>> {
+    if (!LauncherStyle.dock) return emptyList()
+    val at = dock.keys.indexOf(key)
+    return when {
+        at >= 0 ->
+            listOfNotNull(
+                if (at > 0) "move left" to { dock.move(key, -1) } else null,
+                if (at < dock.keys.lastIndex) "move right" to { dock.move(key, 1) } else null,
+                "remove from dock" to { dock.remove(key) },
+            )
+        dock.full -> emptyList()
+        else -> listOf("add to dock" to { dock.add(listOf(key)) })
+    }
 }
 
 /** The app's icon and its silhouette, each null until loaded or if it has none. */
@@ -334,6 +358,62 @@ private fun HitCell(
 
 /** Height of the recent apps strip; home keeps this much room for it above the bar, even while it's empty. */
 val RecentStripHeight = 56.dp
+
+/** Home's strip above the bar: the dock, or the apps used lately, as style's home.dock says. */
+@Composable
+internal fun AppStrip(
+    runtime: Runtime,
+    handlers: AppHandlers,
+    modifier: Modifier = Modifier,
+    vertical: Boolean = false,
+) = if (LauncherStyle.dock) DockStrip(runtime, handlers, modifier, vertical) else RecentStrip(runtime, handlers, modifier, vertical)
+
+/**
+ * The dock: up to [DOCK_SLOTS] apps you picked, each in its own slot spread across the strip (down it in landscape),
+ * so they stay put as stock docks do. An empty dock says how to fill it.
+ */
+@Composable
+private fun DockStrip(
+    runtime: Runtime,
+    handlers: AppHandlers,
+    modifier: Modifier,
+    vertical: Boolean,
+) {
+    val byKey = allApps(runtime).associateBy { it.key }
+    // In the dock's order; one uninstalled (or a Linux app not loaded yet) leaves its slot empty.
+    val slots = runtime.dock.keys.map { byKey[it] }
+    Box(
+        modifier
+            .then(if (vertical) Modifier.fillMaxHeight().width(RecentStripHeight) else Modifier.padding(horizontal = EdgeGap).fillMaxWidth().height(RecentStripHeight))
+            .then(if (LauncherStyle.bareAppIcons) Modifier else Modifier.tile()),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (slots.isEmpty()) {
+            BasicText(
+                if (vertical) "dock" else "long-press an app › add to dock",
+                style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            return@Box
+        }
+        val cells: @Composable (Modifier) -> Unit = { slot ->
+            for (i in 0 until DOCK_SLOTS) {
+                Box(slot, contentAlignment = Alignment.Center) {
+                    slots.getOrNull(i)?.let { hit ->
+                        val (icon, mask) = hit.icons(runtime)
+                        StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
+                    }
+                }
+            }
+        }
+        if (vertical) {
+            Column(Modifier.fillMaxSize()) { cells(Modifier.weight(1f).fillMaxWidth()) }
+        } else {
+            Row(Modifier.fillMaxSize()) { cells(Modifier.weight(1f).fillMaxHeight()) }
+        }
+    }
+}
 
 /**
  * The apps opened lately, on home right above the bar, scrolling sideways; [vertical] stands it up
@@ -691,6 +771,13 @@ private fun SelectionBar(
         handlers.hide(selection, hide)
         state.selection = null
     }
+    // Fills the dock's free slots in the order picked; the drawer closes to show it.
+    val dock = runtime.dock
+    val onDock: () -> Unit = {
+        dock.add(picked(allApps(runtime), selection).map { it.key })
+        state.selection = null
+        state.close()
+    }
     Column(
         Modifier
             .padding(bottom = 6.dp)
@@ -705,6 +792,7 @@ private fun SelectionBar(
         // Scrolls sideways rather than wrapping on a narrow screen.
         Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
             BracketAction("add to home", Palette.accent, onAdd)
+            if (LauncherStyle.dock && !dock.full) BracketAction("add to dock", Palette.accent, onDock)
             if (canHide) BracketAction("hide", Palette.accent) { onHide(true) }
             if (canShow) BracketAction("unhide", Palette.accent) { onHide(false) }
         }

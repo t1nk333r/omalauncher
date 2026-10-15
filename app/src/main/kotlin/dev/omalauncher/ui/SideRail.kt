@@ -118,7 +118,7 @@ internal fun SideRail(
         horizontalArrangement = if (side == HomeSide.Left) Arrangement.Start else Arrangement.End,
     ) {
         // Outward from the grid, like portrait from the grid down: the strip, then the bar.
-        val strip = @Composable { if (LauncherStyle.recentApps) RecentStrip(runtime, handlers, vertical = true) }
+        val strip = @Composable { if (LauncherStyle.recentApps) AppStrip(runtime, handlers, vertical = true) }
         if (side == HomeSide.Left) {
             Spacer(Modifier.width(EdgeGap))
             PromptRail(runtime, state)

@@ -56,6 +56,8 @@ import dev.omalauncher.Runtime
 import dev.omalauncher.theme.Style
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.layout
+import androidx.compose.foundation.layout.Spacer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -214,6 +216,7 @@ private fun DesktopScreen(
                     state.picked = null
                 },
                 select = { hit -> state.selection = setOf(hit.key) },
+                dock = runtime.dock,
             )
         }
 
@@ -266,10 +269,25 @@ private fun DesktopScreen(
             // Hidden while a terminal tile types: it would sit on the keyboard, over the tile.
             if (runtime.terminals.active == null || runtime.terminals.keyboardLeaving) {
                 // Home only: the open app list has everything.
-                // Swiping up or down from either does what it does on home, as from the dock on stock launchers.
-                if (LauncherStyle.recentApps && !panelShown) RecentStrip(runtime, handlers, Modifier.homeSwipe(runtime, state))
+                // Swiping up or down from any of them does what it does on home, as from the dock on stock launchers.
+                if (LauncherStyle.homePill && !panelShown) {
+                    HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
+                    Spacer(Modifier.height(HomeGap))
+                }
+                if (LauncherStyle.recentApps && !panelShown) AppStrip(runtime, handlers, Modifier.homeSwipe(runtime, state))
+                // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
+                // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
+                val barOnHome = LauncherStyle.promptBarOnHome || panelShown
+                if (!barOnHome) Spacer(Modifier.height(EdgeGap))
                 // Insets itself by the grid gap, so it lines up with the tiles and the gap still takes taps.
-                PromptBar(runtime, state, search = search, highlighted = highlighted, onLaunch = handlers.launch, modifier = Modifier.homeSwipe(runtime, state))
+                PromptBar(
+                    runtime,
+                    state,
+                    search = search,
+                    highlighted = highlighted,
+                    onLaunch = handlers.launch,
+                    modifier = Modifier.homeSwipe(runtime, state).then(if (barOnHome) Modifier else Modifier.collapsed()),
+                )
             }
         }
     }
@@ -278,6 +296,13 @@ private fun DesktopScreen(
     ThemesOverlay(runtime, state)
     StyleErrors(runtime.style)
 }
+
+/** Measured as usual but laid out at no size and never placed, so nothing shows and nothing takes touches. */
+private fun Modifier.collapsed() =
+    layout { measurable, constraints ->
+        measurable.measure(constraints)
+        layout(0, 0) {}
+    }
 
 /**
  * What style.toml got wrong, at the top over everything, like Hyprland's bar for config errors: errors.txt is out

@@ -51,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import dev.omalauncher.Runtime
@@ -194,7 +195,13 @@ fun HomeScreen(
     val side = homeSide()
     val turned = homeTurned()
     val sideRoom = sideWidth()
-    val barRoom = with(density) { state.barHeight.takeIf { it > 0 }?.toDp() ?: (PromptBarHeight + HomeGap + EdgeGap) }
+    // Without the bar on home (home.prompt-bar), only the gap to the edge stays below the strip.
+    val barRoom =
+        if (!LauncherStyle.promptBarOnHome) {
+            EdgeGap
+        } else {
+            with(density) { state.barHeight.takeIf { it > 0 }?.toDp() ?: (PromptBarHeight + HomeGap + EdgeGap) }
+        }
     LaunchedEffect(extraKeys) { if (!extraKeys) terminals.extraKeys = null }
     Box(
         modifier
@@ -419,9 +426,9 @@ fun HomeScreen(
                     is AppWidgetItem -> AppWidgetTile(item, engine.appWidgets, highlighted, tile)
                 }
             },
-            // The recent apps strip's room: kept while it's empty, so tiles don't reflow when it fills, and still
-            // home's to swipe and long-press there until it does.
-            room = if (LauncherStyle.recentApps && side == null) RecentStripHeight else 0.dp,
+            // The strip's room (the dock or recent apps) and the pill's above it: kept while they're empty, so tiles don't
+            // reflow when they fill, and still home's to swipe and long-press there until they do.
+            room = if (side == null) homeStripRoom(runtime) else 0.dp,
             turned = turned,
             side = side,
             per = per,
@@ -449,3 +456,8 @@ fun HomeScreen(
     }
 }
 
+
+/** The room below the grid for the strip (the dock or recent apps) and the pill above it, each only while it shows. */
+internal fun homeStripRoom(runtime: Runtime): Dp =
+    (if (LauncherStyle.recentApps) RecentStripHeight else 0.dp) +
+        (if (LauncherStyle.homePill && pillLabel(runtime.gestures.swipeDown) != null) PillHeight + HomeGap else 0.dp)

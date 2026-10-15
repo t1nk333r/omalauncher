@@ -39,6 +39,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import dev.omalauncher.Runtime
 
 /** What a gesture on home does. */
@@ -230,12 +238,63 @@ internal fun Modifier.homeSwipe(
     )
 }
 
+/** Height of the pill above the dock. */
+val PillHeight = 40.dp
+
+/** What the pill above the dock says for [action], the one swiping down does; null (no pill) while that's nothing. */
+internal fun pillLabel(action: GestureAction) =
+    when (action) {
+        GestureAction.Search -> "search"
+        GestureAction.Notifications -> "notifications"
+        GestureAction.Drawer -> "apps"
+        GestureAction.None -> null
+    }
+
+/**
+ * A pill above the dock, like iOS's search pill, that does what swiping down on home does and is named after it, so
+ * the gesture has a button too. Swiping on it does what swiping does elsewhere on home.
+ */
+@Composable
+internal fun HomePill(
+    runtime: Runtime,
+    state: LauncherState,
+    modifier: Modifier = Modifier,
+) {
+    val action = runtime.gestures.swipeDown
+    val label = pillLabel(action) ?: return
+    val context = LocalContext.current
+    Box(modifier.fillMaxWidth().height(PillHeight), contentAlignment = Alignment.Center) {
+        Row(
+            Modifier
+                .fillMaxHeight()
+                // Home's glass, as round as the theme's corners allow: a pill with round corners, a box with Omarchy's.
+                .frame(LauncherStyle.borderWidth, LauncherStyle.tileBorder, Palette.glass, radius = PillHeight / 2, frosted = true)
+                .clickable {
+                    when (action) {
+                        GestureAction.Search -> state.open(search = true)
+                        GestureAction.Drawer -> state.open(search = false)
+                        GestureAction.Notifications -> expandNotifications(context)
+                        GestureAction.None -> Unit
+                    }
+                }.semantics { contentDescription = label }
+                .padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (action == GestureAction.Search) {
+                Image(Icons.Search, null, Modifier.size(18.dp), colorFilter = ColorFilter.tint(Palette.muted))
+                Spacer(Modifier.width(8.dp))
+            }
+            BasicText(label, style = Mono.copy(color = Palette.foreground, fontSize = TextSize.Item))
+        }
+    }
+}
+
 /**
  * Pulls down Android's notification shade. There's no public call for it: launchers that aren't part of the system,
  * like Lawnchair, call StatusBarManager's hidden expandNotificationsPanel, which needs EXPAND_STATUS_BAR.
  */
 @SuppressLint("WrongConstant")
-private fun expandNotifications(context: Context) {
+internal fun expandNotifications(context: Context) {
     runCatching {
         Class
             .forName("android.app.StatusBarManager")
