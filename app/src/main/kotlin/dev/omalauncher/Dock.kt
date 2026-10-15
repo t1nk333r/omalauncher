@@ -30,6 +30,12 @@ class Dock(
 
     fun remove(key: String) = save(keys - key)
 
+    /** Puts [key] at slot [at], moving it there if it's in already; nothing when it isn't and the dock is full. */
+    fun insert(
+        key: String,
+        at: Int,
+    ) = save(inserted(keys, key, at))
+
     /** Moves [key] [by] places, negative to the left. */
     fun move(
         key: String,
@@ -65,3 +71,25 @@ internal fun moved(
     val to = (from + by).coerceIn(0, current.lastIndex)
     return current.toMutableList().apply { add(to, removeAt(from)) }
 }
+
+/** [current] with [key] at slot [at] (moved there if it's in), or unchanged when it isn't and [slots] are full. */
+internal fun inserted(
+    current: List<String>,
+    key: String,
+    at: Int,
+    slots: Int = DOCK_SLOTS,
+): List<String> {
+    if (key !in current && current.size >= slots) return current
+    val rest = current - key
+    return rest.toMutableList().apply { add(at.coerceIn(0, rest.size), key) }
+}
+
+/** The dock's key for a home tile's [homeKey] (app:, linux:, shortcut:), or null for anything else (a folder, a widget). */
+fun dockKeyOf(homeKey: String): String? =
+    when {
+        homeKey.startsWith("app:") -> "a:" + homeKey.removePrefix("app:")
+        homeKey.startsWith("linux:") -> "l:" + homeKey.removePrefix("linux:")
+        homeKey.startsWith("shortcut:") -> "s:" + homeKey.removePrefix("shortcut:")
+        else -> null
+    }
+

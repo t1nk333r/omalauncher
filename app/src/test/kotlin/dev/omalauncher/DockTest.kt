@@ -25,4 +25,27 @@ class DockTest {
         assertEquals(dock, moved(dock, "c", 1))
         assertEquals(dock, moved(dock, "z", 1))
     }
+
+    @Test fun droppingPutsAnAppAtTheSlot() {
+        assertEquals(listOf("a", "x", "b"), inserted(listOf("a", "b"), "x", 1))
+        // Past the end goes last; an app already in moves to the slot.
+        assertEquals(listOf("a", "b", "x"), inserted(listOf("a", "b"), "x", 4))
+        assertEquals(listOf("b", "c", "a"), inserted(listOf("a", "b", "c"), "a", 2))
+    }
+
+    @Test fun aFullDockTakesNoNewApp() {
+        val full = listOf("a", "b", "c", "d", "e")
+        assertEquals(full, inserted(full, "x", 0))
+        // But its own apps still move.
+        assertEquals(listOf("e", "a", "b", "c", "d"), inserted(full, "e", 0))
+    }
+
+    @Test fun homeTilesMapToDockKeys() {
+        assertEquals("a:com.example/.Main@0", dockKeyOf("app:com.example/.Main@0"))
+        assertEquals("l:foot", dockKeyOf("linux:foot"))
+        assertEquals("s:chrome/abc", dockKeyOf("shortcut:chrome/abc"))
+        // Folders and widgets don't go in the dock.
+        assertEquals(null, dockKeyOf("folder:1"))
+        assertEquals(null, dockKeyOf("10-today.owl"))
+    }
 }

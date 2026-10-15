@@ -66,6 +66,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toOffset
 import kotlinx.coroutines.launch
+import kotlin.math.floor
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import dev.omalauncher.DOCK_SLOTS
 
 /**
  * Pixel geometry of the home grid: cells separated by Omarchy-style gaps, as many rows of
@@ -143,6 +147,17 @@ private class Grid(
     fun colLine(p: Offset) = (if (turned) line(p.y, pad.top, cellH) else line(p.x, pad.left, cellW)).coerceIn(0, cols)
 
     fun rowLine(p: Offset) = (if (turned) line(p.x, pad.left, cellW) else line(p.y, pad.top, cellH)).coerceIn(0, rows)
+
+    /** The cell (column, row) a point on a page is over, kept on the grid. */
+    fun cellAt(p: Offset): Pair<Int, Int> {
+        fun at(
+            px: Float,
+            start: Int,
+            cell: Float,
+            n: Int,
+        ) = floor((px - start) / cell).toInt().coerceIn(0, n - 1)
+        return if (turned) at(p.y, pad.top, cellH, cols) to at(p.x, pad.left, cellW, rows) else at(p.x, pad.left, cellW, cols) to at(p.y, pad.top, cellH, rows)
+    }
 
     /** Lines run down the middle of the gaps between cells. */
     private fun line(
@@ -270,6 +285,9 @@ internal class Arrange {
     /** Dropping now puts the carried app into a folder with [swapWith]. */
     var grouping by mutableStateOf(false)
 
+    /** The dock slot the carried app is over, to join the dock there when dropped; null over the grid. */
+    var dockSlot by mutableStateOf<Int?>(null)
+
     /** The open folder's key; its panel covers the grid until a tap outside, Back, or an app lifted out of it. */
     var folder by mutableStateOf<String?>(null)
 
@@ -285,6 +303,7 @@ internal class Arrange {
         swapWith = null
         grouping = false
         displaced = emptyMap()
+        dockSlot = null
     }
 }
 
@@ -324,6 +343,16 @@ internal fun HomeGrid(
     onMove: (HomeItem, Int) -> Unit,
     /** Puts a tile on another page without turning to it, as fitting home into its rows does. */
     onRelocate: (HomeItem, Int) -> Unit,
+    /** The dock's height at the bottom of this area (portrait, with the dock showing), or 0 for none to drop on. */
+    dockHeight: Dp = 0.dp,
+    /** Whether [Shortcut] can join the dock: it's in it already, or there's room. */
+    canDock: (Shortcut) -> Boolean = { false },
+    /** Moves an app from home into the dock at a slot; false when it can't (the dock is full). */
+    onDock: (Shortcut, Int) -> Boolean = { _, _ -> false },
+    /** The dock slot a carried app is over, as it moves, for the dock to show where it would go; null off it. */
+    onDockHover: (Int?) -> Unit = {},
+    /** Hands out a way to find the page and cell under a point in the window, for dropping a dock app on home. */
+    onCellAt: ((Offset) -> Pair<Int, Cell>?) -> Unit = {},
     onGroup: (Shortcut, HomeItem) -> Unit,
     /** Moves an app within its folder to just before another of its apps, or with null to the end. */
     onReorder: (Shortcut, String?) -> Unit,
@@ -401,6 +430,23 @@ internal fun HomeGrid(
         val sideGrab = with(density) { 36.dp.roundToPx() }
         val edge = with(density) { 28.dp.roundToPx() }
         val current by rememberUpdatedState(Triple(pages, grid, selected))
+        // Where this area is in the window, for [onCellAt].
+        var windowOrigin by remember { mutableStateOf(Offset.Zero) }
+        SideEffect {
+            onCellAt { window ->
+                val (shownPages, g) = current
+                val p = window - windowOrigin
+                if (p.y < 0f || p.y > g.height || p.x < 0f) {
+                    null
+                } else {
+                    val side = g.side(p)
+                    val (x, y) = g.cellAt(g.local(p, side))
+                    shownPages.getOrNull(pager.currentPage * g.per + side)?.let { it to Cell(x, y, 1, 1) }
+                }
+            }
+        }
+        val dockPx = with(density) { dockHeight.toPx() }
+        val edgePx = with(density) { EdgeGap.toPx() }
 
         fun placedOn(
             page: Int,
@@ -423,7 +469,14 @@ internal fun HomeGrid(
         Box(
             Modifier
                 .fillMaxSize()
+                .onGloballyPositioned { windowOrigin = it.positionInWindow() }
                 .pointerInput(Unit) {
+                    /** The dock slot under [p] (this area's coordinates), or null off the dock or with none. */
+                    fun dockSlotAt(p: Offset): Int? {
+                        if (dockPx <= 0f || p.y < size.height - dockPx) return null
+                        return ((p.x - edgePx) / ((size.width - 2 * edgePx) / DOCK_SLOTS)).toInt().coerceIn(0, DOCK_SLOTS - 1)
+                    }
+
                     /**
                      * Follows the finger, carrying [item] from [cell] on page [from]; returns whether it moved.
                      * [origin] is where the tile is on screen: its cell, or for an app lifted out of a folder,
@@ -508,6 +561,20 @@ internal fun HomeGrid(
                                     atEdgeSince = now + PAGE_TURN_MS
                                 }
                             }
+                            // Over the dock, an app joins it where it's dropped; the grid's preview steps aside.
+                            val dockSlot = (item as? Shortcut)?.takeIf { canDock(it) }?.let { dockSlotAt(position) }
+                            if (dockSlot != arrange.dockSlot) {
+                                arrange.dockSlot = dockSlot
+                                onDockHover(dockSlot)
+                            }
+                            if (dockSlot != null) {
+                                arrange.preview = null
+                                arrange.displaced = emptyMap()
+                                arrange.swapWith = null
+                                arrange.grouping = false
+                                plannedCell = null
+                                continue
+                            }
                             val (pages, g) = current
                             // Side by side, the finger picks the page; the drop preview works in its coordinates.
                             val side = g.side(position)
@@ -545,8 +612,12 @@ internal fun HomeGrid(
                         val drop = arrange.preview
                         val grouping = arrange.grouping
                         val displaced = arrange.displaced
+                        val dockSlot = arrange.dockSlot
                         arrange.drop()
+                        if (dockSlot != null) onDockHover(null)
                         when {
+                            // Refused (the dock filled meanwhile): it stays where it was.
+                            dockSlot != null && moved && item is Shortcut -> onDock(item, dockSlot)
                             target != null && grouping && moved -> onGroup(item as Shortcut, target)
                             drop != null && moved -> {
                                 displaced.forEach { (key, cell) -> layout.set(key, cell) }

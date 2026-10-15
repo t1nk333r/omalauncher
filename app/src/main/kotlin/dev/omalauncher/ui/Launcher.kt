@@ -275,7 +275,7 @@ private fun DesktopScreen(
                     HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
                     Spacer(Modifier.height(HomeGap))
                 }
-                if (LauncherStyle.recentApps && !panelShown) AppStrip(runtime, handlers, Modifier.homeSwipe(runtime, state))
+                if (LauncherStyle.recentApps && !panelShown) AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state))
                 // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
                 // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
                 // Dictation stops as it goes: there'd be no mic to show it listening.
@@ -294,6 +294,9 @@ private fun DesktopScreen(
             }
         }
     }
+
+    // A dock app being dragged out, over everything on home.
+    state.dockDrag?.let { DockDragIcon(runtime, it) }
 
     // Full-screen panels draw over the bar.
     ThemesOverlay(runtime, state)

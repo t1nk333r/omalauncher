@@ -88,6 +88,14 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import dev.omalauncher.linux.LinuxApp
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.composed
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.layout.offset
+import kotlin.math.roundToInt
 
 /** One app in the bar's results. */
 internal sealed interface AppHit {
@@ -396,10 +404,11 @@ internal fun dockCellSize(
 @Composable
 internal fun AppStrip(
     runtime: Runtime,
+    state: LauncherState,
     handlers: AppHandlers,
     modifier: Modifier = Modifier,
     vertical: Boolean = false,
-) = if (LauncherStyle.dock) DockStrip(runtime, handlers, modifier, vertical) else RecentStrip(runtime, handlers, modifier, vertical)
+) = if (LauncherStyle.dock) DockStrip(runtime, state, handlers, modifier, vertical) else RecentStrip(runtime, handlers, modifier, vertical)
 
 /**
  * The dock: up to [DOCK_SLOTS] apps you picked, each in its own slot spread across the strip (down it in landscape),
@@ -408,10 +417,13 @@ internal fun AppStrip(
 @Composable
 private fun DockStrip(
     runtime: Runtime,
+    state: LauncherState,
     handlers: AppHandlers,
     modifier: Modifier,
     vertical: Boolean,
 ) {
+    // Where the dock is in the window: a dock app dropped back inside it takes the slot under the finger.
+    var bounds by remember { mutableStateOf(Rect.Zero) }
     val byKey = allApps(runtime).associateBy { it.key }
     val linuxState by runtime.bootstrap.state.collectAsState()
     val linuxGone = linuxState == LinuxState.NotInstalled
@@ -420,14 +432,20 @@ private fun DockStrip(
     BoxWithConstraints(
         modifier
             .then(if (vertical) Modifier.fillMaxHeight().width(RecentStripHeight) else Modifier.padding(horizontal = EdgeGap).fillMaxWidth().height(LauncherStyle.dockHeight))
+            .onGloballyPositioned { bounds = it.boundsInWindow() }
             // Boxed or bare as home.dock-box says, whatever home's own apps are.
             .then(if (LauncherStyle.dockBoxed) Modifier.tile() else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         if (slots.isEmpty()) {
+            val hovered = state.dockHover != null
             BasicText(
-                if (vertical) "dock" else "long-press an app › add to dock",
-                style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
+                when {
+                    vertical -> "dock"
+                    hovered -> "drop to add to the dock"
+                    else -> "long-press an app › add to dock, or drag one here"
+                },
+                style = Mono.copy(color = if (hovered) Palette.accent else Palette.muted, fontSize = TextSize.Small),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -438,13 +456,18 @@ private fun DockStrip(
         val cell = if (vertical) dockCellSize(maxHeight, maxWidth) else dockCellSize(maxWidth, maxHeight)
         val cells: @Composable (Modifier) -> Unit = { slot ->
             for (i in 0 until DOCK_SLOTS) {
-                Box(slot, contentAlignment = Alignment.Center) {
+                // A home app carried over this slot would land here.
+                val hovered = state.dockHover == i
+                Box(slot.then(if (hovered) Modifier.frame(2.dp, Palette.accent) else Modifier), contentAlignment = Alignment.Center) {
                     val key = runtime.dock.keys.getOrNull(i)
                     val hit = slots.getOrNull(i)
                     when {
                         hit != null -> {
                             val (icon, mask) = hit.icons(runtime)
-                            StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime), bare = !LauncherStyle.dockBoxed, cell = cell)
+                            val dragged = state.dockDrag?.hit?.key == hit.key
+                            Box(Modifier.dragsOutOfDock(runtime, state, hit) { bounds }) {
+                                StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime) || dragged, bare = !LauncherStyle.dockBoxed, cell = cell, dragged = dragged)
+                            }
                         }
                         // Only once its list has loaded is an app missing from it gone; until then its slot waits empty.
                         key != null && dockKeyKnown(runtime, key, linuxGone) -> MissingDockCell { runtime.dock.remove(key) }
@@ -518,6 +541,92 @@ private fun dockKeyKnown(
 }
 
 /**
+ * Long-press a dock app and drag: it follows the finger ([LauncherState.dockDrag], drawn by [DockDragIcon]) and, let go,
+ * lands on home in the cell under the finger, leaving the dock, or back on the dock in the slot under it. A long-press
+ * without a drag keeps its menu.
+ */
+private fun Modifier.dragsOutOfDock(
+    runtime: Runtime,
+    state: LauncherState,
+    hit: AppHit,
+    dock: () -> Rect,
+): Modifier =
+    composed {
+        var origin by remember { mutableStateOf(Offset.Zero) }
+        onGloballyPositioned { origin = it.positionInWindow() }.pointerInput(hit.key) {
+            val slop = viewConfiguration.touchSlop
+            var start = Offset.Zero
+            var at = Offset.Zero
+            var dragging = false
+            detectDragGesturesAfterLongPress(
+                onDragStart = { p ->
+                    start = origin + p
+                    at = start
+                    dragging = false
+                },
+                onDrag = { change, amount ->
+                    change.consume()
+                    at += amount
+                    if (!dragging && (at - start).getDistance() > slop) dragging = true
+                    if (dragging) state.dockDrag = DockDrag(hit, at)
+                },
+                onDragEnd = {
+                    if (dragging) dropFromDock(runtime, state, hit, at, dock())
+                    state.dockDrag = null
+                },
+                onDragCancel = { state.dockDrag = null },
+            )
+        }
+    }
+
+/** Where a dock app let go at [at] lands: a slot of the [dock], or home's cell under it, leaving the dock. */
+private fun dropFromDock(
+    runtime: Runtime,
+    state: LauncherState,
+    hit: AppHit,
+    at: Offset,
+    dock: Rect,
+) {
+    if (dock.contains(at)) {
+        val slot = ((at.x - dock.left) / (dock.width / DOCK_SLOTS)).toInt().coerceIn(0, DOCK_SLOTS - 1)
+        runtime.dock.insert(hit.key, slot)
+        return
+    }
+    // Let go off home's grid (over the bar, past the edge): it stays in the dock.
+    val (page, cell) = state.homeCellAt(at) ?: return
+    val home = runtime.widgets.shortcuts
+    val key =
+        when (hit) {
+            is AppHit.Linux -> home.keyOf(hit.app).also { home.addLinux(hit.app, page) }
+            is AppHit.Android -> home.keyOf(hit.app).also { home.addAndroid(hit.app, page) }
+            is AppHit.Shortcut -> home.keyOf(hit.shortcut).also { home.addAndroidShortcut(hit.shortcut, page) }
+        }
+    val layout = runtime.widgets.layout
+    val taken = runtime.widgets.itemsOn(page).filter { it.key != key }.mapNotNull { item -> layout.cell(item.key)?.let { if (item.resizable) it else it.copy(w = 1, h = 1) } }
+    // The cell under the finger if it's free; otherwise the first free one, found as for any new tile.
+    if (taken.none { it.overlaps(cell) }) {
+        layout.set(key, cell)
+        layout.save()
+    } else {
+        layout.remove(key)
+    }
+    runtime.dock.remove(hit.key)
+}
+
+/** The dock app being dragged out, under the finger above everything else. */
+@Composable
+internal fun DockDragIcon(
+    runtime: Runtime,
+    drag: DockDrag,
+) {
+    val (icon, mask) = drag.hit.icons(runtime)
+    val half = with(LocalDensity.current) { 32.dp.roundToPx() }
+    Box(Modifier.offset { IntOffset(drag.at.x.roundToInt() - half, drag.at.y.roundToInt() - half) }) {
+        StripCell(drag.hit.label, icon, mask, onClick = {}, actions = { emptyList() }, spoken = drag.hit.spoken, bare = !LauncherStyle.dockBoxed, cell = 64.dp)
+    }
+}
+
+/**
  * A dock slot whose app isn't on the phone (uninstalled, or a Linux app still loading): a faint mark that a tap or
  * long-press offers to free, so a dock full of gone apps can be emptied again.
  */
@@ -556,8 +665,11 @@ private fun StripCell(
     bare: Boolean = LauncherStyle.bareAppIcons,
     /** The cell's size; its icon takes five sixths of it. A big dock passes more. */
     cell: Dp = 48.dp,
+    /** Being dragged out of the dock: the long-press menu gives way to the drag. */
+    dragged: Boolean = false,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(dragged) { if (dragged) menuOpen = false }
     val haptics = LocalHapticFeedback.current
     val mono = LauncherStyle.monochromeIcons
     val size = cell * 5 / 6

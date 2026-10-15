@@ -7,6 +7,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import android.app.WallpaperManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.snapshotFlow
+import dev.omalauncher.dockKeyOf
 import dev.omalauncher.AppWidgetSetupActivity
 import dev.omalauncher.widgets.AppWidgetItem
 import dev.omalauncher.widgets.Folder
@@ -473,6 +474,21 @@ fun HomeScreen(
                 showPage = page
             },
             onRelocate = engine::moveToPage,
+            // An app carried down onto the dock moves into it: off home, into the slot it's dropped on.
+            dockHeight = if (side == null && LauncherStyle.dockShown) stripHeight else 0.dp,
+            canDock = { app -> dockKeyOf(app.key)?.let { it in runtime.dock || !runtime.dock.full } == true },
+            onDock = { app, slot ->
+                val key = dockKeyOf(app.key)
+                if (key == null || (key !in runtime.dock && runtime.dock.full)) {
+                    false
+                } else {
+                    runtime.dock.insert(key, slot)
+                    remove(app)
+                    true
+                }
+            },
+            onDockHover = { state.dockHover = it },
+            onCellAt = { state.homeCellAt = it },
             onGroup = { app, target -> engine.shortcuts.group(app, target) },
             onReorder = { app, before -> engine.shortcuts.moveBefore(app.key, before) },
         )

@@ -71,6 +71,15 @@ class LauncherState {
     /** Keys of the apps picked in the drawer to add to home or hide together; null when not picking. Closing forgets it. */
     var selection by mutableStateOf<Set<String>?>(null)
 
+    /** The dock slot an app carried on home is over, for the dock to show where it would go; null otherwise. */
+    var dockHover by mutableStateOf<Int?>(null)
+
+    /** A dock app being dragged out, and where the finger is in the window; null while none is. */
+    internal var dockDrag by mutableStateOf<DockDrag?>(null)
+
+    /** The page and 1x1 cell of home under a point in the window, as the grid last laid out; null off the grid. */
+    var homeCellAt: (androidx.compose.ui.geometry.Offset) -> Pair<Int, dev.omalauncher.widgets.Cell>? = { null }
+
     /** Whether the drawer lists hidden apps too, dimmed, to show them again. Closing turns it off. */
     var showHidden by mutableStateOf(false)
 
@@ -147,3 +156,10 @@ class LauncherState {
         }
     }
 }
+
+/** A dock app on its way out of the dock: [hit] under the finger at [at] in the window. */
+internal data class DockDrag(
+    val hit: AppHit,
+    val at: androidx.compose.ui.geometry.Offset,
+)
+
