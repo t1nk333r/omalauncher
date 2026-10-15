@@ -428,7 +428,8 @@ private fun DockStrip(
                             val (icon, mask) = hit.icons(runtime)
                             StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
                         }
-                        key != null -> MissingDockCell { runtime.dock.remove(key) }
+                        // Only once its list has loaded is an app missing from it gone; until then its slot waits empty.
+                        key != null && dockKeyKnown(runtime, key) -> MissingDockCell { runtime.dock.remove(key) }
                     }
                 }
             }
@@ -481,6 +482,19 @@ internal fun RecentStrip(
             LazyRow(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically, content = cells)
         }
     }
+}
+
+/**
+ * Whether the list a dock key's app comes from has loaded, so its absence means it's gone: Linux apps once listed,
+ * shortcuts once Android lets the launcher list them (as the default home app), Android apps once listed.
+ */
+private fun dockKeyKnown(
+    runtime: Runtime,
+    key: String,
+) = when {
+    key.startsWith("l:") -> runtime.linuxAppsKnown
+    key.startsWith("s:") -> runtime.androidApps.loaded && runtime.androidApps.listsShortcuts
+    else -> runtime.androidApps.loaded
 }
 
 /**

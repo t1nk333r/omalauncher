@@ -15,9 +15,12 @@ widget "today" {
   state kept = null
   state tick = 0
   state retried = 0
-  // Offline is no answer at all (code -1); a city wttr.in turns down is an answer, shown as its error, not as the
-  // last city's forecast.
-  let offline = wx != null && !wx.ok && wx.code < 0
+  // Offline is no answer (code -1) or wttr.in failing (5xx): the last forecast stays and it retries. A city it turns
+  // down (4xx) is refused: no forecast, since the last one was somewhere else, but a retry to try another.
+  let failed = wx != null && !wx.ok
+  let offline = failed && (wx.code < 0 || wx.code >= 500)
+  let refused = failed && !offline
+  let place = city == "" ? "here" : city
   let data = wx.ok ? wx.out : offline ? kept : null
   let cur = data.current_condition[0]
   let day = data.weather[0]
@@ -155,8 +158,8 @@ widget "today" {
       Row {
         gap: 8
         align: center
-        Text { text: offline ? "weather offline" : "weather…"; style: small; color: muted; weight: 1 }
-        if offline {
+        Text { text: offline ? "weather offline" : refused ? "no weather for ${place}" : "weather…"; style: small; color: muted; weight: 1 }
+        if failed {
           Text { text: "retry"; style: small; color: accent; width: 64; align: center; padding: [8, 2]; border: 1; borderColor: alpha(accent, 0.6); onTap: refresh() }
         }
       }
@@ -173,8 +176,8 @@ widget "today" {
     if cur == null {
       Column {
         gap: 12
-        Text { text: offline ? "weather offline" : "weather…"; style: body; color: muted }
-        if offline {
+        Text { text: offline ? "weather offline" : refused ? "no weather for ${place}" : "weather…"; style: body; color: muted }
+        if failed {
           Text { text: trim(wx.err ?? ""); style: small; color: muted; maxLines: 3 }
           Row {
             Button { text: "retry"; color: accent; onTap: refresh() }

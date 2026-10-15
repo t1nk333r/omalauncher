@@ -168,6 +168,10 @@ class AndroidAppCatalog(
 ) {
     val apps = mutableStateListOf<AndroidApp>()
 
+    /** [apps] has been listed once: an app not in it now is really gone, not just not loaded yet. */
+    var loaded by mutableStateOf(false)
+        private set
+
     /** Shortcuts apps put on the home screen, by name; Android shows them only to the default home app. */
     val shortcuts = mutableStateListOf<AndroidShortcut>()
 
@@ -536,6 +540,7 @@ class AndroidAppCatalog(
                     apps.clear()
                     apps += list
                 }
+                loaded = true
                 made = made.sortedWith(compareBy(shortcutOrder) { it.second })
                 val pinned = made.map { it.second }
                 if (pinned != shortcuts.toList()) {

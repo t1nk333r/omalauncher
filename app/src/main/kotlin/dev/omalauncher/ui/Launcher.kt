@@ -279,8 +279,8 @@ private fun DesktopScreen(
                 // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
                 // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
                 // Dictation stops as it goes: there'd be no mic to show it listening.
-                val barOnHome = barOnHome(runtime) || panelShown
-                if (!barOnHome) Spacer(Modifier.height(EdgeGap))
+                val barShown = barOnHome(runtime) || panelShown
+                if (!barShown) Spacer(Modifier.height(EdgeGap))
                 // Insets itself by the grid gap, so it lines up with the tiles and the gap still takes taps.
                 PromptBar(
                     runtime,
@@ -288,8 +288,8 @@ private fun DesktopScreen(
                     search = search,
                     highlighted = highlighted,
                     onLaunch = handlers.launch,
-                    shown = barOnHome,
-                    modifier = Modifier.homeSwipe(runtime, state).then(if (barOnHome) Modifier else Modifier.collapsed()),
+                    shown = barShown,
+                    modifier = Modifier.homeSwipe(runtime, state).then(if (barShown) Modifier else Modifier.collapsed()),
                 )
             }
         }

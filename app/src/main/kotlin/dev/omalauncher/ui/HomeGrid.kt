@@ -49,7 +49,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -353,8 +352,8 @@ internal fun HomeGrid(
         }
         // Held while a finger holds a tile: shrinking the lowest one would otherwise resize every row under the finger
         // mid-gesture (with home.rows below what the tiles reach). The grid follows once the tile is let go.
-        var used by remember { mutableIntStateOf(reached) }
-        LaunchedEffect(reached, arrange.holding) { if (!arrange.holding || reached > used) used = reached }
+        val heldAt = remember(arrange.holding) { reached }
+        val used = if (arrange.holding) maxOf(heldAt, reached) else reached
         val fixedRows = LauncherStyle.homeRows
         val grid =
             remember(width, height, gap, pad, turned, windowSize, used, per, fixedRows) {

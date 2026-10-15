@@ -86,6 +86,13 @@ class Runtime(
     val dock = Dock(context)
     val linuxApps = mutableStateListOf<LinuxApp>()
 
+    /** [linuxApps] has been listed since Linux started: a Linux app not in it now is really gone. */
+    var linuxAppsListed by mutableStateOf(false)
+        private set
+
+    /** Whether an app missing from [linuxApps] is gone: they've been listed, or there's no Linux to list them. */
+    val linuxAppsKnown get() = linuxAppsListed || !bootstrap.isInstalled
+
     /** Icons of [linuxApps] by desktop id; apps without a PNG icon have no entry. */
     val linuxIcons = mutableStateMapOf<String, ImageBitmap>()
 
@@ -413,6 +420,7 @@ class Runtime(
             linuxApps.clear()
             linuxApps += apps
         }
+        linuxAppsListed = true
         val ids = apps.mapTo(HashSet()) { it.id }
         // An entry can change its Icon= under the same id: on a fresh install, pacman's micro.desktop
         // shows up before the launcher's Editor entry replaces it.
