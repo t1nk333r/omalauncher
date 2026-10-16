@@ -77,6 +77,12 @@ class LauncherState {
     /** A dock app being dragged out; null while none is. Set as the drag starts and ends, not as it moves. */
     internal var dockDrag by mutableStateOf<AppHit?>(null)
 
+    /** [dockDrag] came from the drawer: it steps aside for home and the dock while the app is carried. */
+    var drawerDrag by mutableStateOf(false)
+
+    /** Where the dock is in the window, as last laid out; empty while it isn't on screen. */
+    var dockBounds by mutableStateOf(androidx.compose.ui.geometry.Rect.Zero)
+
     /** Where the finger dragging [dockDrag] is in the window; read only where the dragged icon is placed. */
     var dockDragAt by mutableStateOf(androidx.compose.ui.geometry.Offset.Zero)
 

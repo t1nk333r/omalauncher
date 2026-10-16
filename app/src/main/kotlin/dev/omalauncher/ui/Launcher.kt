@@ -230,7 +230,8 @@ private fun DesktopScreen(
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = state.drawer.value.coerceAtMost(1f) }
+                // Gone while an app is carried out of the drawer, so home shows to drop it on.
+                .graphicsLayer { alpha = if (state.drawerDrag) 0f else state.drawer.value.coerceAtMost(1f) }
                 .background(Palette.background.copy(alpha = LauncherStyle.drawerOpacity))
                 .clickable { state.close() }
                 .drawerSwipe(state)
@@ -265,7 +266,7 @@ private fun DesktopScreen(
                         modifier =
                             Modifier.graphicsLayer {
                                 val progress = state.drawer.value
-                                alpha = progress.coerceAtMost(1f)
+                                alpha = if (state.drawerDrag) 0f else progress.coerceAtMost(1f)
                                 translationY = (1f - progress) * size.height * 0.6f
                             },
                     )
@@ -279,7 +280,8 @@ private fun DesktopScreen(
                     HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
                     Spacer(Modifier.height(HomeGap))
                 }
-                if (LauncherStyle.recentApps && !panelShown) AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state))
+                // Also while an app is carried out of the drawer, to drop it on the dock.
+                if (LauncherStyle.recentApps && (!panelShown || state.drawerDrag)) AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state))
                 // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
                 // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
                 // Dictation stops as it goes: there'd be no mic to show it listening.
@@ -330,7 +332,8 @@ private fun Modifier.blurUnderDrawer(state: LauncherState): Modifier {
     val radius = LauncherStyle.drawerBlur
     if (radius <= 0.dp || Build.VERSION.SDK_INT < 31) return this
     return graphicsLayer {
-        val r = radius.toPx() * state.drawer.value.coerceIn(0f, 1f)
+        // Sharp while an app is carried out of the drawer, to see where it goes.
+        val r = if (state.drawerDrag) 0f else radius.toPx() * state.drawer.value.coerceIn(0f, 1f)
         renderEffect = if (r > 0.5f) BlurEffect(r, r, TileMode.Clamp) else null
     }
 }
