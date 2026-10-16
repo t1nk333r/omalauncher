@@ -111,6 +111,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.layout.onSizeChanged
 import kotlin.math.ceil
+import androidx.compose.foundation.layout.wrapContentHeight
 
 /** One app in the bar's results. */
 internal sealed interface AppHit {
@@ -1147,7 +1148,8 @@ private fun LetterRail(
     val haptics = LocalHapticFeedback.current
     val pick by rememberUpdatedState(onPick)
     var height by remember { mutableIntStateOf(0) }
-    val legible = with(LocalDensity.current) { 14.dp.toPx() }
+    // A line of the rail's text, as Android's font size makes it: closer than that, letters are skipped.
+    val legible = with(LocalDensity.current) { TextSize.Small.toPx() * 1.4f }
     Column(
         modifier.onSizeChanged { height = it.height }.pointerInput(letters) {
             fun at(y: Float) {
@@ -1178,7 +1180,12 @@ private fun LetterRail(
         for ((i, c) in letters.withIndex()) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 if (i % step == 0 || c == touched) {
-                    BasicText(c.toString(), style = Mono.copy(color = if (c == touched) Palette.accent else Palette.muted, fontSize = TextSize.Small))
+                    // Taller than its slot when crowded: it spills over the blank slots beside it rather than being cut.
+                    BasicText(
+                        c.toString(),
+                        Modifier.wrapContentHeight(unbounded = true),
+                        style = Mono.copy(color = if (c == touched) Palette.accent else Palette.muted, fontSize = TextSize.Small),
+                    )
                 }
             }
         }
