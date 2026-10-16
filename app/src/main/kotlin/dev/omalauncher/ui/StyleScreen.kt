@@ -105,6 +105,7 @@ fun StyleScreen(
             val style = runtime.style
             Flag("icons", "monochrome", "colored", style, Style.MONOCHROME_ICONS)
             Flag("home apps", "boxed", "icon only", style, Style.APP_TILES)
+            Flag("app names", "shown", "hidden", style, Style.APP_LABELS)
             // The strip above the bar: the dock you fill, the apps used lately, or neither.
             StyleOption(
                 "strip",

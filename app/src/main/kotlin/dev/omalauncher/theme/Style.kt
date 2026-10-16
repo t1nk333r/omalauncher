@@ -153,6 +153,7 @@ class Style(
         val ANDROID_WALLPAPER = Setting.Flag("background.android", false, "true: home shows Android's own wallpaper instead of the theme's picture, live ones included; the theme's colors stay, and Linux apps keep the theme's background.")
 
         val APP_TILES = Setting.Flag("home.app-tiles", true, "Apps on home in a tile like a widget; false draws bare icons on the wallpaper.")
+        val APP_LABELS = Setting.Flag("home.app-labels", true, "Apps' names under their icons on home; false shows the icons alone, a little bigger.")
         val RECENT_APPS = Setting.Flag("home.recent-apps", true, "The strip above the prompt bar: the dock (home.dock) or the apps used lately; false hides it.")
         val DOCK = Setting.Flag("home.dock", true, "true: the strip holds a dock of up to 5 apps you pick (long-press an app, add to dock); false: the apps used lately.")
         val DOCK_BOX = Setting.Flag("home.dock-box", true, "The dock on a box of the tiles' glass; false leaves its icons bare on the wallpaper.")
@@ -228,7 +229,7 @@ object StyleFile {
 
     val ALL: List<Setting<*>> =
         with(Style) {
-            listOf(THEME, BACKGROUND, ANDROID_WALLPAPER, APP_TILES, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, HOME_PILL, PROMPT_BAR, HOME_ROWS, GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
+            listOf(THEME, BACKGROUND, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, HOME_PILL, PROMPT_BAR, HOME_ROWS, GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, MONOCHROME_ICONS, CORNER_SCALE) +
                 STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, EXTRA_KEYS)
         }

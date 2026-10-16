@@ -58,8 +58,9 @@ fun ShortcutTile(
             .pointerInput(shortcut.key) { detectTapGestures(onTap = { onTap() }) }
             .padding(4.dp),
     ) {
-        // Label only when the tile is tall enough to fit it under the icon.
-        val showLabel = maxHeight > 64.dp
+        // Label only when style shows names and the tile is tall enough to fit one under the icon; without it the icon
+        // takes the room.
+        val showLabel = LauncherStyle.appLabels && maxHeight > 64.dp
         // Bare icons have no frame to fill, so they take nearly the whole cell.
         val iconSize = min(maxWidth, maxHeight - if (showLabel) 18.dp else 0.dp) * if (bare) 0.95f else 0.85f
         Column(

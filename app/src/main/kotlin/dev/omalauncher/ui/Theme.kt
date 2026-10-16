@@ -108,6 +108,9 @@ object LauncherStyle {
     /** Home screen apps as bare icons on the wallpaper instead of framed tiles. */
     val bareAppIcons get() = !style[Style.APP_TILES]
 
+    /** Apps' names under their icons on home. */
+    val appLabels get() = style[Style.APP_LABELS]
+
     /** The strip above the bar on home: the dock or the apps used lately, see [dock]. */
     val recentApps get() = style[Style.RECENT_APPS]
 
