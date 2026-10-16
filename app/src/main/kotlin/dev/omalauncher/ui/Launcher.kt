@@ -295,7 +295,12 @@ private fun DesktopScreen(
                     highlighted = highlighted,
                     onLaunch = handlers.launch,
                     shown = barShown,
-                    modifier = Modifier.homeSwipe(runtime, state).then(if (barShown) Modifier else Modifier.collapsed()),
+                    modifier =
+                        Modifier
+                            .homeSwipe(runtime, state)
+                            .then(if (barShown) Modifier else Modifier.collapsed())
+                            // Unseen while an app is carried out of the drawer, keeping its room so the drawer stays put.
+                            .graphicsLayer { alpha = if (state.drawerDrag) 0f else 1f },
                 )
             }
         }
@@ -318,7 +323,8 @@ private fun DesktopScreen(
 
     // An app carried out of the drawer: home's bottom as home has it, over the drawer that stepped aside, so the dock is
     // where it'll be to drop on. An overlay, so the drawer under it keeps its size and the carried app's row its place.
-    if (state.drawerDrag) {
+    // Only while the drawer is open: closed mid-drag (Back), home's own dock is back and the overlay mustn't linger.
+    if (state.drawerDrag && panelShown) {
         if (side != null) {
             SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().safePadding())
         } else {
@@ -330,7 +336,8 @@ private fun DesktopScreen(
                 if (LauncherStyle.dockShown) AppStrip(runtime, state, handlers)
                 // Where the bar is on home, or the gap to the edge when it isn't there.
                 val density = LocalDensity.current
-                Spacer(Modifier.height(if (barOnHome(runtime)) with(density) { state.barHeight.toDp() } else EdgeGap))
+                val barRoom = state.barHeight.takeIf { it > 0 }?.let { with(density) { it.toDp() } } ?: (PromptBarHeight + HomeGap + EdgeGap)
+                Spacer(Modifier.height(if (barOnHome(runtime)) barRoom else EdgeGap))
             }
         }
     }

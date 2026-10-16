@@ -91,13 +91,16 @@ internal fun AppCustomizeDialog(
             if (hit.key in customs.icons) BracketAction("reset", Palette.muted) { customs.resetIcon(hit.key) }
         }
         if (unreadable) BasicText("that image couldn't be read", style = Mono.copy(color = Palette.red, fontSize = TextSize.Small))
-        FieldLabel("drawer group")
-        GroupChips(groups.groups.map { it.name }, group, onPick = { group = it }, onNew = { naming = true })
+        // Groups are the personal tab's: a work app stays on the work tab.
+        if (!hit.isWork) {
+            FieldLabel("drawer group")
+            GroupChips(groups.groups.map { it.name }, group, onPick = { group = it }, onNew = { naming = true })
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             BracketAction("cancel", Palette.muted, onDismiss)
             BracketAction("save", Palette.accent) {
                 customs.rename(hit.key, name)
-                group?.let { groups.put(listOf(hit.key), it) } ?: groups.ungroup(listOf(hit.key))
+                if (!hit.isWork) group?.let { groups.put(listOf(hit.key), it) } ?: groups.ungroup(listOf(hit.key))
                 onDismiss()
             }
         }

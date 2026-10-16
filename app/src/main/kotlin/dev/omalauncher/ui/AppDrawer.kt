@@ -1090,6 +1090,7 @@ private fun drawerEntries(
         // Above the apps, as on the personal tab.
         out.section("w-shortcuts", "shortcuts", ready(apps.shortcuts.filter { it.work }.map { AppHit.Shortcut(it) }), columns, titled = sections)
         val paused = apps.workProfiles.any { apps.paused(it) }
+        val workApps = out.size
         // Titled even as one list: the heading holds the pause switch.
         out.section(
             "w-apps",
@@ -1098,7 +1099,7 @@ private fun drawerEntries(
             columns,
             listOf((if (paused) "turn on" else "pause") to { apps.pauseWork(!paused) }),
         )
-        return out to 0
+        return out to workApps
     }
     if (LauncherStyle.drawerSuggestions) {
         val top = allApps(runtime).filter { !it.isWork }.shown(hidden, false).filter { score(it) > 0.0 }.sortedByDescending(score).take(columns)
@@ -1169,14 +1170,17 @@ private fun LetterRail(
                 touched = null
             }
         },
-        verticalArrangement = Arrangement.SpaceEvenly,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Too many for the height to read apart: every other one (or fewer) is drawn, and touches still reach them all.
+        // Each letter has its own slot, as touches map them. Too many to read apart: every other one (or fewer) is drawn,
+        // and the one touched; the others' slots stay blank but still take touches.
         val step = if (height <= 0) 1 else ceil(letters.size * legible / height).toInt().coerceAtLeast(1)
         for ((i, c) in letters.withIndex()) {
-            if (i % step != 0 && c != touched) continue
-            BasicText(c.toString(), style = Mono.copy(color = if (c == touched) Palette.accent else Palette.muted, fontSize = TextSize.Small))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                if (i % step == 0 || c == touched) {
+                    BasicText(c.toString(), style = Mono.copy(color = if (c == touched) Palette.accent else Palette.muted, fontSize = TextSize.Small))
+                }
+            }
         }
     }
 }
@@ -1235,7 +1239,10 @@ private fun SelectionBar(
             if (LauncherStyle.dockShown && !dock.full) BracketAction("add to dock", Palette.accent, onDock)
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-            BracketAction("group", Palette.accent) { state.grouping = selection }
+            // Groups are the personal tab's: none for work apps.
+            if (picked(allApps(runtime), selection).any { !it.isWork }) {
+                BracketAction("group", Palette.accent) { state.grouping = picked(allApps(runtime), selection).filter { !it.isWork }.map { it.key }.toSet() }
+            }
             if (canHide) BracketAction("hide", Palette.accent) { onHide(true) }
             if (canShow) BracketAction("unhide", Palette.accent) { onHide(false) }
         }
