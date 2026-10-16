@@ -67,6 +67,8 @@ import dev.omalauncher.widgets.publishWidgetCommand
 import dev.omalauncher.widgets.reviewSharedWidgetCommand
 import dev.omalauncher.widgets.render.LocalHomeCovered
 import dev.omalauncher.widgets.render.LocalInputFocus
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
 
 @Composable
 fun LauncherRoot(
@@ -134,7 +136,7 @@ private fun DesktopScreen(
     if (!runtime.themes.wallpaperBehind) {
         runtime.themes.wallpaper?.let { bmp ->
             // Read while drawing, so swiping pages only redraws this.
-            Canvas(Modifier.fillMaxSize()) {
+            Canvas(Modifier.fillMaxSize().blurUnderDrawer(state)) {
                 Backdrop.screen = IntSize(size.width.toInt(), size.height.toInt())
                 val src = wallpaperCrop(bmp.width, bmp.height, size.width.toInt(), size.height.toInt(), state.wallpaperOffset)
                 drawImage(
@@ -151,7 +153,7 @@ private fun DesktopScreen(
     val covered = remember(state) { { state.homeCovered || runtime.widgets.openScreen != null } }
     CompositionLocalProvider(LocalHomeCovered provides covered) {
         Column(Modifier.fillMaxSize().safePadding()) {
-            HomeScreen(runtime, state, Modifier.weight(1f))
+            HomeScreen(runtime, state, Modifier.weight(1f).blurUnderDrawer(state))
         }
     }
     HomeMenu(runtime, state)
@@ -222,12 +224,13 @@ private fun DesktopScreen(
         }
 
     if (panelShown) {
-        // Near-opaque like stock drawers: home widgets bleeding through made icons hard to read.
+        // Near-opaque by default like stock drawers (style's drawer.opacity): home widgets bleeding through made icons
+        // hard to read.
         Box(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer { alpha = state.drawer.value.coerceAtMost(1f) }
-                .background(Palette.background.copy(alpha = 0.97f))
+                .background(Palette.background.copy(alpha = LauncherStyle.drawerOpacity))
                 .clickable { state.close() }
                 .drawerSwipe(state)
                 .swipeTabs(runtime, state),
@@ -301,6 +304,19 @@ private fun DesktopScreen(
     // Full-screen panels draw over the bar.
     ThemesOverlay(runtime, state)
     StyleErrors(runtime.style)
+}
+
+/**
+ * Blurs home as the drawer opens over it, as much as style's drawer.blur says once it's open (Android 12 and later).
+ * Read while drawing, so the drawer's every step redraws home's layer rather than recomposing it.
+ */
+private fun Modifier.blurUnderDrawer(state: LauncherState): Modifier {
+    val radius = LauncherStyle.drawerBlur
+    if (radius <= 0.dp || Build.VERSION.SDK_INT < 31) return this
+    return graphicsLayer {
+        val r = radius.toPx() * state.drawer.value.coerceIn(0f, 1f)
+        renderEffect = if (r > 0.5f) BlurEffect(r, r, TileMode.Clamp) else null
+    }
 }
 
 /** Measured as usual but laid out at no size and never placed, so nothing shows and nothing takes touches. */

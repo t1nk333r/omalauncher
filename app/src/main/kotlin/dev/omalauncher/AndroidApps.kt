@@ -54,6 +54,8 @@ data class AndroidApp(
     val system: Boolean = false,
     /** [user] is a clone profile, holding a second copy of an app the owner has too, rather than a work profile. */
     val clone: Boolean = false,
+    /** When it was first installed, in millis; 0 when unknown. */
+    val installed: Long = 0L,
 ) {
     /** Stable across restarts and unique across profiles; icons, usage and pinned apps go by it. */
     val key get() = androidAppKey(component, profile)
@@ -526,7 +528,7 @@ class AndroidAppCatalog(
                                     .onFailure { Log.w(TAG, "cannot list apps in $user", it) }
                                     .getOrDefault(emptyList())
                                     .filter { it.componentName.packageName != context.packageName }
-                                    .map { it to AndroidApp(it.label.toString(), it.componentName, user, profile, it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0, clone = clone) }
+                                    .map { it to AndroidApp(it.label.toString(), it.componentName, user, profile, it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0, clone = clone, installed = it.firstInstallTime) }
                             }
                             // The same app in two profiles: the owner's one first.
                             .sortedWith(compareBy({ it.second.label.lowercase() }, { it.second.profile != null }))

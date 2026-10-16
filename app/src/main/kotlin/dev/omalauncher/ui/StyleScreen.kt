@@ -124,6 +124,20 @@ fun StyleScreen(
             NumberOption("rows", listOf("auto" to 0.0) + (7..12).map { "$it" to it.toDouble() }, Style.HOME_ROWS, style)
             OptionHint("tiles below the last row move up at their size, or to a later page; more rows later won't move them back")
             NumberOption("corners", Corners.entries.map { it.label to it.scale.toDouble() }, Style.CORNER_SCALE, style)
+            Heading("app drawer")
+            StyleOption("sort", listOf("a–z", "most used", "newest"), Style.DRAWER_SORT.options.indexOf(style.style[Style.DRAWER_SORT])) { i ->
+                style.update { it.with(Style.DRAWER_SORT, Style.DRAWER_SORT.options[i]) }
+            }
+            Flag("letter rail", "shown", "hidden", style, Style.DRAWER_LETTERS)
+            Flag("most used row", "shown", "hidden", style, Style.DRAWER_SUGGESTIONS)
+            Flag("new apps", "dot", "no dot", style, Style.DRAWER_NEW)
+            Flag("list", "sections", "one list", style, Style.DRAWER_SECTIONS)
+            NumberOption("columns", listOf("auto" to 0.0) + (4..7).map { "$it" to it.toDouble() }, Style.DRAWER_COLUMNS, style)
+            NumberOption("icons", listOf("small" to 44.0, "normal" to 52.0, "large" to 64.0), Style.DRAWER_ICON, style, unit = "dp")
+            Flag("app names", "shown", "hidden", style, Style.DRAWER_LABELS)
+            NumberOption("background", listOf("solid" to 1.0, "dim" to 0.97, "see-through" to 0.8), Style.DRAWER_OPACITY, style)
+            NumberOption("blur", listOf("none" to 0.0, "soft" to 12.0, "strong" to 28.0), Style.DRAWER_BLUR, style, unit = "dp")
+            Flag("hidden apps", "locked", "open", style, Style.DRAWER_LOCK)
             // Like Hyprland's gaps_in, gaps_out and border_size; the colors are in style.toml.
             Heading("widgets")
             OpacityStepper("opacity", style, Style.WIDGET_OPACITY)

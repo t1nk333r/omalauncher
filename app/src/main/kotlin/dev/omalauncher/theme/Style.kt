@@ -55,6 +55,19 @@ sealed class Setting<T>(
         override fun decode(value: Any): String = nonBlank(value, "takes text in quotes")
     }
 
+    /** One of a few words, [options], the first the default. */
+    class Choice(
+        key: String,
+        val options: List<String>,
+        doc: String,
+    ) : Setting<String>(key, options.first(), doc) {
+        override fun decode(value: Any): String {
+            val v = (value as? String)?.trim()?.lowercase()
+            require(v != null && v in options) { "takes ${options.joinToString(", ") { "\"$it\"" }}" }
+            return v
+        }
+    }
+
     /**
      * Text in a format of its own, unset by default: [check] reads it, and throws
      * [IllegalArgumentException] saying what's wrong, so a bad value keeps the last good one.
@@ -180,6 +193,19 @@ class Style(
         val STATUS_BAR = Bar("status-bar", "Android's status bar at the top of home")
         val NAVIGATION_BAR = Bar("navigation-bar", "Android's gesture or button bar on home")
 
+        // The app drawer: what it lists in what order, and how it looks.
+        val DRAWER_SORT = Setting.Choice("drawer.sort", listOf("name", "used", "new"), "The order of the drawer's apps: \"name\" A to Z, \"used\" most used first, \"new\" newest installed first.")
+        val DRAWER_LETTERS = Setting.Flag("drawer.letters", true, "A rail of letters along the drawer's edge to jump to the apps they start; only while it's sorted by name.")
+        val DRAWER_SUGGESTIONS = Setting.Flag("drawer.suggestions", true, "A row of the apps used most at the top of the drawer.")
+        val DRAWER_NEW = Setting.Flag("drawer.new-badge", true, "A dot on apps installed in the last three days and not opened since.")
+        val DRAWER_COLUMNS = Setting.Number("drawer.columns", 0.0, 0.0..8.0, "Apps in a row of the drawer: 0 as many as fit, or a number.")
+        val DRAWER_ICON = Setting.Number("drawer.icon-size", 52.0, 36.0..80.0, "The drawer's icons, in dp.")
+        val DRAWER_LABELS = Setting.Flag("drawer.labels", true, "Apps' names under their icons in the drawer; search results always show them.")
+        val DRAWER_SECTIONS = Setting.Flag("drawer.sections", true, "The drawer's apps under headings (linux, shortcuts, android); false lists them all in one list.")
+        val DRAWER_OPACITY = Setting.Number("drawer.opacity", 0.97, 0.0..1.0, "How much the drawer's background covers home behind it: 0 clear, 1 solid.")
+        val DRAWER_BLUR = Setting.Number("drawer.blur", 0.0, 0.0..48.0, "Blurs home behind the drawer, in dp (Android 12 and later).")
+        val DRAWER_LOCK = Setting.Flag("drawer.lock-hidden", false, "Showing hidden apps asks for the fingerprint, face or screen lock first.")
+
         val TERMINAL_FONT = Setting.Text("terminal.font", "JetBrains Mono", "The terminals' font family; fc-list :spacing=100 lists those installed.")
         val TERMINAL_TEXT = Setting.Number("terminal.text", 12.0, 6.0..32.0, "The terminals' em size in dp, before Android's font size: 10 smaller, 12 default, 14 larger.")
         val TERMINAL_OPACITY = Setting.Number("terminal.opacity", 1.0, 0.0..1.0, "How much the terminals' background covers the wallpaper: foot's alpha, for new terminals and open ones alike.")
@@ -231,6 +257,7 @@ object StyleFile {
         with(Style) {
             listOf(THEME, BACKGROUND, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, HOME_PILL, PROMPT_BAR, HOME_ROWS, GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, MONOCHROME_ICONS, CORNER_SCALE) +
+                listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +
                 STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, EXTRA_KEYS)
         }
 

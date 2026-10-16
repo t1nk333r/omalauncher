@@ -111,6 +111,19 @@ object LauncherStyle {
     /** Apps' names under their icons on home. */
     val appLabels get() = style[Style.APP_LABELS]
 
+    /** The app drawer's settings: see [Style.DRAWER_SORT] and those after it. */
+    val drawerSort get() = style[Style.DRAWER_SORT]
+    val drawerLetters get() = style[Style.DRAWER_LETTERS] && drawerSort == "name"
+    val drawerSuggestions get() = style[Style.DRAWER_SUGGESTIONS]
+    val drawerNewBadge get() = style[Style.DRAWER_NEW]
+    val drawerColumns: Int? get() = style[Style.DRAWER_COLUMNS].roundToInt().takeIf { it > 0 }
+    val drawerIcon: Dp get() = style[Style.DRAWER_ICON].toFloat().dp
+    val drawerLabels get() = style[Style.DRAWER_LABELS]
+    val drawerSections get() = style[Style.DRAWER_SECTIONS]
+    val drawerOpacity get() = style[Style.DRAWER_OPACITY].toFloat()
+    val drawerBlur: Dp get() = style[Style.DRAWER_BLUR].toFloat().dp
+    val drawerLock get() = style[Style.DRAWER_LOCK]
+
     /** The strip above the bar on home: the dock or the apps used lately, see [dock]. */
     val recentApps get() = style[Style.RECENT_APPS]
 
