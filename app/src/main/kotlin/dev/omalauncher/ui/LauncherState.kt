@@ -83,6 +83,15 @@ class LauncherState {
     /** The page and 1x1 cell of home under a point in the window, as the grid last laid out; null off the grid. */
     var homeCellAt: (androidx.compose.ui.geometry.Offset) -> Pair<Int, dev.omalauncher.widgets.Cell>? = { null }
 
+    /** The app whose customize dialog (name, icon, drawer group) is open, from its long-press menu. */
+    internal var customizing by mutableStateOf<AppHit?>(null)
+
+    /** Apps picked to put in a drawer group, while that dialog is open. */
+    var grouping by mutableStateOf<Set<String>?>(null)
+
+    /** The drawer group being renamed, from its heading. */
+    var renamingGroup by mutableStateOf<String?>(null)
+
     /** Whether the drawer lists hidden apps too, dimmed, to show them again. Closing turns it off. */
     var showHidden by mutableStateOf(false)
 

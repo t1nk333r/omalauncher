@@ -101,6 +101,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalContext
 
 /** One app in the bar's results. */
 internal sealed interface AppHit {
@@ -258,7 +259,15 @@ internal fun searchApps(
     if (query.isBlank()) return BarSearch(emptyList(), false)
     val now = System.currentTimeMillis()
     val apps = allApps(runtime).shown(runtime.hiddenApps.keys, showHidden)
-    val ranked = rankMatches(apps, query, { it.label }, boost = { (runtime.usage.score(it.key, now) * 10).toInt() }, alias = { it.alias })
+    // Your own name first; the app's own name still finds a renamed app.
+    val ranked =
+        rankMatches(
+            apps,
+            query,
+            { it.name(runtime) },
+            boost = { (runtime.usage.score(it.key, now) * 10).toInt() },
+            alias = { if (runtime.customs.name(it.key) != null) it.label else it.alias },
+        )
     return BarSearch(ranked.map { it.first }, ranked.firstOrNull()?.let { isStrongMatch(it.second, query) } == true)
 }
 
@@ -279,6 +288,8 @@ internal class AppHandlers(
     val select: (AppHit) -> Unit,
     /** The dock above the bar: what the menus add to, remove from and move within. */
     val dock: Dock,
+    /** Opens the app's customize dialog: its name, icon and drawer group. */
+    val customize: (AppHit) -> Unit,
 )
 
 /** The shortcuts an Android app offers above its menu's actions; null for anything else. */
@@ -312,6 +323,7 @@ private fun AppHit.actions(
     val hidden = handlers.isHidden(this)
     return own +
         dockActions(handlers.dock, inDock) +
+        listOf("customize" to { handlers.customize(this) }) +
         listOfNotNull(
             (if (hidden) "unhide" else "hide") to { handlers.hide(listOf(key), !hidden) },
             if (selectable) "select several" to { handlers.select(this) } else null,
@@ -354,16 +366,19 @@ private fun dockMoves(
     )
 }
 
-/** The name the drawer, home and the dock show for it. */
-internal fun AppHit.name(runtime: Runtime): String = label
+/** The name the drawer, home and the dock show for it: yours (customize), or the app's own. */
+internal fun AppHit.name(runtime: Runtime): String = runtime.customs.name(key) ?: label
 
 /** The app's icon and its silhouette, each null until loaded or if it has none. */
-private fun AppHit.icons(runtime: Runtime): Pair<ImageBitmap?, ImageBitmap?> =
-    when (this) {
+internal fun AppHit.icons(runtime: Runtime): Pair<ImageBitmap?, ImageBitmap?> {
+    // Your own icon (customize) for both: in the monochrome style it's tinted like the others' silhouettes.
+    runtime.customs.icons[key]?.let { mine -> return mine to mine }
+    return when (this) {
         is AppHit.Linux -> runtime.linuxIcons[app.id] to runtime.linuxMasks[app.id]
         is AppHit.Android -> runtime.androidApps.icons[app.key] to runtime.androidApps.masks[app.key]
         is AppHit.Shortcut -> runtime.androidApps.icons[shortcut.key] to runtime.androidApps.masks[shortcut.key]
     }
+}
 
 @Composable
 private fun HitCell(
@@ -480,7 +495,7 @@ private fun DockStrip(
                             val (icon, mask) = hit.icons(runtime)
                             val dragged = state.dockDrag?.key == hit.key
                             Box(Modifier.dragsOutOfDock(runtime, state, hit) { bounds }) {
-                                StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime) || dragged, bare = !LauncherStyle.dockBoxed, cell = cell, dragged = dragged)
+                                StripCell(hit.name(runtime), icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime) || dragged, bare = !LauncherStyle.dockBoxed, cell = cell, dragged = dragged)
                             }
                         }
                         // Only once its list has loaded is an app missing from it gone; until then its slot waits empty.
@@ -528,7 +543,7 @@ internal fun RecentStrip(
         val cells: LazyListScope.() -> Unit = {
             items(apps, key = { it.key }) { hit ->
                 val (icon, mask) = hit.icons(runtime)
-                StripCell(hit.label, icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
+                StripCell(hit.name(runtime), icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
             }
         }
         if (vertical) {
@@ -676,7 +691,7 @@ internal fun DockDragIcon(
             IntOffset(at.x.roundToInt() - half, at.y.roundToInt() - half)
         },
     ) {
-        StripCell(hit.label, icon, mask, onClick = {}, actions = { emptyList() }, spoken = hit.spoken, bare = !LauncherStyle.dockBoxed, cell = 64.dp)
+        StripCell(hit.name(runtime), icon, mask, onClick = {}, actions = { emptyList() }, spoken = hit.spoken, bare = !LauncherStyle.dockBoxed, cell = 64.dp)
     }
 }
 
@@ -845,11 +860,16 @@ internal fun AppPanel(
                 Box(Modifier.weight(1f).padding(end = 8.dp), contentAlignment = Alignment.CenterEnd) {
                     // Lists the hidden apps too, dimmed, so they can be shown again; only while there are some.
                     if (hiddenCount > 0) {
+                        val context = LocalContext.current
                         BracketAction(
                             if (state.showHidden) "hide hidden ($hiddenCount)" else "show hidden ($hiddenCount)",
                             if (state.showHidden) Palette.accent else Palette.muted,
                         ) {
-                            state.showHidden = !state.showHidden
+                            when {
+                                // Locked (drawer.lock-hidden): the fingerprint, face or screen lock first.
+                                !state.showHidden && LauncherStyle.drawerLock -> unlock(context, "show hidden apps") { state.showHidden = true }
+                                else -> state.showHidden = !state.showHidden
+                            }
                             // Hidden apps picked while listed would otherwise stay picked out of sight.
                             if (!state.showHidden) state.selection = state.selection?.let { (it - runtime.hiddenApps.keys).ifEmpty { null } }
                         }
@@ -996,7 +1016,10 @@ private fun drawerEntries(
     val apps = runtime.androidApps
     val hidden = runtime.hiddenApps.keys
     val score = { hit: AppHit -> runtime.usage.score(hit.key, now) }
-    fun ready(hits: List<AppHit>) = sortApps(hits.shown(hidden, state.showHidden), LauncherStyle.drawerSort, { it.name(runtime) }, score)
+    val groups = runtime.drawerGroups.groups
+    val grouped = groups.flatMapTo(HashSet()) { it.keys }
+    // An app in a group is listed there, not under its usual heading.
+    fun ready(hits: List<AppHit>) = sortApps(hits.filter { it.key !in grouped }.shown(hidden, state.showHidden), LauncherStyle.drawerSort, { it.name(runtime) }, score)
     val sections = LauncherStyle.drawerSections
     val out = mutableListOf<DrawerEntry>()
     if (tab == DrawerTab.Work) {
@@ -1016,6 +1039,14 @@ private fun drawerEntries(
     if (LauncherStyle.drawerSuggestions) {
         val top = allApps(runtime).shown(hidden, false).filter { score(it) > 0.0 }.sortedByDescending(score).take(columns)
         out.section("most", "most used", top, columns)
+    }
+    // Your groups, in the order made, each in the drawer's sort order; an empty one stays until it's deleted.
+    if (groups.isNotEmpty()) {
+        val byKey = allApps(runtime).associateBy { it.key }
+        for (g in groups) {
+            val hits = sortApps(g.keys.mapNotNull { byKey[it] }.shown(hidden, state.showHidden), LauncherStyle.drawerSort, { it.name(runtime) }, score)
+            out.section("g:${g.name}", g.name, hits, columns, listOf("rename" to { state.renamingGroup = g.name }, "ungroup" to { runtime.drawerGroups.delete(g.name) }))
+        }
     }
     val from = out.size
     if (!linux) out += LinuxOfferEntry
@@ -1132,6 +1163,7 @@ private fun SelectionBar(
             if (LauncherStyle.dockShown && !dock.full) BracketAction("add to dock", Palette.accent, onDock)
         }
         Row(Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+            BracketAction("group", Palette.accent) { state.grouping = selection }
             if (canHide) BracketAction("hide", Palette.accent) { onHide(true) }
             if (canShow) BracketAction("unhide", Palette.accent) { onHide(false) }
         }

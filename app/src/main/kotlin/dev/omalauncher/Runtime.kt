@@ -84,6 +84,7 @@ class Runtime(
     val gestures = Gestures(context)
     val hiddenApps = HiddenApps(context)
     val dock = Dock(context)
+    val drawerGroups = DrawerGroups(context)
     val linuxApps = mutableStateListOf<LinuxApp>()
 
     /** [linuxApps] has been listed since Linux started: a Linux app not in it now is really gone. */
@@ -134,6 +135,9 @@ class Runtime(
         CoroutineScope(SupervisorJob() + Dispatchers.Main + CoroutineExceptionHandler { _, e -> Log.e(TAG, "background job failed", e) })
     private var started = false
     private var prepared = false
+
+    /** Your own names and icons for apps; after [scope], which loads the icons. */
+    val customs = AppCustoms(context, scope)
 
     private val prefs = context.getSharedPreferences("launcher", Context.MODE_PRIVATE)
 
@@ -455,6 +459,8 @@ class Runtime(
         shortcut: Shortcut,
         mono: Boolean,
     ): ImageBitmap? {
+        // Your own icon first, as the drawer and the dock show it.
+        dockKeyOf(shortcut.key)?.let { customs.icons[it] }?.let { return it }
         androidKeyOf(shortcut)?.let { return if (mono) androidApps.masks[it] else androidApps.icons[it] }
         val id = shortcut.linux?.id ?: return null
         return if (mono) linuxMasks[id] else linuxIcons[id]
@@ -464,7 +470,8 @@ class Runtime(
      * A pinned app's name as the drawer shows it, so it follows the phone's language and the app's updates; the name
      * it was pinned with while its app is gone or not listed yet, and for Linux apps.
      */
-    fun shortcutLabel(shortcut: Shortcut) = androidKeyOf(shortcut)?.let { androidApps.labels[it] } ?: shortcut.label
+    fun shortcutLabel(shortcut: Shortcut) =
+        dockKeyOf(shortcut.key)?.let { customs.name(it) } ?: androidKeyOf(shortcut)?.let { androidApps.labels[it] } ?: shortcut.label
 
     /** A pinned Android app's or shortcut's key in [androidApps]; null for a Linux app. */
     private fun androidKeyOf(shortcut: Shortcut) =

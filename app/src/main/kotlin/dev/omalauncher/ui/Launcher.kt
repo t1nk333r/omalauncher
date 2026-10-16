@@ -220,6 +220,7 @@ private fun DesktopScreen(
                 },
                 select = { hit -> state.selection = setOf(hit.key) },
                 dock = runtime.dock,
+                customize = { hit -> state.customizing = hit },
             )
         }
 
@@ -295,6 +296,21 @@ private fun DesktopScreen(
                     modifier = Modifier.homeSwipe(runtime, state).then(if (barShown) Modifier else Modifier.collapsed()),
                 )
             }
+        }
+    }
+
+    // The customize dialog, the group picker and renaming a group, from the drawer, home's strip or the dock.
+    state.customizing?.let { AppCustomizeDialog(runtime, it) { state.customizing = null } }
+    state.grouping?.let { keys ->
+        GroupPickDialog(runtime, keys) {
+            state.grouping = null
+            state.selection = null
+        }
+    }
+    state.renamingGroup?.let { name ->
+        TextDialog("rename group", name, "rename", onDismiss = { state.renamingGroup = null }) { new ->
+            runtime.drawerGroups.rename(name, new)
+            state.renamingGroup = null
         }
     }
 

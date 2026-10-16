@@ -17,6 +17,9 @@
     <!-- Swiping down on home can pull down the notification shade (StatusBarManager), if gesture settings say so. -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 
+    <!-- Showing hidden apps can ask for the fingerprint, face or screen lock (style's drawer.lock-hidden). -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
     <!-- Android widgets on home (AppWidgetSetupActivity); the user allows each app once in Android's dialog. -->
     <uses-permission android:name="android.permission.BIND_APPWIDGET" />
 
