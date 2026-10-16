@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import dev.omalauncher.ui.bitmapMask
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -37,11 +38,14 @@ class AppCustoms(
     /** Loaded once at start, then as they're set. */
     val icons = mutableStateMapOf<String, ImageBitmap>()
 
+    /** [icons]' silhouettes, for the monochrome style, made as the apps' own are. */
+    val masks = mutableStateMapOf<String, ImageBitmap>()
+
     init {
         scope.launch(Dispatchers.IO) {
             for (file in dir.listFiles().orEmpty()) {
                 val key = keyOf(file) ?: continue
-                BitmapFactory.decodeFile(file.path)?.let { icons[key] = it.asImageBitmap() }
+                BitmapFactory.decodeFile(file.path)?.let { put(key, it) }
             }
         }
     }
@@ -80,13 +84,22 @@ class AppCustoms(
                     }
                 }.onFailure { Log.w(TAG, "cannot use that image as an icon", it) }.getOrNull()
             } ?: return false
-        icons[key] = bitmap.asImageBitmap()
+        withContext(Dispatchers.Default) { put(key, bitmap) }
         return true
+    }
+
+    private fun put(
+        key: String,
+        bitmap: Bitmap,
+    ) {
+        masks[key] = bitmapMask(bitmap).asImageBitmap()
+        icons[key] = bitmap.asImageBitmap()
     }
 
     /** Gives the app [key] back its own icon. */
     fun resetIcon(key: String) {
         icons.remove(key)
+        masks.remove(key)
         fileOf(key).delete()
         File(dir, fileOf(key).name + ".key").delete()
     }

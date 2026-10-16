@@ -104,6 +104,13 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.DisposableEffect
 import dev.omalauncher.landingSlot
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.LocalPinnableContainer
+import androidx.compose.ui.layout.PinnableContainer
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onSizeChanged
+import kotlin.math.ceil
 
 /** One app in the bar's results. */
 internal sealed interface AppHit {
@@ -268,7 +275,7 @@ internal fun searchApps(
             query,
             { it.name(runtime) },
             boost = { (runtime.usage.score(it.key, now) * 10).toInt() },
-            alias = { if (runtime.customs.name(it.key) != null) it.label else it.alias },
+            alias = { if (runtime.customs.name(it.key) != null) it.alias ?: it.label else it.alias },
         )
     return BarSearch(ranked.map { it.first }, ranked.firstOrNull()?.let { isStrongMatch(it.second, query) } == true)
 }
@@ -368,13 +375,22 @@ private fun dockMoves(
     )
 }
 
+/** In a work profile: listed on the work tab, not the personal one's groups or most-used row. */
+internal val AppHit.isWork
+    get() =
+        when (this) {
+            is AppHit.Android -> app.work
+            is AppHit.Shortcut -> shortcut.work
+            is AppHit.Linux -> false
+        }
+
 /** The name the drawer, home and the dock show for it: yours (customize), or the app's own. */
 internal fun AppHit.name(runtime: Runtime): String = runtime.customs.name(key) ?: label
 
 /** The app's icon and its silhouette, each null until loaded or if it has none. */
 internal fun AppHit.icons(runtime: Runtime): Pair<ImageBitmap?, ImageBitmap?> {
-    // Your own icon (customize) for both: in the monochrome style it's tinted like the others' silhouettes.
-    runtime.customs.icons[key]?.let { mine -> return mine to mine }
+    // Your own icon (customize), with its silhouette for the monochrome style.
+    runtime.customs.icons[key]?.let { mine -> return mine to (runtime.customs.masks[key] ?: mine) }
     return when (this) {
         is AppHit.Linux -> runtime.linuxIcons[app.id] to runtime.linuxMasks[app.id]
         is AppHit.Android -> runtime.androidApps.icons[app.key] to runtime.androidApps.masks[app.key]
@@ -597,13 +613,18 @@ private fun Modifier.dragsApp(
         this
     } else {
         composed {
-            var origin by remember { mutableStateOf(Offset.Zero) }
-            onGloballyPositioned { origin = it.positionInWindow() }.pointerInput(hit.key, fromDrawer) {
+            // Where the icon is, read as the finger moves rather than written on every layout (a scrolled list moves
+            // every cell every frame).
+            val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+            // Kept composed while carried, even scrolled out of the list, or the drag would end with it.
+            val pinnable = LocalPinnableContainer.current
+            onGloballyPositioned { coords[0] = it }.pointerInput(hit.key, fromDrawer) {
                 val slop = viewConfiguration.touchSlop
                 val hold = viewConfiguration.longPressTimeoutMillis
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     var dragging = false
+                    var pin: PinnableContainer.PinnedHandle? = null
                     // However the drag ends (this icon leaving the screen mid-drag too), the dragged icon goes.
                     try {
                         while (true) {
@@ -614,6 +635,7 @@ private fun Modifier.dragsApp(
                                 // Moved before the long-press: a swipe, home's or the list's, or the tap's to settle.
                                 if (change.uptimeMillis - down.uptimeMillis < hold) break
                                 dragging = true
+                                pin = pinnable?.pin()
                                 state.dockDrag = hit
                                 if (fromDrawer) {
                                     state.drawerDrag = true
@@ -621,7 +643,7 @@ private fun Modifier.dragsApp(
                                     state.focusSearch = false
                                 }
                             }
-                            val at = origin + change.position
+                            val at = (coords[0]?.takeIf { it.isAttached }?.positionInWindow() ?: Offset.Zero) + change.position
                             if (!change.pressed) {
                                 // A lift arrives here unconsumed; a cancel (the system taking the gesture) arrives consumed,
                                 // and only puts the icon back.
@@ -637,6 +659,7 @@ private fun Modifier.dragsApp(
                             state.dockHover = dockSlotAt(state.dockBounds, at)?.let { landingSlot(runtime.dock.keys, hit.key, it) }
                         }
                     } finally {
+                        pin?.release()
                         if (state.dockDrag === hit) {
                             state.dockDrag = null
                             state.drawerDrag = false
@@ -900,7 +923,8 @@ internal fun AppPanel(
                         ) {
                             when {
                                 // Locked (drawer.lock-hidden): the fingerprint, face or screen lock first.
-                                !state.showHidden && LauncherStyle.drawerLock -> unlock(context, "show hidden apps") { state.showHidden = true }
+                                !state.showHidden && LauncherStyle.drawerLock ->
+                                    unlock(context, "show hidden apps") { if (state.drawer.value > 0.01f) state.showHidden = true }
                                 else -> state.showHidden = !state.showHidden
                             }
                             // Hidden apps picked while listed would otherwise stay picked out of sight.
@@ -959,12 +983,13 @@ internal fun AppPanel(
                         val now = remember(shown) { System.currentTimeMillis() }
                         // Search results bottom-up, so the best match sits right above the bar; the full list reads
                         // top-down from its start, like stock drawers, so a drag down there closes the panel right away.
+                        val linuxInstalled = linuxState == LinuxState.Installed
+                        // Worked out again only when what they read changes (apps, usage, groups, hidden, style).
+                        val listed by remember(shown, columns, linuxInstalled, now) {
+                            derivedStateOf { shown?.let { drawerEntries(runtime, state, it, linuxInstalled, columns, now) } }
+                        }
                         val (entries, railFrom) =
-                            if (shown == null) {
-                                search.hits.chunked(columns).mapIndexed { r, cells -> RowEntry("q:$r", cells, if (picking) -1 else highlighted - r * columns) } to -1
-                            } else {
-                                drawerEntries(runtime, state, shown, linuxState == LinuxState.Installed, columns, now)
-                            }
+                            listed ?: (search.hits.chunked(columns).mapIndexed { r, cells -> RowEntry("q:$r", cells, if (picking) -1 else highlighted - r * columns) } to -1)
                         val letters = if (railFrom >= 0 && LauncherStyle.drawerLetters) letterIndex(entries, { it.name(runtime) }, railFrom) else emptyMap()
                         val rail = letters.size > 1
                         Box {
@@ -981,6 +1006,8 @@ internal fun AppPanel(
                                             val selection = state.selection
                                             Row(Modifier.fillMaxWidth()) {
                                                 entry.cells.forEachIndexed { i, hit ->
+                                                    // By app: a list shifting under a carried app keeps its gesture.
+                                                    key(hit.key) {
                                                     Box(Modifier.weight(1f)) {
                                                         HitCell(
                                                             runtime,
@@ -996,6 +1023,7 @@ internal fun AppPanel(
                                                             showLabel = shown == null || LauncherStyle.drawerLabels,
                                                             new = LauncherStyle.drawerNewBadge && isNew(hit.installed, runtime.usage.score(hit.key, now), now),
                                                         )
+                                                    }
                                                     }
                                                 }
                                                 repeat(columns - entry.cells.size) { Spacer(Modifier.weight(1f)) }
@@ -1053,7 +1081,9 @@ private fun drawerEntries(
     val groups = runtime.drawerGroups.groups
     val grouped = groups.flatMapTo(HashSet()) { it.keys }
     // An app in a group is listed there, not under its usual heading.
-    fun ready(hits: List<AppHit>) = sortApps(hits.filter { it.key !in grouped }.shown(hidden, state.showHidden), LauncherStyle.drawerSort, { it.name(runtime) }, score)
+    // Groups are the personal tab's: there an app in one is listed in it, not under its usual heading.
+    fun ready(hits: List<AppHit>) =
+        sortApps(hits.filter { tab == DrawerTab.Work || it.key !in grouped }.shown(hidden, state.showHidden), LauncherStyle.drawerSort, { it.name(runtime) }, score)
     val sections = LauncherStyle.drawerSections
     val out = mutableListOf<DrawerEntry>()
     if (tab == DrawerTab.Work) {
@@ -1071,14 +1101,14 @@ private fun drawerEntries(
         return out to 0
     }
     if (LauncherStyle.drawerSuggestions) {
-        val top = allApps(runtime).shown(hidden, false).filter { score(it) > 0.0 }.sortedByDescending(score).take(columns)
+        val top = allApps(runtime).filter { !it.isWork }.shown(hidden, false).filter { score(it) > 0.0 }.sortedByDescending(score).take(columns)
         out.section("most", "most used", top, columns)
     }
     // Your groups, in the order made, each in the drawer's sort order; an empty one stays until it's deleted.
     if (groups.isNotEmpty()) {
         val byKey = allApps(runtime).associateBy { it.key }
         for (g in groups) {
-            val hits = sortApps(g.keys.mapNotNull { byKey[it] }.shown(hidden, state.showHidden), LauncherStyle.drawerSort, { it.name(runtime) }, score)
+            val hits = sortApps(g.keys.mapNotNull { byKey[it] }.filter { !it.isWork }.shown(hidden, state.showHidden), LauncherStyle.drawerSort, { it.name(runtime) }, score)
             out.section("g:${g.name}", g.name, hits, columns, listOf("rename" to { state.renamingGroup = g.name }, "ungroup" to { runtime.drawerGroups.delete(g.name) }))
         }
     }
@@ -1088,15 +1118,18 @@ private fun drawerEntries(
     // Clones too, as stock drawers list them: second copies of the owner's apps.
     val shortcuts = apps.shortcuts.filter { !it.work }.map { AppHit.Shortcut(it) }
     val android = apps.apps.filter { !it.work }.map { AppHit.Android(it) }
+    var rail = from
     if (sections) {
         out.section("linux", "linux", ready(linuxApps), columns)
         // Usually few and just added: between the Linux and the Android apps, not past all the Android ones.
         out.section("shortcuts", "shortcuts", ready(shortcuts), columns)
+        // With headings each section runs A to Z on its own: the rail goes through Android's, the long one.
+        rail = out.size
         out.section("android", "android", ready(android), columns)
     } else {
         out.section("all", "apps", ready(linuxApps + shortcuts + android), columns, titled = false)
     }
-    return out to from
+    return out to rail
 }
 
 /** How wide the letter rail is beside the drawer's list. */
@@ -1112,8 +1145,10 @@ private fun LetterRail(
     var touched by remember { mutableStateOf<Char?>(null) }
     val haptics = LocalHapticFeedback.current
     val pick by rememberUpdatedState(onPick)
+    var height by remember { mutableIntStateOf(0) }
+    val legible = with(LocalDensity.current) { 14.dp.toPx() }
     Column(
-        modifier.pointerInput(letters) {
+        modifier.onSizeChanged { height = it.height }.pointerInput(letters) {
             fun at(y: Float) {
                 val c = letters[(y / size.height * letters.size).toInt().coerceIn(0, letters.lastIndex)]
                 if (c == touched) return
@@ -1137,7 +1172,10 @@ private fun LetterRail(
         verticalArrangement = Arrangement.SpaceEvenly,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        for (c in letters) {
+        // Too many for the height to read apart: every other one (or fewer) is drawn, and touches still reach them all.
+        val step = if (height <= 0) 1 else ceil(letters.size * legible / height).toInt().coerceAtLeast(1)
+        for ((i, c) in letters.withIndex()) {
+            if (i % step != 0 && c != touched) continue
             BasicText(c.toString(), style = Mono.copy(color = if (c == touched) Palette.accent else Palette.muted, fontSize = TextSize.Small))
         }
     }

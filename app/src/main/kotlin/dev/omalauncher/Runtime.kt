@@ -460,7 +460,7 @@ class Runtime(
         mono: Boolean,
     ): ImageBitmap? {
         // Your own icon first, as the drawer and the dock show it.
-        dockKeyOf(shortcut.key)?.let { customs.icons[it] }?.let { return it }
+        dockKeyOf(shortcut.key)?.let { if (mono) customs.masks[it] ?: customs.icons[it] else customs.icons[it] }?.let { return it }
         androidKeyOf(shortcut)?.let { return if (mono) androidApps.masks[it] else androidApps.icons[it] }
         val id = shortcut.linux?.id ?: return null
         return if (mono) linuxMasks[id] else linuxIcons[id]
@@ -516,8 +516,13 @@ class Runtime(
         launch("foot --app-id=$appId${terminalFont.optionFor(appId, command)}$args")
     }
 
-    /** Opens a pinned app from the home screen. A Linux one runs its current desktop entry, which an update may have changed. */
+    /**
+     * Opens a pinned app from the home screen. A Linux one runs its current desktop entry, which an update may have
+     * changed. It counts as using it, as opening it from the drawer or the dock does: the most-used row and search
+     * ranking follow, and a new app's dot goes.
+     */
     fun open(shortcut: Shortcut) {
+        dockKeyOf(shortcut.key)?.let(usage::record)
         shortcut.linux?.let { pinned -> launch(linuxApps.firstOrNull { it.id == pinned.id } ?: pinned) }
         shortcut.component?.let { c -> androidApps.pinned(c, shortcut.profile)?.let(androidApps::open) ?: androidApps.open(c, shortcut.profile) }
         shortcut.androidShortcut?.let { androidApps.open(it, shortcut.profile) }

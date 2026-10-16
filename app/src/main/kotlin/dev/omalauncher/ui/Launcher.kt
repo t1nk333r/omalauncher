@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Arrangement
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -280,8 +281,7 @@ private fun DesktopScreen(
                     HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
                     Spacer(Modifier.height(HomeGap))
                 }
-                // Also while an app is carried out of the drawer, to drop it on the dock.
-                if (LauncherStyle.recentApps && (!panelShown || state.drawerDrag)) AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state))
+                if (LauncherStyle.recentApps && !panelShown) AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state))
                 // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
                 // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
                 // Dictation stops as it goes: there'd be no mic to show it listening.
@@ -313,6 +313,25 @@ private fun DesktopScreen(
         TextDialog("rename group", name, "rename", onDismiss = { state.renamingGroup = null }) { new ->
             runtime.drawerGroups.rename(name, new)
             state.renamingGroup = null
+        }
+    }
+
+    // An app carried out of the drawer: home's bottom as home has it, over the drawer that stepped aside, so the dock is
+    // where it'll be to drop on. An overlay, so the drawer under it keeps its size and the carried app's row its place.
+    if (state.drawerDrag) {
+        if (side != null) {
+            SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().safePadding())
+        } else {
+            Column(Modifier.fillMaxSize().safePadding().imePadding(), verticalArrangement = Arrangement.Bottom) {
+                if (LauncherStyle.homePill) {
+                    HomePill(runtime, state)
+                    Spacer(Modifier.height(HomeGap))
+                }
+                if (LauncherStyle.dockShown) AppStrip(runtime, state, handlers)
+                // Where the bar is on home, or the gap to the edge when it isn't there.
+                val density = LocalDensity.current
+                Spacer(Modifier.height(if (barOnHome(runtime)) with(density) { state.barHeight.toDp() } else EdgeGap))
+            }
         }
     }
 

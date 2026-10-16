@@ -87,5 +87,5 @@ internal fun letterIndex(
         if (i < from || entry !is RowEntry) return@forEachIndexed
         for (hit in entry.cells) out.putIfAbsent(railLetter(name(hit)), i)
     }
-    return out.entries.sortedBy { if (it.key == '#') '{' else it.key }.associate { it.key to it.value }
+    return out.entries.sortedWith(compareBy({ it.key == '#' }, { it.key })).associate { it.key to it.value }
 }

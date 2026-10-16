@@ -137,7 +137,16 @@ fun StyleScreen(
             Flag("app names", "shown", "hidden", style, Style.DRAWER_LABELS)
             NumberOption("background", listOf("solid" to 1.0, "dim" to 0.97, "see-through" to 0.8), Style.DRAWER_OPACITY, style)
             NumberOption("blur", listOf("none" to 0.0, "soft" to 12.0, "strong" to 28.0), Style.DRAWER_BLUR, style, unit = "dp")
-            Flag("hidden apps", "locked", "open", style, Style.DRAWER_LOCK)
+            // Turning the lock off asks for it, or anyone holding the phone could.
+            val context = LocalContext.current
+            StyleOption("hidden apps", listOf("locked", "open"), if (style.style[Style.DRAWER_LOCK]) 0 else 1) { i ->
+                val lock = i == 0
+                if (lock || !style.style[Style.DRAWER_LOCK]) {
+                    style.update { it.with(Style.DRAWER_LOCK, lock) }
+                } else {
+                    unlock(context, "turn off the lock on hidden apps") { style.update { it.with(Style.DRAWER_LOCK, false) } }
+                }
+            }
             // Like Hyprland's gaps_in, gaps_out and border_size; the colors are in style.toml.
             Heading("widgets")
             OpacityStepper("opacity", style, Style.WIDGET_OPACITY)
