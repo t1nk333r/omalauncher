@@ -394,6 +394,7 @@ internal fun HomePill(
 /**
  * The unseen strip under home's grid, above the pill and the dock (home.settings-strip): long-pressed, it opens
  * settings, which a grid full to its last row leaves no empty spot for. Swiping on it does what swiping does on home.
+ * Gone while a tile is being arranged, so a tap there finishes, as it does anywhere off the tile.
  */
 @Composable
 internal fun SettingsStrip(
@@ -401,7 +402,7 @@ internal fun SettingsStrip(
     state: LauncherState,
 ) {
     val height = LauncherStyle.settingsStrip
-    if (height <= 0.dp) return
+    if (height <= 0.dp || state.editing != null) return
     val haptics = LocalHapticFeedback.current
     Box(
         Modifier

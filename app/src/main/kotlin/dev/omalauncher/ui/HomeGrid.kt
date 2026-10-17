@@ -442,11 +442,13 @@ internal fun HomeGrid(
             onCellAt { window ->
                 val (shownPages, g) = current
                 val p = window - windowOrigin
-                if (p.y < 0f || p.y > g.height || p.x < 0f || p.x > g.width * g.per) {
+                // Below the grid, in the room kept for the settings strip, the pill and the dock, a drop that missed the
+                // dock lands on the last row rather than going back where it came from.
+                if (p.y < 0f || p.y > constraints.maxHeight || p.x < 0f || p.x > g.width * g.per) {
                     null
                 } else {
                     val side = g.side(p)
-                    val (x, y) = g.cellAt(g.local(p, side))
+                    val (x, y) = g.cellAt(g.local(Offset(p.x, minOf(p.y, g.height - 1f)), side))
                     shownPages.getOrNull(pager.currentPage * g.per + side)?.let { it to Cell(x, y, 1, 1) }
                 }
             }
