@@ -89,7 +89,9 @@ class Runtime(
     /** [linuxApps] has been listed since Linux started: a Linux app not in it now is really gone. */
     var linuxAppsListed by mutableStateOf(false)
         private set
-    val androidApps = AndroidAppCatalog(context)
+    /** Icon packs on the phone, and style's icons.pack, which [androidApps] draws apps with. */
+    val iconPacks = IconPackStore(context).apply { choose(style.style[Style.ICON_PACK]) }
+    val androidApps = AndroidAppCatalog(context, iconPacks)
     val usage = AppUsage(context)
     val themes = ThemeStore(context, proot, style, isLinux = { linux }, onConfigChanged = ::syncGuest)
     private val audio = AudioBridge(proot)
@@ -164,6 +166,15 @@ class Runtime(
                 themes.retintTerminals()
             }
         }
+        // Another pack, from the Style menu or style.toml: the apps' icons are drawn again.
+        scope.launch {
+            snapshotFlow { style.style[Style.ICON_PACK] }.collect { pack ->
+                // Off the main thread: the store is held while a pack is read, which ready() does now, before the redraw needs it.
+                val (changed, ready) = withContext(Dispatchers.IO) { iconPacks.choose(pack) to iconPacks.ready() }
+                if (changed) androidApps.redrawIcons()
+                if (!ready) reportIconPack(pack)
+            }
+        }
         androidApps.start()
         // Omarchy's Super bindings inside Linux windows; the home screen handles its own (see MainActivity).
         keyboard.onShortcut = { code ->
@@ -222,6 +233,21 @@ class Runtime(
         prefs.edit().putBoolean(SETUP_DONE, true).apply()
         launcherReady = true
         scope.launch { themes.ensureRelease() }
+    }
+
+    /** The picked icon pack updated or removed while home was away: the apps' icons are drawn again. */
+    fun checkIconPack() {
+        // Off the main thread: icons being drawn hold the pack while it's read.
+        scope.launch {
+            val (changed, ready) = withContext(Dispatchers.IO) { iconPacks.changedOnDisk().let { it to (!it || iconPacks.ready()) } }
+            if (changed) androidApps.redrawIcons()
+            if (!ready) reportIconPack(style.style[Style.ICON_PACK])
+        }
+    }
+
+    /** Says in errors.txt that style's icon pack [pack] can't be read, unless another was picked meanwhile. */
+    private fun reportIconPack(pack: String?) {
+        if (pack != null && style.style[Style.ICON_PACK] == pack) style.report("icons.pack: no app \"$pack\" on the phone; apps show their own icons")
     }
 
     /** Installs Linux in the background, with [agents]; progress shows in [Bootstrap.state] and the notification. */

@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
+import android.content.pm.LauncherActivityInfo
 import android.content.pm.LauncherApps
 import android.content.pm.LauncherApps.ShortcutQuery
 import android.content.pm.ShortcutInfo
@@ -167,6 +168,8 @@ fun pinnedIds(
  */
 class AndroidAppCatalog(
     private val context: Context,
+    /** The icon pack apps are drawn from, where it has an icon for them. */
+    private val iconPacks: IconPackStore,
 ) {
     val apps = mutableStateListOf<AndroidApp>()
 
@@ -232,6 +235,12 @@ class AndroidAppCatalog(
 
     /** Icon edge in px: the drawer's 52dp icon at this screen's density. */
     private val iconPx = (52 * context.resources.displayMetrics.density).toInt().coerceAtLeast(48)
+
+    /** Bumped when another icon pack is picked, or the picked one changes: apps' icons from before it are drawn again. */
+    private var iconGeneration = 0
+
+    /** The [iconGeneration] each app's icon in [icons] was drawn in. */
+    private val drawnIn = HashMap<String, Int>()
 
     fun start() {
         launcherApps.registerCallback(
@@ -502,6 +511,8 @@ class AndroidAppCatalog(
                     icons.keys.removeAll { it.startsWith("$evict/") }
                     masks.keys.removeAll { it.startsWith("$evict/") }
                 }
+                // The icon pack itself updated or removed is a package change too.
+                if (withContext(Dispatchers.IO) { iconPacks.changedOnDisk() }) iconGeneration++
                 var paused = emptySet<Long>()
                 var clones = emptySet<Long>()
                 var works = emptySet<Long>()
@@ -552,8 +563,10 @@ class AndroidAppCatalog(
                 val present = (list.map { it.key } + pinned.map { it.key }).toHashSet()
                 icons.keys.retainAll(present)
                 masks.keys.retainAll(present)
+                drawnIn.keys.retainAll(present)
                 for ((info, app) in infos) {
-                    if (app.key !in icons) loadIcon(app.key, app.profile, app.clone) { info.getIcon(0) }
+                    // Missing, or drawn before another icon pack was picked.
+                    if (app.key !in icons || drawnIn[app.key] != iconGeneration) loadAppIcon(info, app)
                 }
                 // Apps change a shortcut's icon without an update, so these are drawn again each time; there are only a few.
                 for ((info, shortcut) in made) {
@@ -606,17 +619,38 @@ class AndroidAppCatalog(
             .filter { it.isEnabled }
             .map { it to AndroidShortcut(shortcutLabel(it), ShortcutRef(it.`package`, it.id), user, profile, clone) }
 
+    /** [app]'s icon: the icon pack's for it, else its own. */
+    private fun CoroutineScope.loadAppIcon(
+        info: LauncherActivityInfo,
+        app: AndroidApp,
+    ) {
+        val generation = iconGeneration
+        loadIcon(app.key, app.profile, app.clone, onDrawn = { drawnIn[app.key] = generation }) { iconPacks.iconFor(app.component) ?: info.getIcon(0) }
+    }
+
+    /**
+     * Draws every app's icon again, as another icon pack is picked or the picked one changes. A load of its own, so
+     * a package change meanwhile starts it over rather than racing it; each icon swaps in when it's drawn, so none
+     * goes blank meanwhile. Shortcuts keep theirs, which packs don't draw.
+     */
+    fun redrawIcons() {
+        iconGeneration++
+        reload()
+    }
+
     /** Draws [key]'s icon off the main thread; both styles up front so switching is instant, and masks are 1 byte per pixel. */
     private fun CoroutineScope.loadIcon(
         key: String,
         profile: Long?,
         clone: Boolean,
+        onDrawn: () -> Unit = {},
         drawable: () -> Drawable?,
     ) = launch {
         val rendered = withContext(iconDispatcher) { runCatching { drawable()?.let { render(it, profile, clone) } }.getOrNull() }
         if (rendered != null) {
             icons[key] = rendered.first
             masks[key] = rendered.second
+            onDrawn()
         }
     }
 

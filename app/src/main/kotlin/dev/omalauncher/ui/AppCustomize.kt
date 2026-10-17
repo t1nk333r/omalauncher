@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
 
 /**
  * An app's own look and place, from its long-press menu: your name for it (blank for its own), your icon (an image
- * from the phone), and its drawer group. Names and icons show in the drawer, on home and in the dock.
+ * from the phone, or one of an icon pack's), and its drawer group. Names and icons show in the drawer, on home and in the dock.
  */
 @Composable
 internal fun AppCustomizeDialog(
@@ -51,6 +51,7 @@ internal fun AppCustomizeDialog(
     var group by remember(hit.key) { mutableStateOf(groups.groupOf(hit.key)) }
     var naming by remember { mutableStateOf(false) }
     var unreadable by remember { mutableStateOf(false) }
+    var packPicking by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     // Set at once, unlike the name and group: the picker is a trip out of the dialog.
     val pick =
@@ -84,11 +85,18 @@ internal fun AppCustomizeDialog(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val (icon, _) = hit.icons(runtime)
             if (icon != null) Image(icon, null, Modifier.size(44.dp))
-            BracketAction("pick image", Palette.accent) {
-                unreadable = false
-                pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            // Wraps: all three don't fit beside the icon across a phone's dialog.
+            FlowRow(Modifier.weight(1f)) {
+                BracketAction("pick image", Palette.accent) {
+                    unreadable = false
+                    pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+                BracketAction("icon pack", Palette.accent) {
+                    unreadable = false
+                    packPicking = true
+                }
+                if (hit.key in customs.icons) BracketAction("reset", Palette.muted) { customs.resetIcon(hit.key) }
             }
-            if (hit.key in customs.icons) BracketAction("reset", Palette.muted) { customs.resetIcon(hit.key) }
         }
         if (unreadable) BasicText("that image couldn't be read", style = Mono.copy(color = Palette.red, fontSize = TextSize.Small))
         // Groups are the personal tab's: a work app stays on the work tab.
@@ -106,6 +114,12 @@ internal fun AppCustomizeDialog(
         }
     }
     if (naming) TextDialog("new group", "", "add", onDismiss = { naming = false }) { new -> group = new; naming = false }
+    if (packPicking) {
+        PackIconDialog(runtime, hit, onDismiss = { packPicking = false }) { drawable ->
+            packPicking = false
+            scope.launch { unreadable = !customs.setIcon(hit.key, drawable) }
+        }
+    }
 }
 
 /** Puts the picked apps [keys] in a drawer group, from the select bar; a tap applies it. */

@@ -3,7 +3,9 @@ package dev.omalauncher
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.ImageDecoder
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.getValue
@@ -23,7 +25,7 @@ import java.security.MessageDigest
 
 /**
  * Your own names and icons for apps, by their [dev.omalauncher.ui.AppHit] key: the drawer, home and the dock show
- * them instead of the app's. Icons are kept as PNGs in the app's files, 192px at most.
+ * them instead of the app's. Icons, a picked image or an icon pack's, are kept as PNGs in the app's files, 192px at most.
  */
 class AppCustoms(
     private val context: Context,
@@ -67,16 +69,37 @@ class AppCustoms(
     suspend fun setIcon(
         key: String,
         uri: Uri,
+    ): Boolean =
+        save(key) {
+            ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
+                val (w, h) = info.size.width to info.size.height
+                val scale = minOf(1f, ICON_PX.toFloat() / maxOf(w, h))
+                decoder.setTargetSize((w * scale).toInt().coerceAtLeast(1), (h * scale).toInt().coerceAtLeast(1))
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        }
+
+    /** Makes [drawable], an icon pack's, the app [key]'s icon; false when it can't be drawn. */
+    suspend fun setIcon(
+        key: String,
+        drawable: Drawable,
+    ): Boolean =
+        save(key) {
+            Bitmap.createBitmap(ICON_PX, ICON_PX, Bitmap.Config.ARGB_8888).also { bmp ->
+                drawable.setBounds(0, 0, ICON_PX, ICON_PX)
+                drawable.draw(Canvas(bmp))
+            }
+        }
+
+    /** Keeps the bitmap [make] gives as the app [key]'s icon; false when it throws. */
+    private suspend fun save(
+        key: String,
+        make: () -> Bitmap,
     ): Boolean {
         val bitmap =
             withContext(Dispatchers.IO) {
                 runCatching {
-                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
-                        val (w, h) = info.size.width to info.size.height
-                        val scale = minOf(1f, ICON_PX.toFloat() / maxOf(w, h))
-                        decoder.setTargetSize((w * scale).toInt().coerceAtLeast(1), (h * scale).toInt().coerceAtLeast(1))
-                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                    }.also { bmp ->
+                    make().also { bmp ->
                         dir.mkdirs()
                         fileOf(key).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
                         // The key beside it, since the file is named by a hash of the key.

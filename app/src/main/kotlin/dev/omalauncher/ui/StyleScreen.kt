@@ -81,6 +81,8 @@ fun StyleScreen(
     onDismiss: () -> Unit,
     /** Opens the community themes over this screen. */
     onBrowse: () -> Unit,
+    /** Opens the icon packs over this screen. */
+    onIconPacks: () -> Unit,
 ) {
     val store = runtime.themes
     val scope = rememberCoroutineScope()
@@ -104,6 +106,7 @@ fun StyleScreen(
             Heading("home screen")
             val style = runtime.style
             Flag("icons", "monochrome", "colored", style, Style.MONOCHROME_ICONS)
+            IconPackOption(runtime, onIconPacks)
             Flag("home apps", "boxed", "icon only", style, Style.APP_TILES)
             Flag("app names", "shown", "hidden", style, Style.APP_LABELS)
             // The strip above the bar: the dock you fill, the apps used lately, or neither.
@@ -496,6 +499,39 @@ private fun OpacityStepper(
     style: StyleStore,
     vararg settings: Setting.Number,
 ) = Stepper(label, style, *settings, step = 0.05, format = { "${Math.round(it * 100)}%" })
+
+/** Style's icon pack by its name, or the apps' own icons; a tap opens the packs to pick from. */
+@Composable
+private fun IconPackOption(
+    runtime: Runtime,
+    onOpen: () -> Unit,
+) {
+    val chosen = runtime.style.style[Style.ICON_PACK]
+    val label by produceState<String?>(null, chosen) {
+        // Not the last pack's name while this one's is looked up.
+        value = null
+        value = chosen?.let { pkg -> withContext(Dispatchers.IO) { runtime.iconPacks.installed().firstOrNull { it.packageName == pkg }?.label } ?: pkg }
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        OptionLabel("icon pack")
+        Row(
+            Modifier
+                .frame(1.dp, Palette.border, radius = 12.dp)
+                .clickable(onClick = onOpen)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BasicText(
+                if (chosen == null) "each app's own" else label ?: "",
+                Modifier.weight(1f, fill = false),
+                style = Mono.copy(color = Palette.foreground),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Symbol(Glyph.ChevronRight, Palette.accent, Modifier.padding(start = 8.dp))
+        }
+    }
+}
 
 /** [Style] flags as a choice of two, [on] first, set together. */
 @Composable
