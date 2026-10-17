@@ -29,12 +29,12 @@ class ArchDocs(val root: File) {
         if (canonical.path == rootCanonical) return rootDocId
         // A relative result can still climb out when the file merely shares a tmp parent (../sibling).
         return canonical.relativeToOrNull(root.canonicalFile)?.takeIf { it.path.isNotEmpty() && !it.path.startsWith("..") }?.path
-            ?.split(File.separatorChar)?.joinToString("/") { URLEncoder.encode(it, Charsets.UTF_8) }
+            ?.split(File.separatorChar)?.joinToString("/") { URLEncoder.encode(it, "UTF-8") }
     }
 
     /** The document id of a child of [parentDocId] named [name], as listing and creation give ids out. */
     fun childDocId(parentDocId: String, name: String): String =
-        (if (parentDocId == rootDocId) "" else parentDocId) + "/" + URLEncoder.encode(name, Charsets.UTF_8)
+        (if (parentDocId == rootDocId) "" else parentDocId) + "/" + URLEncoder.encode(name, "UTF-8")
 
     /**
      * The file a document id means, canonicalized. Anything that resolves
@@ -48,7 +48,7 @@ class ArchDocs(val root: File) {
                 root
             } else {
                 docId.split('/')
-                    .joinToString(File.separator) { URLDecoder.decode(it, Charsets.UTF_8) }
+                    .joinToString(File.separator) { URLDecoder.decode(it, "UTF-8") }
                     .split(File.separator)
                     .fold(root) { parent, segment -> File(parent, segment) }
             }
@@ -78,7 +78,7 @@ class ArchDocs(val root: File) {
 
     /** A file's display name, decoded from the last id segment; the root itself shows as the guest home. */
     fun displayNameFor(docId: String): String =
-        if (docId == rootDocId) "/" else URLDecoder.decode(docId.substringAfterLast('/'), Charsets.UTF_8)
+        if (docId == rootDocId) "/" else URLDecoder.decode(docId.substringAfterLast('/'), "UTF-8")
 
     /** Children of a directory as SAF should see them: broken symlinks are skipped, everything else is shown. */
     fun visibleChildren(dir: File): List<File> = dir.listFiles().orEmpty().filter { it.exists() }.sortedBy { it.path.lowercase() }
