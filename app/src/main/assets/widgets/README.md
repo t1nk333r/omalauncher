@@ -696,8 +696,9 @@ The repo's CI checks the rules and summarizes every command for the reviewer. St
 the page you're on; `page:` and `order:` in the file only apply to widgets you add yourself.
 
 To pass a widget on without the store, share it as a link or QR code: the whole file is in it,
-after the `#` of `https://simonschubert.github.io/omarchy-widgets/w#owl1.<data>` (raw DEFLATE, then
-unpadded base64url), so it never reaches a server. One code holds about 2.9 KB of that, which most
+after the `#` of `https://t1nk333r.github.io/w#owl1.<data>` (raw DEFLATE, then unpadded base64url),
+so it never reaches a server; the same data opens from `https://feather.aloqaili.xyz/w#…`, the backup,
+and from upstream's `https://simonschubert.github.io/omarchy-widgets/w#…`. One code holds about 2.9 KB of that, which most
 widgets under 6 KB fit. Scanning it opens the launcher, which lists every command the widget runs and
 flags risky ones before it adds it as `shared-<name>.owl`: nobody reviewed it. On Omarchy, the Widgets
 app's **Share…** shows the code, and `omarchy-widgets share` / `omarchy-widgets import` make and read

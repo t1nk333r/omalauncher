@@ -248,6 +248,7 @@ class ShareTest {
         }
         assertTrue(Share.isPage("t1nk333r.github.io", "/w/"))
         assertTrue(Share.isPage("feather.aloqaili.xyz", "/w"))
+        assertTrue(Share.isPage("T1nk333r.GitHub.io", "/w"))
         assertTrue(Share.isPage("simonschubert.github.io", "/omarchy-widgets/w"))
         assertFalse(Share.isPage("t1nk333r.github.io", "/widgets"))
         assertFalse(Share.isPage("feather.aloqaili.xyz", "/fdroid/repo/w"))

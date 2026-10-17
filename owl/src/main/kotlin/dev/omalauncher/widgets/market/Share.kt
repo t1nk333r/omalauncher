@@ -55,11 +55,14 @@ object Share {
     /** [link], any page's, on the backup page instead: the data after the `#` is all a page reads. */
     fun backupLink(link: String) = BACKUP_LINK + link.substringAfter('#')
 
-    /** Whether a link to [host] and [path] is one of [PAGES]', with or without the slash a web server adds to it. */
+    /**
+     * Whether a link to [host] and [path] is one of [PAGES]', with or without the slash a web server adds to it.
+     * Hosts in any case, as Android matches them.
+     */
     fun isPage(
         host: String?,
         path: String?,
-    ) = PAGES.any { (h, p) -> host == h && (path == p || path == "$p/") }
+    ) = PAGES.any { (h, p) -> host.equals(h, ignoreCase = true) && (path == p || path == "$p/") }
 
     const val PASTE = "dpaste."
 
