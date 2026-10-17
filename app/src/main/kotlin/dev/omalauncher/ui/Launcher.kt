@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -71,6 +72,7 @@ import dev.omalauncher.widgets.render.LocalHomeCovered
 import dev.omalauncher.widgets.render.LocalInputFocus
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
+import dev.omalauncher.linux.LinuxState
 
 @Composable
 fun LauncherRoot(
@@ -172,7 +174,9 @@ private fun DesktopScreen(
         }
     }
     val search by remember(runtime, state) { derivedStateOf { searchApps(runtime, state.query, state.showHidden) } }
-    val highlighted = search.highlighted(state.picked)
+    // Agents run in Linux; without one to ask, Enter searches the web instead.
+    val linuxState by runtime.bootstrap.state.collectAsState()
+    val highlighted = search.highlighted(state.picked, canAsk = linuxState == LinuxState.Installed && runtime.agents.default != null)
 
     fun launch(hit: AppHit) {
         runtime.usage.record(hit.key)
@@ -280,6 +284,7 @@ private fun DesktopScreen(
                         highlighted = highlighted,
                         handlers = handlers,
                         onAsk = { state.promptRequest = PromptRequest.Send },
+                        onWeb = { state.promptRequest = PromptRequest.Web },
                         onSettings = { state.show() },
                         modifier =
                             Modifier.graphicsLayer {

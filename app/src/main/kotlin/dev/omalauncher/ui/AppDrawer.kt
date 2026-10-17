@@ -105,6 +105,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.DisposableEffect
 import dev.omalauncher.landingSlot
+import dev.omalauncher.theme.Style
+import dev.omalauncher.webSearchName
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.LocalPinnableContainer
 import androidx.compose.ui.layout.PinnableContainer
@@ -237,8 +239,54 @@ internal class BarSearch(
     val hits: List<AppHit>,
     val opensApp: Boolean,
 ) {
-    /** The result Enter acts on: an index into [hits], or -1 for the agent. */
-    fun highlighted(picked: Int?) = picked?.coerceIn(-1, hits.lastIndex) ?: if (opensApp) 0 else -1
+    /** The result Enter acts on: an index into [hits], [ASK] for the agent or [WEB] for the web; see [barHighlight]. */
+    fun highlighted(
+        picked: Int?,
+        canAsk: Boolean,
+    ) = barHighlight(picked, hits.size, opensApp, canAsk)
+
+    /** The row [step]s up the panel from [from]; see [barStep]. */
+    fun moved(
+        from: Int,
+        step: Int,
+    ) = barStep(from, step, hits.size)
+
+    companion object {
+        /** The ask row's place, lowest above the bar. */
+        const val ASK = -1
+
+        /** The web search row's, above the ask row and below the apps. */
+        const val WEB = -2
+    }
+}
+
+/**
+ * What Enter acts on: the row [picked] with Tab or the arrows while it's still there, else the first of [hits] apps
+ * when it's a strong match, else the agent, or the web without an agent to [canAsk].
+ */
+internal fun barHighlight(
+    picked: Int?,
+    hits: Int,
+    opensApp: Boolean,
+    canAsk: Boolean,
+): Int =
+    when {
+        picked == BarSearch.ASK || picked == BarSearch.WEB -> picked
+        picked != null && hits > 0 -> picked.coerceIn(0, hits - 1)
+        opensApp && hits > 0 -> 0
+        canAsk -> BarSearch.ASK
+        else -> BarSearch.WEB
+    }
+
+/** The row [step]s up the panel from [from] (negative: back down toward the bar), stopping at the ends: ask, web, then the [hits] apps. */
+internal fun barStep(
+    from: Int,
+    step: Int,
+    hits: Int,
+): Int {
+    val order = listOf(BarSearch.ASK, BarSearch.WEB) + (0 until hits)
+    val at = order.indexOf(from).coerceAtLeast(0)
+    return order[(at + step).coerceIn(0, order.lastIndex)]
 }
 
 private fun allApps(runtime: Runtime): List<AppHit> =
@@ -886,6 +934,8 @@ internal fun AppPanel(
     highlighted: Int,
     handlers: AppHandlers,
     onAsk: () -> Unit,
+    /** Searches the web for what's typed. */
+    onWeb: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1090,7 +1140,8 @@ internal fun AppPanel(
                 if (picking) {
                     SelectionBar(runtime, state, handlers)
                 } else if (query.isNotBlank()) {
-                    AskRow(runtime, linuxState == LinuxState.Installed, query, highlighted == -1, onAsk)
+                    BarRow("↗ ", "search ${webSearchName(LauncherStyle.style[Style.WEB_SEARCH])}: " + query.trim().replace('\n', ' '), highlighted == BarSearch.WEB, onWeb)
+                    AskRow(runtime, linuxState == LinuxState.Installed, query, highlighted == BarSearch.ASK, onAsk)
                 }
             }
         }
@@ -1294,7 +1345,7 @@ private fun SelectionBar(
     }
 }
 
-/** The one line above the bar that sends what's typed to the agent. */
+/** The line above the bar that sends what's typed to the agent. */
 @Composable
 private fun AskRow(
     runtime: Runtime,
@@ -1310,6 +1361,17 @@ private fun AskRow(
             agent == null -> "ask an agent · install one"
             else -> "ask ${agent.bin}: " + query.trim().replace('\n', ' ')
         }
+    BarRow("⏎ ", label, selected, onClick)
+}
+
+/** A line above the bar that does something with what's typed, [mark]ed; framed while Enter does it. */
+@Composable
+private fun BarRow(
+    mark: String,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
     Row(
         Modifier
             .padding(bottom = 6.dp)
@@ -1319,7 +1381,7 @@ private fun AskRow(
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BasicText("⏎ ", style = Mono.copy(color = if (selected) Palette.accent else Palette.muted))
+        BasicText(mark, style = Mono.copy(color = if (selected) Palette.accent else Palette.muted))
         BasicText(
             label,
             style = Mono.copy(color = if (selected) Palette.foreground else Palette.muted),

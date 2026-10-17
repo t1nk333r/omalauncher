@@ -1,6 +1,7 @@
 package dev.omalauncher.theme
 
 import androidx.compose.runtime.Immutable
+import dev.omalauncher.isWebSearch
 import dev.omalauncher.ui.ExtraKeysLayout
 
 /**
@@ -174,6 +175,12 @@ class Style(
         val SETTINGS_STRIP = Setting.Number("home.settings-strip", 24.0, 0.0..64.0, "An unseen strip in dp under home's grid, above the pill and the dock (or recent apps): long-press it for settings, however full the grid is. 0: none, the grid reaches down to them.")
         val HOME_PILL = Setting.Flag("home.pill", false, "A pill above the strip that does what swiping down on home does, named after it: search, notifications or apps. None while swiping down does nothing.")
         val PROMPT_BAR = Setting.Flag("home.prompt-bar", false, "The prompt bar on home; false shows it only with the app panel open (a swipe or the pill), and home reaches further down.")
+        val WEB_SEARCH =
+            Setting.Spec(
+                "home.web-search",
+                "The web search the prompt bar's row above the agent's opens in the default browser: an address with %s where the words go, " +
+                    "\"https://duckduckgo.com/?q=%s\". Unset: Google.",
+            ) { require(isWebSearch(it)) { "takes a web address with %s where the words go" } }
         val HOME_ROWS = Setting.Number("home.rows", 9.0, 0.0..14.0, "Rows of the home grid in portrait: 0 as many square cells as fit, or a number to stretch or squeeze the cells to. Tiles below the last row move up, or to the next page with room.")
 
         val GAPS_IN = Setting.Number("widgets.gaps-in", 6.0, 0.0..24.0, "Space in dp between two of home's widgets (all of it, unlike Hyprland's gaps_in, which each window has on its side).")
@@ -258,7 +265,7 @@ object StyleFile {
 
     val ALL: List<Setting<*>> =
         with(Style) {
-            listOf(THEME, BACKGROUND, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, HOME_ROWS, GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
+            listOf(THEME, BACKGROUND, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, WEB_SEARCH, HOME_ROWS, GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, MONOCHROME_ICONS, ICON_PACK, CORNER_SCALE) +
                 listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +
                 listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, EXTRA_KEYS)

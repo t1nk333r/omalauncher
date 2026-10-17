@@ -53,6 +53,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.omalauncher.Runtime
+import dev.omalauncher.WEB_SEARCHES
 import dev.omalauncher.linux.LinuxState
 import dev.omalauncher.linux.TerminalFont
 import dev.omalauncher.linux.TerminalText
@@ -126,6 +127,11 @@ fun StyleScreen(
             // Does what swiping down does, as gestures set it.
             Flag("pill", "shown", "hidden", style, Style.HOME_PILL)
             Flag("prompt bar", "always", "with apps", style, Style.PROMPT_BAR)
+            // What the bar's web row searches with; another address in style.toml shows as custom.
+            val web = style.style[Style.WEB_SEARCH] ?: WEB_SEARCHES.first().second
+            StyleOption("web search", WEB_SEARCHES.map { it.first }, WEB_SEARCHES.indexOfFirst { it.second == web }, web) { i ->
+                style.update { it.with(Style.WEB_SEARCH, if (i == 0) null else WEB_SEARCHES[i].second) }
+            }
             NumberOption("rows", listOf("auto" to 0.0) + (7..12).map { "$it" to it.toDouble() }, Style.HOME_ROWS, style)
             OptionHint("tiles below the last row move up at their size, or to a later page; more rows later won't move them back")
             NumberOption("corners", Corners.entries.map { it.label to it.scale.toDouble() }, Style.CORNER_SCALE, style)

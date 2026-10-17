@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.Manifest
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -77,29 +78,34 @@ import dev.omalauncher.linux.LinuxState
 import dev.omalauncher.linux.agentInvocation
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.gestures.detectTapGestures
+import dev.omalauncher.openUrl
+import dev.omalauncher.theme.Style
+import dev.omalauncher.webSearchName
+import dev.omalauncher.webSearchUrl
 
 /**
  * How the prompt bar was summoned from outside it; Send asks the agent with what's typed (the panel's ask row),
- * Listen dictates into it (the landscape rail's mic).
+ * Web searches the web with it (the row above), Listen dictates into it (the landscape rail's mic).
  */
-enum class PromptRequest { Type, Send, Listen }
+enum class PromptRequest { Type, Send, Web, Listen }
 
 /** Height of the collapsed bar; the home grid leaves this much room for it. */
 val PromptBarHeight = 48.dp
 
 /**
- * The one input at the bottom of the home screen: it finds apps and asks agents.
+ * The one input at the bottom of the home screen: it finds apps, searches the web and asks agents.
  * Focusing it opens the app panel above it; typing narrows that panel, and Enter
- * opens the highlighted app or sends the text to the default agent in a terminal
- * (the send button says which). The mic always asks the agent: hold to talk and
- * release to send, tap to dictate into the field (it stops at the next pause).
+ * opens the highlighted app, sends the text to the default agent in a terminal, or
+ * searches the web with it (the send button says which; the web without an agent).
+ * The mic always asks the agent: hold to talk and release to send, tap to dictate
+ * into the field (it stops at the next pause).
  */
 @Composable
 internal fun PromptBar(
     runtime: Runtime,
     state: LauncherState,
     search: BarSearch,
-    /** What Enter acts on: an index into the search hits, or -1 for the agent. */
+    /** What Enter acts on: an index into the search hits, [BarSearch.ASK] for the agent or [BarSearch.WEB]. */
     highlighted: Int,
     onLaunch: (AppHit) -> Unit,
     /** Whether the bar shows; off home it collapses with the panel, see [barOnHome]. */
@@ -148,17 +154,36 @@ internal fun PromptBar(
         state.closeNow()
     }
 
-    /** Enter: the highlighted app, or the agent; nothing while apps are being picked in the drawer, so the picks stay. */
+    /** Opens style's web search for [query] in the browser, and leaves home as opening an app does. */
+    fun searchWeb(query: String) {
+        val q = query.trim()
+        if (q.isEmpty()) return
+        val url = webSearchUrl(LauncherStyle.style[Style.WEB_SEARCH], q)
+        if (!context.openUrl(url)) {
+            Toast.makeText(context, "no browser opens ${webSearchName(LauncherStyle.style[Style.WEB_SEARCH])}", Toast.LENGTH_SHORT).show()
+            return
+        }
+        state.query = ""
+        focusManager.clearFocus()
+        keyboard?.hide()
+        state.closeNow()
+    }
+
+    /** Enter: the highlighted app, the web or the agent; nothing while apps are being picked in the drawer, so the picks stay. */
     fun submit() {
         if (state.selection != null) return
         val hit = search.hits.getOrNull(highlighted)
-        if (hit != null) onLaunch(hit) else send(text)
+        when {
+            hit != null -> onLaunch(hit)
+            highlighted == BarSearch.WEB -> searchWeb(text)
+            else -> send(text)
+        }
     }
 
-    /** Moves the highlight up the panel (away from the bar) or back down; the ask row sits lowest. */
+    /** Moves the highlight up the panel (away from the bar) or back down; the ask row sits lowest, the web's above it. */
     fun pick(step: Int) {
         if (text.isBlank()) return
-        state.picked = (highlighted + step).coerceIn(-1, search.hits.lastIndex)
+        state.picked = search.moved(highlighted, step)
     }
 
     /** Whether a finished recognition sends (hold-to-talk) or lands in the field for editing. */
@@ -198,6 +223,7 @@ internal fun PromptBar(
                 keyboard?.show()
             }
             PromptRequest.Send -> send(text)
+            PromptRequest.Web -> searchWeb(text)
             PromptRequest.Listen -> talk(hold = false)
             null -> {}
         }
@@ -308,7 +334,7 @@ internal fun PromptBar(
                             val hint =
                                 when {
                                     listening -> "listening…"
-                                    !linux || agent == null -> "open an app…"
+                                    !linux || agent == null -> "open an app or search the web…"
                                     else -> "open an app or ask ${agent.bin}…"
                                 }
                             BasicText(hint, style = Mono.copy(color = Palette.muted, fontSize = TextSize.Item), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -321,7 +347,15 @@ internal fun PromptBar(
                     // Says what Enter does, so opening an app instead of asking is never a surprise.
                     Box(
                         Modifier.clickable(onClick = ::submit).padding(horizontal = 10.dp, vertical = 12.dp),
-                    ) { BasicText(if (highlighted >= 0) "▸ open" else "⏎ ask", style = Mono.copy(color = Palette.accent)) }
+                    ) {
+                        val does =
+                            when {
+                                highlighted >= 0 -> "▸ open"
+                                highlighted == BarSearch.WEB -> "↗ search"
+                                else -> "⏎ ask"
+                            }
+                        BasicText(does, style = Mono.copy(color = Palette.accent))
+                    }
                 }
                 MicButton(
                     listening = listening,
