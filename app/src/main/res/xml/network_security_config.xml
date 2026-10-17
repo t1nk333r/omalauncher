@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What a network security config replaces: usesCleartextTraffic in the manifest, which Android stops reading
+     once this file exists, and the system's CAs, as before. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <!-- dpaste.com (Paste) sends a chain that ends at Let's Encrypt's Root YR and leaves out its cross-sign by
+         ISRG Root X1, and Root YR isn't in Android's store yet, so phones that don't go and find the cross-sign
+         turn the connection down ("can't reach dpaste.com"). Root YR itself, from letsencrypt.org/certificates,
+         for this host only. SHA-256 E5:7B:7E:6F:15:0C:41:91:02:E8:D5:C0:55:72:9F:F9:67:B9:D1:A8:29:BF:00:CE:C8:9C:A6:04:EB:F4:A8:6F. -->
+    <domain-config>
+        <domain includeSubdomains="false">dpaste.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/isrg_root_yr" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

@@ -12,6 +12,7 @@ import java.nio.charset.CharacterCodingException
  * A widget too big for one QR code, as plain text on dpaste.com (around since 2006, no account needed),
  * so the code only has to hold `…/w#dpaste.<id>`. Anyone with the link can read it, and it's gone after
  * [DAYS] days. dpaste asks clients to name themselves in the User-Agent and stay under a request a second.
+ * Its certificate needs a root Android doesn't ship yet; the app adds it for this host (res/xml/network_security_config.xml).
  */
 object Paste {
     const val HOST = "dpaste.com"
