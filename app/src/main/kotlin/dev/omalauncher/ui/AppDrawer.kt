@@ -607,7 +607,8 @@ internal fun RecentStrip(
  * Whether the list a dock key's app comes from has loaded, so its absence means it's gone: Linux apps once listed
  * (or with no Linux at all, [linuxGone]; while it's checked, installed or started they're still coming), shortcuts
  * once Android lets the launcher list them (as the default home app), Android apps once listed. An owl app is gone
- * once its file is: one that needs Linux isn't listed while Linux starts.
+ * once its file is, or is no longer an app (broken, or a widget now); one that needs Linux waits while Linux starts.
+ * Before the widgets have loaded, only its file tells.
  */
 private fun dockKeyKnown(
     runtime: Runtime,
@@ -615,7 +616,11 @@ private fun dockKeyKnown(
     linuxGone: Boolean,
 ) = when {
     key.startsWith("l:") -> runtime.linuxAppsListed || linuxGone
-    key.startsWith("o:") -> !File(runtime.widgets.dir, key.removePrefix("o:")).exists()
+    key.startsWith("o:") -> {
+        val name = key.removePrefix("o:")
+        runtime.widgets.specs.firstOrNull { it.file.name == name }?.let { !runtime.widgets.waitsForLinux(it) }
+            ?: !File(runtime.widgets.dir, name).exists()
+    }
     key.startsWith("s:") -> runtime.androidApps.loaded && runtime.androidApps.listsShortcuts
     else -> runtime.androidApps.loaded
 }

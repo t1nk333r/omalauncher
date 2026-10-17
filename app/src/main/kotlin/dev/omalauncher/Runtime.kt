@@ -27,7 +27,6 @@ import dev.omalauncher.linux.LinuxApp
 import dev.omalauncher.linux.OpenBridge
 import dev.omalauncher.linux.Pacman
 import dev.omalauncher.linux.Proot
-import dev.omalauncher.linux.LinuxState
 import dev.omalauncher.linux.SPLIT_APP_ID_PREFIX
 import dev.omalauncher.linux.SystemUpdates
 import dev.omalauncher.linux.TerminalFont
