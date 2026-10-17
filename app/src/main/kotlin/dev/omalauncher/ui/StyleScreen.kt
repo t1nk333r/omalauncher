@@ -159,6 +159,7 @@ fun StyleScreen(
             Stepper("border width", style, Style.SCREEN_BORDER_WIDTH)
             // Both bars at once; style.toml can set them apart. Background is the band behind their icons.
             Heading("system bars")
+            Flag("status bar", "shown", "hidden", style, Style.STATUS_BAR_SHOWN)
             Flag("background", "shown", "hidden", style, Style.STATUS_BAR.framed, Style.NAVIGATION_BAR.framed)
             Stepper("border width", style, Style.STATUS_BAR.borderWidth, Style.NAVIGATION_BAR.borderWidth)
             OpacityStepper("opacity", style, Style.STATUS_BAR.opacity, Style.NAVIGATION_BAR.opacity)

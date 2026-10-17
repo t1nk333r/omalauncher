@@ -64,6 +64,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import dev.omalauncher.theme.StyleStore
 import dev.omalauncher.widgets.checkSecretsCommand
+import dev.omalauncher.widgets.editWidgetCommand
 import dev.omalauncher.widgets.publishWidgetCommand
 import dev.omalauncher.widgets.reviewSharedWidgetCommand
 import dev.omalauncher.widgets.render.LocalHomeCovered
@@ -181,6 +182,7 @@ private fun DesktopScreen(
             is AppHit.Linux -> runtime.launch(hit.app)
             is AppHit.Android -> runtime.androidApps.open(hit.app)
             is AppHit.Shortcut -> runtime.androidApps.open(hit.shortcut)
+            is AppHit.Owl -> runtime.openOwlApp(hit.spec.file.name)
         }
     }
 
@@ -196,6 +198,7 @@ private fun DesktopScreen(
                             is AppHit.Linux -> runtime.widgets.shortcuts.addLinux(hit.app, state.currentPage)
                             is AppHit.Android -> runtime.widgets.shortcuts.addAndroid(hit.app, state.currentPage)
                             is AppHit.Shortcut -> runtime.widgets.shortcuts.addAndroidShortcut(hit.shortcut, state.currentPage)
+                            is AppHit.Owl -> runtime.widgets.shortcuts.addOwl(hit.spec, state.currentPage)
                         }
                     }
                     state.close()
@@ -222,6 +225,20 @@ private fun DesktopScreen(
                 select = { hit -> state.selection = setOf(hit.key) },
                 dock = runtime.dock,
                 customize = { hit -> state.customizing = hit },
+                edit = { spec ->
+                    state.closeNow()
+                    state.withAgent(runtime, "Edit ${spec.name}") { editWidgetCommand(it, spec) }
+                },
+                // The same screen a widget is shared from: a link or QR code, or the store.
+                share = { spec ->
+                    state.closeNow()
+                    state.sharing = spec
+                },
+                // Its file goes to .removed/, as a removed widget's does; off the dock too.
+                removeOwl = { spec ->
+                    runtime.widgets.removeWidget(spec)
+                    runtime.dock.remove(AppHit.Owl(spec).key)
+                },
             )
         }
 
@@ -417,10 +434,7 @@ private fun ThemesOverlay(
             link,
             state.currentPage,
             // Stays open underneath, to add it once the agent has had its say.
-            onReview = { path ->
-                val agent = runtime.agents.default
-                if (agent == null) state.show(SettingsPage.Agents) else runtime.terminal(reviewSharedWidgetCommand(agent.bin, path), "Review widget", agent)
-            },
+            onReview = { path -> state.withAgent(runtime, "Review widget") { reviewSharedWidgetCommand(it, path) } },
             onDismiss = { state.shared = null },
         )
     }
@@ -435,15 +449,13 @@ private fun ThemesOverlay(
                     {
                         state.sharing = null
                         // The default agent opens a pull request (or an issue) on the store repo.
-                        val agent = runtime.agents.default
-                        if (agent == null) state.show(SettingsPage.Agents) else runtime.terminal(publishWidgetCommand(agent.bin, spec), "Publish ${spec.name}", agent)
+                        state.withAgent(runtime, "Publish ${spec.name}") { publishWidgetCommand(it, spec) }
                     }
                 },
             // Closes the screen: what the agent changes would be shared from a fresh one.
             onCheck = {
                 state.sharing = null
-                val agent = runtime.agents.default
-                if (agent == null) state.show(SettingsPage.Agents) else runtime.terminal(checkSecretsCommand(agent.bin, spec), "Check ${spec.name}", agent)
+                state.withAgent(runtime, "Check ${spec.name}") { checkSecretsCommand(it, spec) }
             },
             onDismiss = { state.sharing = null },
         )

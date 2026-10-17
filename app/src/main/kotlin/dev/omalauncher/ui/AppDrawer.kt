@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import java.io.File
 import kotlin.math.abs
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -112,6 +113,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.layout.onSizeChanged
 import kotlin.math.ceil
 import androidx.compose.foundation.layout.wrapContentHeight
+import dev.omalauncher.widgets.WidgetSpec
 
 /** One app in the bar's results. */
 internal sealed interface AppHit {
@@ -147,6 +149,14 @@ internal sealed interface AppHit {
         override val alias get() = if (app.profile != null) "${app.label} ${if (app.clone) "clone" else "work"}" else null
 
         override fun paused(runtime: Runtime) = runtime.androidApps.paused(app.profile)
+    }
+
+    /** An owl file that's an app: it opens full screen over home. */
+    data class Owl(
+        val spec: WidgetSpec,
+    ) : AppHit {
+        override val key get() = "o:" + spec.file.name
+        override val label get() = spec.name
     }
 
     /** A shortcut an app put on the home screen, such as a website installed from a browser. */
@@ -232,7 +242,8 @@ internal class BarSearch(
 }
 
 private fun allApps(runtime: Runtime): List<AppHit> =
-    runtime.linuxApps.map { AppHit.Linux(it) } + runtime.androidApps.apps.map { AppHit.Android(it) } + runtime.androidApps.shortcuts.map { AppHit.Shortcut(it) }
+    runtime.widgets.apps().map { AppHit.Owl(it) } + runtime.linuxApps.apps.map { AppHit.Linux(it) } + runtime.androidApps.apps.map { AppHit.Android(it) } +
+        runtime.androidApps.shortcuts.map { AppHit.Shortcut(it) }
 
 /** The apps the drawer, search and the recent strip list: the [hidden] ones only while [showHidden]. */
 internal fun List<AppHit>.shown(
@@ -281,7 +292,7 @@ internal fun searchApps(
     return BarSearch(ranked.map { it.first }, ranked.firstOrNull()?.let { isStrongMatch(it.second, query) } == true)
 }
 
-/** What the app cells do: open, pin to home, the Android app's info and uninstall, removing a shortcut, and hiding. */
+/** What the app cells do: open, pin to home, the Android app's info and uninstall, removing a shortcut, hiding, and an owl app's edit, share and remove. */
 internal class AppHandlers(
     val launch: (AppHit) -> Unit,
     /** Pins apps to home, several at once when picked together. */
@@ -300,14 +311,20 @@ internal class AppHandlers(
     val dock: Dock,
     /** Opens the app's customize dialog: its name, icon and drawer group. */
     val customize: (AppHit) -> Unit,
+    /** Opens the default agent on an owl app's file. */
+    val edit: (WidgetSpec) -> Unit,
+    /** Shares an owl app as a link or QR code, as a widget is shared. */
+    val share: (WidgetSpec) -> Unit,
+    /** Removes an owl app's file, and its icon from home. */
+    val removeOwl: (WidgetSpec) -> Unit,
 )
 
 /** The shortcuts an Android app offers above its menu's actions; null for anything else. */
 private fun AppHit.shortcutMenu(handlers: AppHandlers): ShortcutMenu? = (this as? AppHit.Android)?.let { handlers.shortcuts(it.app) }
 
 /**
- * The long-press menu of an app cell: pin to home, for Android apps their info and uninstall, for shortcuts removing
- * them, then hiding it (or showing it again) and, in the drawer ([selectable]), picking several apps.
+ * The long-press menu of an app cell: pin to home, for owl apps editing, sharing and removing, for Android apps their
+ * info and uninstall, for shortcuts removing them, then hiding it (or showing it again) and, in the drawer ([selectable]), picking several apps.
  */
 private fun AppHit.actions(
     handlers: AppHandlers,
@@ -318,6 +335,13 @@ private fun AppHit.actions(
     val own =
         when (this) {
             is AppHit.Linux -> listOf("add to home" to { handlers.pin(listOf(this)) })
+            is AppHit.Owl ->
+                listOf(
+                    "add to home" to { handlers.pin(listOf(this)) },
+                    "edit" to { handlers.edit(spec) },
+                    "share" to { handlers.share(spec) },
+                    "remove" to { handlers.removeOwl(spec) },
+                )
             is AppHit.Android ->
                 listOfNotNull(
                     "add to home" to { handlers.pin(listOf(this)) },
@@ -382,7 +406,7 @@ internal val AppHit.isWork
         when (this) {
             is AppHit.Android -> app.work
             is AppHit.Shortcut -> shortcut.work
-            is AppHit.Linux -> false
+            is AppHit.Linux, is AppHit.Owl -> false
         }
 
 /** The name the drawer, home and the dock show for it: yours (customize), or the app's own. */
@@ -393,7 +417,8 @@ internal fun AppHit.icons(runtime: Runtime): Pair<ImageBitmap?, ImageBitmap?> {
     // Your own icon (customize), with its silhouette for the monochrome style.
     runtime.customs.icons[key]?.let { mine -> return mine to (runtime.customs.masks[key] ?: mine) }
     return when (this) {
-        is AppHit.Linux -> runtime.linuxIcons[app.id] to runtime.linuxMasks[app.id]
+        is AppHit.Linux -> runtime.linuxApps.icons[app.id] to runtime.linuxApps.masks[app.id]
+        is AppHit.Owl -> runtime.owlIcon(spec, mono = false) to runtime.owlIcon(spec, mono = true)
         is AppHit.Android -> runtime.androidApps.icons[app.key] to runtime.androidApps.masks[app.key]
         is AppHit.Shortcut -> runtime.androidApps.icons[shortcut.key] to runtime.androidApps.masks[shortcut.key]
     }
@@ -581,7 +606,8 @@ internal fun RecentStrip(
 /**
  * Whether the list a dock key's app comes from has loaded, so its absence means it's gone: Linux apps once listed
  * (or with no Linux at all, [linuxGone]; while it's checked, installed or started they're still coming), shortcuts
- * once Android lets the launcher list them (as the default home app), Android apps once listed.
+ * once Android lets the launcher list them (as the default home app), Android apps once listed. An owl app is gone
+ * once its file is: one that needs Linux isn't listed while Linux starts.
  */
 private fun dockKeyKnown(
     runtime: Runtime,
@@ -589,6 +615,7 @@ private fun dockKeyKnown(
     linuxGone: Boolean,
 ) = when {
     key.startsWith("l:") -> runtime.linuxAppsListed || linuxGone
+    key.startsWith("o:") -> !File(runtime.widgets.dir, key.removePrefix("o:")).exists()
     key.startsWith("s:") -> runtime.androidApps.loaded && runtime.androidApps.listsShortcuts
     else -> runtime.androidApps.loaded
 }
@@ -704,6 +731,7 @@ private fun dropApp(
             is AppHit.Linux -> home.keyOf(hit.app)
             is AppHit.Android -> home.keyOf(hit.app)
             is AppHit.Shortcut -> home.keyOf(hit.shortcut)
+            is AppHit.Owl -> home.keyOf(hit.spec)
         }
     val there = home.items.firstOrNull { it.key == key }
     when {
@@ -719,6 +747,7 @@ private fun dropApp(
                 is AppHit.Linux -> home.addLinux(hit.app, page)
                 is AppHit.Android -> home.addAndroid(hit.app, page)
                 is AppHit.Shortcut -> home.addAndroidShortcut(hit.shortcut, page)
+                is AppHit.Owl -> home.addOwl(hit.spec, page)
             }
     }
     val layout = runtime.widgets.layout
@@ -817,7 +846,7 @@ private fun StripCell(
         when {
             // Bare silhouettes and initials sit on a badge, as pinned apps do, so they read on any wallpaper.
             bare && (mono || bmp == null) ->
-                Box(Modifier.size(size).clip(LauncherStyle.shape(size / 2)).background(Palette.surface), contentAlignment = Alignment.Center) {
+                IconBadge(size) {
                     if (bmp != null) {
                         Image(bmp, spoken, Modifier.size(size * 0.75f), colorFilter = ColorFilter.tint(Palette.accent))
                     } else {
@@ -1064,8 +1093,8 @@ internal fun AppPanel(
 }
 
 /**
- * The rows of a drawer tab: on the personal one the apps used most (style's drawer.suggestions), then Linux's apps
- * (or the offer to install Linux), shortcuts and Android's apps, under headings or as one list (drawer.sections),
+ * The rows of a drawer tab: on the personal one the apps used most (style's drawer.suggestions), then owl apps,
+ * Linux's apps (or the offer to install Linux), shortcuts and Android's apps, under headings or as one list (drawer.sections),
  * each in the drawer's sort order. Also the index past which the letter rail counts rows.
  */
 private fun drawerEntries(
@@ -1115,8 +1144,11 @@ private fun drawerEntries(
         }
     }
     val from = out.size
+    // Owl apps open full screen over home: from the store, or made with an agent.
+    val owlApps = runtime.widgets.apps().map { AppHit.Owl(it) }
+    if (sections) out.section("apps", "apps", ready(owlApps), columns)
     if (!linux) out += LinuxOfferEntry
-    val linuxApps = if (linux) runtime.linuxApps.map { AppHit.Linux(it) } else emptyList()
+    val linuxApps = if (linux) runtime.linuxApps.apps.map { AppHit.Linux(it) } else emptyList()
     // Clones too, as stock drawers list them: second copies of the owner's apps.
     val shortcuts = apps.shortcuts.filter { !it.work }.map { AppHit.Shortcut(it) }
     val android = apps.apps.filter { !it.work }.map { AppHit.Android(it) }
@@ -1129,7 +1161,7 @@ private fun drawerEntries(
         rail = out.size
         out.section("android", "android", ready(android), columns)
     } else {
-        out.section("all", "apps", ready(linuxApps + shortcuts + android), columns, titled = false)
+        out.section("all", "apps", ready(owlApps + linuxApps + shortcuts + android), columns, titled = false)
     }
     return out to rail
 }
@@ -1213,6 +1245,7 @@ private fun SelectionBar(
                         is AppHit.Linux -> home.keyOf(it.app)
                         is AppHit.Android -> home.keyOf(it.app)
                         is AppHit.Shortcut -> home.keyOf(it.shortcut)
+                        is AppHit.Owl -> home.keyOf(it.spec)
                     },
                 )
             },

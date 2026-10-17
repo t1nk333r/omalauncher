@@ -3,11 +3,9 @@ package dev.omalauncher.ui
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,7 +16,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.omalauncher.Runtime
@@ -33,7 +30,6 @@ fun SettingsScreen(
     onStyle: () -> Unit,
     onAgents: () -> Unit,
     onPackages: () -> Unit,
-    onStore: () -> Unit,
     onLinux: () -> Unit,
     onLicenses: () -> Unit,
     onGestures: () -> Unit,
@@ -61,7 +57,6 @@ fun SettingsScreen(
                     Triple("coding agents", "needs linux", onLinux)
                 },
                 Triple("packages", if (installed) "install Linux apps and tools with pacman and the AUR" else "needs linux", if (installed) onPackages else onLinux),
-                Triple("widget store", "add widgets to the home screen", onStore),
                 Triple("android settings", "the phone's system settings") {
                     context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 },
@@ -75,12 +70,7 @@ fun SettingsScreen(
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(rows, key = { it.first }) { (title, subtitle, onClick) ->
                 Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(LauncherStyle.shape(12.dp))
-                        .background(Palette.surface)
-                        .clickable(onClick = onClick)
-                        .padding(14.dp),
+                    Modifier.card(onClick = onClick),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -102,12 +92,7 @@ private fun SetupUpdates(runtime: Runtime) {
     val working = state as? JobState.Working
     if (failed == null && working == null) return
     Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp)
-            .clip(LauncherStyle.shape(12.dp))
-            .background(Palette.surface)
-            .padding(14.dp),
+        Modifier.padding(bottom = 8.dp).card(),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BasicText(
@@ -142,12 +127,7 @@ private fun UpdatesRow(runtime: Runtime) {
                 ).joinToString(" · ")
         }
     Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp)
-            .clip(LauncherStyle.shape(12.dp))
-            .background(Palette.surface)
-            .padding(14.dp),
+        Modifier.padding(bottom = 8.dp).card(),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

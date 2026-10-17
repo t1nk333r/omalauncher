@@ -54,6 +54,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import dev.omalauncher.widgets.runtime.PicturePainter
+import dev.omalauncher.widgets.runtime.WidgetImage
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
@@ -80,7 +82,6 @@ import dev.omalauncher.widgets.lang.Env
 import dev.omalauncher.widgets.lang.Lst
 import dev.omalauncher.widgets.lang.Null
 import dev.omalauncher.widgets.lang.Num
-import dev.omalauncher.widgets.lang.Obj
 import dev.omalauncher.widgets.lang.Str
 import dev.omalauncher.widgets.lang.Value
 import dev.omalauncher.widgets.lang.WNode
@@ -195,7 +196,7 @@ private fun Node(
         }
         is WNode.For -> {
             val list by remember(node, env) { derivedStateOf(structuralEqualityPolicy()) { inst.eval(node.list, env, "for") } }
-            val items = items(list)
+            val items = Builtins.iterable(list)
             items.forEachIndexed { i, v ->
                 val k: Any = node.key?.let { inst.eval(it, env.child(v, Num(i.toDouble())), "for key") } ?: i
                 key(k) {
@@ -236,13 +237,6 @@ private fun Node(
         is WNode.Draw -> {} // only inside Canvas, which draws them itself
     }
 }
-
-internal fun items(v: Value): List<Value> =
-    when (v) {
-        is Lst -> v.items
-        is Obj -> v.fields.map { (k, x) -> Obj(mapOf("key" to Str(k), "value" to x)) }
-        else -> emptyList()
-    }.let { if (it.size > Builtins.MAX_LIST) it.subList(0, Builtins.MAX_LIST) else it } // take() would copy every list, every frame
 
 private val SIZING = setOf("width", "height", "size", "fill", "weight")
 
@@ -352,7 +346,7 @@ private fun Element(
             val thickness = p.float("thickness", 2f)
             Spacer(
                 mod.then(if (sized) Modifier else Modifier.fillMaxWidth().height(48.dp)).drawBehind {
-                    val points = items(p.now("values") ?: return@drawBehind).mapNotNull { it.num()?.toFloat() }
+                    val points = Builtins.iterable(p.now("values") ?: return@drawBehind).mapNotNull { it.num()?.toFloat() }
                     if (points.size < 2) return@drawBehind
                     val lo = p.now("min")?.num()?.toFloat() ?: 0f
                     // Auto-scaled lines get headroom so the peak isn't glued to the top edge.
@@ -380,7 +374,7 @@ private fun Element(
         }
         "Image" -> {
             val src = p.observe("src")?.toString().orEmpty()
-            val bitmap =
+            val image =
                 if (src.startsWith("media:")) {
                     // Album art isn't a file to watch: look again whenever a source (the media one) updates,
                     // but recompose only when the art itself changed, not on every tick of every source.
@@ -393,21 +387,24 @@ private fun Element(
                 } else {
                     inst.image(src)
                 }
-            // An alpha-only image (an app icon's silhouette, with monochrome icons) needs a color to show.
-            val tint = p.observe("tint")?.let { p.color(it) } ?: Palette.foreground.takeIf { bitmap?.config == ImageBitmapConfig.Alpha8 }
-            if (bitmap != null) {
-                Image(
-                    bitmap,
-                    null,
-                    mod,
-                    contentScale =
-                        when (p.observe("fit")?.toString()) {
-                            "cover" -> ContentScale.Crop
-                            "fill" -> ContentScale.FillBounds
-                            else -> ContentScale.Fit
-                        },
-                    colorFilter = tint?.let { ColorFilter.tint(it) },
-                )
+            val scale =
+                when (p.observe("fit")?.toString()) {
+                    "cover" -> ContentScale.Crop
+                    "fill" -> ContentScale.FillBounds
+                    else -> ContentScale.Fit
+                }
+            when (image) {
+                is WidgetImage.Raster -> {
+                    val bitmap = image.bitmap
+                    // An alpha-only image (an app icon's silhouette, with monochrome icons) needs a color to show.
+                    val tint = p.observe("tint")?.let { p.color(it) } ?: Palette.foreground.takeIf { bitmap.config == ImageBitmapConfig.Alpha8 }
+                    Image(bitmap, null, mod, contentScale = scale, colorFilter = tint?.let { ColorFilter.tint(it) })
+                }
+                is WidgetImage.Vector -> {
+                    val tint = p.observe("tint")?.let { p.color(it) }
+                    Image(remember(image) { PicturePainter(image.picture) }, null, mod, contentScale = scale, colorFilter = tint?.let { ColorFilter.tint(it) })
+                }
+                null -> {}
             }
         }
         "Canvas" -> CanvasNode(p, mod.then(if (sized) Modifier else Modifier.fillMaxSize()))

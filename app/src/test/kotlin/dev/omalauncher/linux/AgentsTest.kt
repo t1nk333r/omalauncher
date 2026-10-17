@@ -33,4 +33,30 @@ class AgentsTest {
         assertEquals("omp --allow-home", omp.command)
         assertTrue("the home tile", "cd ~ && omp --allow-home; exec bash" in agentWidget(omp))
     }
+
+    @Test fun copilotReceivesAnInteractivePromptAsOneLiteralArgument() {
+        val prompt = "Explain \"it's quoted\"; \$(exit 17)\nand keep \$HOME literal."
+        val script = """
+            set -- ${agentInvocation("copilot", prompt)}
+            test "${'$'}#" -eq 3 &&
+            test "${'$'}1" = copilot &&
+            test "${'$'}2" = -i &&
+            test "${'$'}3" = "${'$'}EXPECTED_PROMPT"
+        """.trimIndent()
+        val process = ProcessBuilder("sh", "-c", script)
+            .redirectErrorStream(true)
+            .apply { environment()["EXPECTED_PROMPT"] = prompt }
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(output, 0, process.waitFor())
+    }
+
+    /** OpenCode installs from before 2 have no node, and mise needs it for OpenCode 2's postinstall. */
+    @Test fun updatesAddNodeForOpencode() {
+        assertEquals(
+            "if [ -z \"\$(mise ls -g node)\" ] && [ -n \"\$(mise ls -g 'opencode' 'npm:@xai-official/grok' 'npm:@moonshot-ai/kimi-code')\" ]; " +
+                "then mise use -g node@lts; fi",
+            MISE_NODE_FOR_AGENTS,
+        )
+    }
 }

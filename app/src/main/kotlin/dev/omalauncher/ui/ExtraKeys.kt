@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
@@ -180,6 +183,55 @@ private fun PlainKey(
             else -> KeyLabel(prefix + label, color)
         }
         if (popup != null && !popupVisible) PopupHint(popup, if (pressed) Palette.background else Palette.accent)
+    }
+}
+
+/**
+ * A keycap that acts on touch down, and keeps acting while held when it [repeats]: the editor's keys.
+ * Shows [icon] turned by [rotation], else [label]. The terminal's keys can also swipe up to a second
+ * key, so [PlainKey] is their own.
+ */
+@Composable
+internal fun RepeatingKeyCap(
+    label: String,
+    icon: ImageVector?,
+    rotation: Float,
+    repeats: Boolean,
+    modifier: Modifier,
+    onPress: () -> Unit,
+) {
+    val view = LocalView.current
+    val press by rememberUpdatedState(onPress)
+    var pressed by remember { mutableStateOf(false) }
+    KeyCap(
+        modifier.pointerInput(label, repeats) {
+            presses { scope, _ ->
+                pressed = true
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                // The first stroke now, not in the launch: a tap lifted before the coroutine starts would cancel it.
+                press()
+                val job =
+                    scope.launch {
+                        if (!repeats) return@launch
+                        delay(RepeatDelay)
+                        while (true) {
+                            press()
+                            delay(RepeatInterval)
+                        }
+                    }
+                waitForUpOrCancellation()
+                job.cancel()
+                pressed = false
+            }
+        },
+        fill = if (pressed) Palette.accent else Palette.surface,
+    ) {
+        val color = if (pressed) Palette.background else Palette.foreground
+        if (icon != null) {
+            Image(icon, label, Modifier.size(20.dp).rotate(rotation), colorFilter = ColorFilter.tint(color))
+        } else {
+            BasicText(label, style = Mono.copy(color = color), maxLines = 1)
+        }
     }
 }
 

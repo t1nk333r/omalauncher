@@ -291,6 +291,9 @@ internal class Arrange {
     /** The open folder's key; its panel covers the grid until a tap outside, Back, or an app lifted out of it. */
     var folder by mutableStateOf<String?>(null)
 
+    /** The open folder's name is being typed, in its header. */
+    var naming by mutableStateOf(false)
+
     /** Where the selected tile's action bar is, in page coordinates; taps there go to the bar, not the editor. */
     var bar by mutableStateOf<IntRect?>(null)
 
@@ -314,8 +317,8 @@ internal class Arrange {
  * move it, tap outside or press Back to finish. Hold a carried tile against a
  * side edge to turn the page; the last page is always an empty one. Drop an app
  * on another app to put both in a folder, or on a folder to add it; tap a folder
- * to open it, and long-press an app in it to drag it to another place in it,
- * or back out.
+ * to open it, tap its name to type a new one, and long-press an app in it to drag it
+ * to another place in it, or back out.
  *
  * Gestures live here, around the pager, rather than on each page: a drag that
  * turns the page has to survive leaving the page it started on. [room] at the
@@ -357,6 +360,8 @@ internal fun HomeGrid(
     onGroup: (Shortcut, HomeItem) -> Unit,
     /** Moves an app within its folder to just before another of its apps, or with null to the end. */
     onReorder: (Shortcut, String?) -> Unit,
+    /** Names a folder as its name is typed; blank for none. */
+    onRenameFolder: (Folder, String) -> Unit,
     modifier: Modifier = Modifier,
     room: Dp = 0.dp,
     turned: Boolean = false,
@@ -638,6 +643,19 @@ internal fun HomeGrid(
                         }
                     } == null
 
+                    /** Takes [downId]'s moves until it lifts, giving [onMove] each position while pressed; where it lifted, or null if it went away. */
+                    suspend fun AwaitPointerEventScope.trackUntilUp(
+                        downId: PointerId,
+                        onMove: (Offset) -> Unit = {},
+                    ): Offset? {
+                        while (true) {
+                            val c = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == downId } ?: return null
+                            c.consume()
+                            if (!c.pressed) return c.position
+                            onMove(c.position)
+                        }
+                    }
+
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                         val start = down.position
@@ -649,7 +667,7 @@ internal fun HomeGrid(
                         val placed = placedOn(page, g)
 
                         // An open folder takes every touch: a tap on an app opens it (the tile gets the tap),
-                        // a long-press lifts it to sort it in or drag it out, a tap outside closes the folder. Its panel is centered on
+                        // a long-press lifts it to sort it in or drag it out, a tap on its name types a new one, a tap outside closes the folder. Its panel is centered on
                         // the whole screen, even with two pages showing.
                         val folderPage = shown.getOrNull(sideOf(arrange.folder, shown))
                         val open = folderPage?.let { p -> itemsOn(p).firstOrNull { it.key == arrange.folder } as? Folder }
@@ -660,11 +678,7 @@ internal fun HomeGrid(
                             if (hit == null) {
                                 down.consume()
                                 if (!fg.panel.has(start)) arrange.folder = null
-                                while (true) {
-                                    val c = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
-                                    c.consume()
-                                    if (!c.pressed) break
-                                }
+                                trackUntilUp(down.id)?.let { up -> arrange.naming = fg.header.has(start) && fg.header.has(up) }
                                 return@awaitEachGesture
                             }
                             if (!awaitLongPress(down.id, start)) return@awaitEachGesture
@@ -696,12 +710,9 @@ internal fun HomeGrid(
                                 when {
                                     edges.any -> {
                                         val others = placed.filter { it.first.key != item.key }.map { it.second }
-                                        while (true) {
-                                            val c = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
-                                            c.consume()
-                                            if (!c.pressed) break
+                                        trackUntilUp(down.id) { position ->
                                             val (minW, minH) = item.minSize
-                                            val p = g.local(c.position, selSide)
+                                            val p = g.local(position, selSide)
                                             val x0 = if (edges.left) g.colLine(p).coerceAtMost(cell.right - minW) else cell.x
                                             val x1 = if (edges.right) g.colLine(p).coerceAtLeast(cell.x + minW) else cell.right
                                             val y0 = if (edges.top) g.rowLine(p).coerceAtMost(cell.bottom - minH) else cell.y
@@ -716,11 +727,7 @@ internal fun HomeGrid(
                                     else -> {
                                         // Tap outside finishes editing; a drag outside does nothing.
                                         onSelect(null)
-                                        while (true) {
-                                            val c = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
-                                            c.consume()
-                                            if (!c.pressed) break
-                                        }
+                                        trackUntilUp(down.id)
                                     }
                                 }
                             } finally {
@@ -766,7 +773,15 @@ internal fun HomeGrid(
             val openFolder = arrange.folder?.let { key -> pagesAt(pager.currentPage, pages, grid).firstNotNullOfOrNull { p -> itemsOn(p).firstOrNull { it.key == key } as? Folder } }
             if (openFolder != null) {
                 val fg = FolderGeometry(width * per, grid.height, grid.cellW, grid.cellH, gap, openFolder.apps.size, density)
-                FolderPanel(openFolder, fg, render, arrange.carry?.item?.key)
+                FolderPanel(
+                    openFolder,
+                    fg,
+                    render,
+                    arrange.carry?.item?.key,
+                    naming = arrange.naming,
+                    onName = { onRenameFolder(openFolder, it) },
+                    onNamed = { arrange.naming = false },
+                )
             }
 
             // The carried tile floats above the pager, so it stays put while pages turn, and above an open folder it's sorting.

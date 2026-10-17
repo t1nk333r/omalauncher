@@ -84,12 +84,13 @@ internal fun inserted(
     return rest.toMutableList().apply { add(at.coerceIn(0, rest.size), key) }
 }
 
-/** The dock's key for a home tile's [homeKey] (app:, linux:, shortcut:), or null for anything else (a folder, a widget). */
+/** The dock's key for a home tile's [homeKey] (app:, linux:, shortcut:, owl:), or null for anything else (a folder, a widget). */
 fun dockKeyOf(homeKey: String): String? =
     when {
         homeKey.startsWith("app:") -> "a:" + homeKey.removePrefix("app:")
         homeKey.startsWith("linux:") -> "l:" + homeKey.removePrefix("linux:")
         homeKey.startsWith("shortcut:") -> "s:" + homeKey.removePrefix("shortcut:")
+        homeKey.startsWith("owl:") -> "o:" + homeKey.removePrefix("owl:")
         else -> null
     }
 

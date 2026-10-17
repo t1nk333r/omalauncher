@@ -44,6 +44,7 @@ class DockTest {
         assertEquals("a:com.example/.Main@0", dockKeyOf("app:com.example/.Main@0"))
         assertEquals("l:foot", dockKeyOf("linux:foot"))
         assertEquals("s:chrome/abc", dockKeyOf("shortcut:chrome/abc"))
+        assertEquals("o:yoga.owl", dockKeyOf("owl:yoga.owl"))
         // Folders and widgets don't go in the dock.
         assertEquals(null, dockKeyOf("folder:1"))
         assertEquals(null, dockKeyOf("10-today.owl"))
