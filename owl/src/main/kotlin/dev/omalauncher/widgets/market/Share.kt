@@ -16,29 +16,50 @@ import java.util.zip.Inflater
 /**
  * A whole widget file in a link, to pass on as a QR code:
  *
- *     https://simonschubert.github.io/omarchy-widgets/w#owl1.<data>
+ *     https://t1nk333r.github.io/w#owl1.<data>
  *
  * `<data>` is the file's UTF-8 bytes, raw DEFLATE-compressed (no zlib or gzip
  * header), in unpadded base64url. It sits after the `#`, so it never reaches a
  * server: the page there only shows the widget and hands it to the launcher.
- * The desktop app (omarchy-widgets share) makes the same links.
+ * The desktop app (omarchy-widgets share) makes the same links, on upstream's page.
  *
  * Nobody reviewed a shared widget, so [Shared] works out what it runs and what
  * looks risky, for the user to read before it goes on the home screen.
  */
 object Share {
     const val PREFIX = "owl1."
-    const val LINK = "https://simonschubert.github.io/omarchy-widgets/w#"
-    const val HOST = "simonschubert.github.io"
-    const val PATH = "/omarchy-widgets/w"
+
+    /** Phone build: the owner's own copy of the page (github.com/t1nk333r/t1nk333r.github.io), not upstream's. */
+    const val LINK = "https://t1nk333r.github.io/w#"
+
+    /** The same page on the owner's Feather server, for when GitHub Pages is down or blocked. */
+    const val BACKUP_LINK = "https://feather.aloqaili.xyz/w#"
+
+    /** Upstream's page: where links from other launchers and the desktop app point, and what a store submission links to. */
+    const val UPSTREAM_LINK = "https://simonschubert.github.io/omarchy-widgets/w#"
+
+    /** The host and path of each of those pages: the same page, which reads the same data. */
+    val PAGES = listOf("t1nk333r.github.io" to "/w", "feather.aloqaili.xyz" to "/w", "simonschubert.github.io" to "/omarchy-widgets/w")
 
     /** What a version 40 QR code holds in byte mode at error correction L. */
     const val MAX_LINK = 2953
 
     fun link(text: String) = LINK + encode(text)
 
-    /** The short link to a widget uploaded with [Paste]: `…/w#dpaste.<id>`. */
-    fun pasteLink(id: String) = LINK + PASTE + id
+    /** The short link to a widget uploaded with [Paste]: `…/w#dpaste.<id>`, on [page]. */
+    fun pasteLink(
+        id: String,
+        page: String = LINK,
+    ) = page + PASTE + id
+
+    /** [link], any page's, on the backup page instead: the data after the `#` is all a page reads. */
+    fun backupLink(link: String) = BACKUP_LINK + link.substringAfter('#')
+
+    /** Whether a link to [host] and [path] is one of [PAGES]', with or without the slash a web server adds to it. */
+    fun isPage(
+        host: String?,
+        path: String?,
+    ) = PAGES.any { (h, p) -> host == h && (path == p || path == "$p/") }
 
     const val PASTE = "dpaste."
 

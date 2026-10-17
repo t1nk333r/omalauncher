@@ -25,7 +25,7 @@ class ShareTest {
 
     @Test fun aWidgetSurvivesTheRoundTrip() {
         val link = Share.link(widget)
-        assertTrue(link.startsWith("https://simonschubert.github.io/omarchy-widgets/w#owl1."))
+        assertTrue(link.startsWith("https://t1nk333r.github.io/w#owl1."))
         assertTrue(Share.fits(link))
         assertEquals(widget, Share.decode(link))
         assertEquals(widget, Share.decode(link.substringAfter('#')))
@@ -220,13 +220,40 @@ class ShareTest {
 
     @Test fun aPasteLinkCarriesOnlyTheId() {
         val link = Share.pasteLink("4HD3FB7KD")
-        assertEquals("https://simonschubert.github.io/omarchy-widgets/w#dpaste.4HD3FB7KD", link)
+        assertEquals("https://t1nk333r.github.io/w#dpaste.4HD3FB7KD", link)
+        assertEquals("https://simonschubert.github.io/omarchy-widgets/w#dpaste.4HD3FB7KD", Share.pasteLink("4HD3FB7KD", Share.UPSTREAM_LINK))
         assertEquals("4HD3FB7KD", Share.pasteId(link))
         assertEquals("4HD3FB7KD", Share.pasteId("dpaste.4HD3FB7KD\n"))
         assertNull(Share.pasteId(Share.link(widget)))
         assertNull(Share.pasteId("dpaste.../x"))
         assertNull(Share.pasteId("https://example.com/"))
         assertTrue(Share.fits(link))
+    }
+
+    @Test fun theBackupLinkHoldsTheSameWidget() {
+        val link = Share.link(widget)
+        val backup = Share.backupLink(link)
+        assertTrue(backup.startsWith("https://feather.aloqaili.xyz/w#owl1."))
+        assertEquals(widget, Share.decode(backup))
+        // From upstream's page too, and a paste stays a paste.
+        assertEquals(backup, Share.backupLink(Share.UPSTREAM_LINK + link.substringAfter('#')))
+        assertEquals("4HD3FB7KD", Share.pasteId(Share.backupLink(Share.pasteLink("4HD3FB7KD"))))
+    }
+
+    @Test fun linksOpenFromEachPageAndNowhereElse() {
+        // Every link this file writes lands on one of the pages.
+        for (page in listOf(Share.LINK, Share.BACKUP_LINK, Share.UPSTREAM_LINK)) {
+            val url = page.removePrefix("https://").removeSuffix("#")
+            assertTrue(page, Share.isPage(url.substringBefore('/'), "/" + url.substringAfter('/')))
+        }
+        assertTrue(Share.isPage("t1nk333r.github.io", "/w/"))
+        assertTrue(Share.isPage("feather.aloqaili.xyz", "/w"))
+        assertTrue(Share.isPage("simonschubert.github.io", "/omarchy-widgets/w"))
+        assertFalse(Share.isPage("t1nk333r.github.io", "/widgets"))
+        assertFalse(Share.isPage("feather.aloqaili.xyz", "/fdroid/repo/w"))
+        assertFalse(Share.isPage("simonschubert.github.io", "/w"))
+        assertFalse(Share.isPage("example.com", "/w"))
+        assertFalse(Share.isPage(null, null))
     }
 
     companion object {

@@ -89,6 +89,7 @@ fun ShareWidgetScreen(
     var uploading by remember(file) { mutableStateOf(false) }
     var uploadError by remember(file) { mutableStateOf<String?>(null) }
     var copied by remember(file) { mutableStateOf(false) }
+    var copiedBackup by remember(file) { mutableStateOf(false) }
     var showSource by remember(file) { mutableStateOf(false) }
 
     OverlayPanel("share $name", onDismiss, contentWidth = ReadingWidth) {
@@ -181,6 +182,11 @@ fun ShareWidgetScreen(
                         BracketAction(if (copied) "copied" else "copy link", Palette.foreground) {
                             context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("$name widget", link))
                             copied = true
+                        }
+                        // The same link on Feather, for someone who can't reach GitHub Pages.
+                        BracketAction(if (copiedBackup) "copied" else "copy backup link", Palette.foreground) {
+                            context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("$name widget", Share.backupLink(link)))
+                            copiedBackup = true
                         }
                     }
                     BasicText(

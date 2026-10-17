@@ -33,7 +33,7 @@ object Submit {
                 if (description.isNotBlank()) appendLine().appendLine("> $description")
                 appendLine()
                 appendLine("- file: https://${Paste.HOST}/$pasteId.txt (gone after ${Paste.STORE_DAYS} days)")
-                appendLine("- open in Omalauncher: ${Share.pasteLink(pasteId)}")
+                appendLine("- open in Omalauncher: ${Share.pasteLink(pasteId, Share.UPSTREAM_LINK)}")
                 appendLine()
                 append("Sent from Omalauncher.")
             }

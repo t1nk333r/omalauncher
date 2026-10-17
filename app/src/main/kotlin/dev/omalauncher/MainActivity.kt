@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
         val data = intent.data
         val link =
             intent.getStringExtra("widget")
-                ?: data?.takeIf { it.host == Share.HOST && it.path.orEmpty().startsWith(Share.PATH) }?.toString()
+                ?: data?.takeIf { Share.isPage(it.host, it.path) }?.toString()
                 ?: return
         state.shared = link
     }

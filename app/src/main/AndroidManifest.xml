@@ -66,7 +66,19 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- A widget shared as a link or QR code: https://simonschubert.github.io/omarchy-widgets/w#owl1.<data> (widgets/market/Share.kt). -->
+            <!-- A widget shared as a link or QR code: https://t1nk333r.github.io/w#owl1.<data>, the same page on Feather, its
+                 backup, or upstream's for links from other launchers (Share.PAGES in widgets/market/Share.kt). The owner's
+                 two hosts publish .well-known/assetlinks.json, so Android opens their links here without the browser. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:host="t1nk333r.github.io" />
+                <data android:host="feather.aloqaili.xyz" />
+                <data android:path="/w" />
+                <data android:path="/w/" />
+            </intent-filter>
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
