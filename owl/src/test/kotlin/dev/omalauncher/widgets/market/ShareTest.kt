@@ -233,7 +233,7 @@ class ShareTest {
     @Test fun theBackupLinkHoldsTheSameWidget() {
         val link = Share.link(widget)
         val backup = Share.backupLink(link)
-        assertTrue(backup.startsWith("https://feather.aloqaili.xyz/w#owl1."))
+        assertTrue(backup.startsWith("https://share.aloqaili.xyz/w#owl1."))
         assertEquals(widget, Share.decode(backup))
         // From upstream's page too, and a paste stays a paste.
         assertEquals(backup, Share.backupLink(Share.UPSTREAM_LINK + link.substringAfter('#')))
@@ -247,6 +247,7 @@ class ShareTest {
             assertTrue(page, Share.isPage(url.substringBefore('/'), "/" + url.substringAfter('/')))
         }
         assertTrue(Share.isPage("t1nk333r.github.io", "/w/"))
+        assertTrue(Share.isPage("share.aloqaili.xyz", "/w/"))
         assertTrue(Share.isPage("feather.aloqaili.xyz", "/w"))
         assertTrue(Share.isPage("T1nk333r.GitHub.io", "/w"))
         assertTrue(Share.isPage("simonschubert.github.io", "/omarchy-widgets/w"))

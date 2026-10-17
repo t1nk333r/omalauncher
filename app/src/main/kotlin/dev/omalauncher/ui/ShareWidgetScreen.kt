@@ -183,7 +183,7 @@ fun ShareWidgetScreen(
                             context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("$name widget", link))
                             copied = true
                         }
-                        // The same link on Feather, for someone who can't reach GitHub Pages.
+                        // The same link on Cloudflare (share.aloqaili.xyz), for someone who can't reach GitHub Pages.
                         BracketAction(if (copiedBackup) "copied" else "copy backup link", Palette.foreground) {
                             context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("$name widget", Share.backupLink(link)))
                             copiedBackup = true

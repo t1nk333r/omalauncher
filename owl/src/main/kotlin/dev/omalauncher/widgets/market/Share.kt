@@ -32,14 +32,17 @@ object Share {
     /** Phone build: the owner's own copy of the page (github.com/t1nk333r/t1nk333r.github.io), not upstream's. */
     const val LINK = "https://t1nk333r.github.io/w#"
 
-    /** The same page on the owner's Feather server, for when GitHub Pages is down or blocked. */
-    const val BACKUP_LINK = "https://feather.aloqaili.xyz/w#"
+    /** The same page on Cloudflare Pages, on the owner's domain and deployed from the same repo, for when GitHub Pages is down or blocked. */
+    const val BACKUP_LINK = "https://share.aloqaili.xyz/w#"
 
     /** Upstream's page: where links from other launchers and the desktop app point, and what a store submission links to. */
     const val UPSTREAM_LINK = "https://simonschubert.github.io/omarchy-widgets/w#"
 
-    /** The host and path of each of those pages: the same page, which reads the same data. */
-    val PAGES = listOf("t1nk333r.github.io" to "/w", "feather.aloqaili.xyz" to "/w", "simonschubert.github.io" to "/omarchy-widgets/w")
+    /**
+     * The host and path of each of those pages: the same page, which reads the same data. Also the copy on the owner's
+     * Feather server, which only answers at home and on Tailscale, and was the backup in build 1502.
+     */
+    val PAGES = listOf("t1nk333r.github.io" to "/w", "share.aloqaili.xyz" to "/w", "feather.aloqaili.xyz" to "/w", "simonschubert.github.io" to "/omarchy-widgets/w")
 
     /** What a version 40 QR code holds in byte mode at error correction L. */
     const val MAX_LINK = 2953
