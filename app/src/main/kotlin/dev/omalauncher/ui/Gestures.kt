@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Column
@@ -38,7 +39,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.rememberUpdatedState
@@ -384,6 +389,38 @@ internal fun HomePill(
             BasicText(label, style = Mono.copy(color = Palette.foreground, fontSize = TextSize.Item))
         }
     }
+}
+
+/**
+ * The unseen strip under home's grid, above the pill and the dock (home.settings-strip): long-pressed, it opens
+ * settings, which a grid full to its last row leaves no empty spot for. Swiping on it does what swiping does on home.
+ */
+@Composable
+internal fun SettingsStrip(
+    runtime: Runtime,
+    state: LauncherState,
+) {
+    val height = LauncherStyle.settingsStrip
+    if (height <= 0.dp) return
+    val haptics = LocalHapticFeedback.current
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(height)
+            .homeSwipe(runtime, state)
+            .pointerInput(state) {
+                detectTapGestures(onLongPress = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    state.show()
+                })
+            }.semantics {
+                contentDescription = "settings"
+                onLongClick("open settings") {
+                    state.show()
+                    true
+                }
+            },
+    )
 }
 
 /**

@@ -294,6 +294,7 @@ private fun DesktopScreen(
             if (runtime.terminals.active == null || runtime.terminals.keyboardLeaving) {
                 // Home only: the open app list has everything.
                 // Swiping up or down from any of them does what it does on home, as from the dock on stock launchers.
+                if (!panelShown) SettingsStrip(runtime, state)
                 if (LauncherStyle.homePill && !panelShown) {
                     HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
                     Spacer(Modifier.height(HomeGap))

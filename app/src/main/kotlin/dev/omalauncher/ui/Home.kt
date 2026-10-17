@@ -504,7 +504,8 @@ fun HomeScreen(
 
 
 /**
- * The room below the grid for the strip (the dock or recent apps) and the pill above it, each only while it shows.
+ * The room below the grid for the strip (the dock or recent apps), the pill above it and the settings strip above
+ * both, each only while it shows.
  * Added up in whole pixels, as the column drawing them rounds each part, so the pill can't reach into the grid's gap.
  */
 @Composable
@@ -512,7 +513,7 @@ internal fun homeStripRoom(runtime: Runtime): Dp =
     with(LocalDensity.current) {
         val strip = if (LauncherStyle.recentApps) stripHeight.roundToPx() else 0
         val pill = if (LauncherStyle.homePill && pillLabel(runtime.gestures.swipeDown) != null) PillHeight.roundToPx() + HomeGap.roundToPx() else 0
-        (strip + pill).toDp()
+        (strip + pill + LauncherStyle.settingsStrip.roundToPx()).toDp()
     }
 
 /** Whether the prompt bar stays on home: style says so, or nothing else opens the app panel (no swipe, no pill). */

@@ -118,6 +118,8 @@ fun StyleScreen(
             ) { i -> style.update { if (i == 2) it.with(Style.RECENT_APPS, false) else it.with(Style.RECENT_APPS, true).with(Style.DOCK, i == 0) } }
             Flag("dock", "boxed", "bare", style, Style.DOCK_BOX)
             NumberOption("dock size", listOf("small" to 56.0, "large" to 100.0), Style.DOCK_HEIGHT, style, unit = "dp")
+            NumberOption("settings strip", listOf("off" to 0.0, "on" to 24.0), Style.SETTINGS_STRIP, style, unit = "dp")
+            OptionHint("long-press the space between home's apps and the dock for settings")
             // Does what swiping down does, as gestures set it.
             Flag("pill", "shown", "hidden", style, Style.HOME_PILL)
             Flag("prompt bar", "always", "with apps", style, Style.PROMPT_BAR)

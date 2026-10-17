@@ -139,6 +139,9 @@ object LauncherStyle {
     /** The dock is on home: the strip shows, and holds it. What adds to or arranges the dock waits for this. */
     val dockShown get() = recentApps && dock
 
+    /** How tall the unseen strip under home's grid is that opens settings when long-pressed; 0 when there's none. */
+    val settingsStrip: Dp get() = style[Style.SETTINGS_STRIP].toFloat().dp
+
     /** The pill above the strip that does what swiping down does. */
     val homePill get() = style[Style.HOME_PILL]
 
