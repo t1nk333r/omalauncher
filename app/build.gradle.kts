@@ -22,8 +22,8 @@ android {
         minSdk = 29
         targetSdk = 37
         // Phone build: upstream's versionCode × 100 + this build, so it stays above both Play's 15 and the earlier phone builds (14xx).
-        versionCode = 1506
-        versionName = "0.8.0-phone.6"
+        versionCode = 1507
+        versionName = "0.8.0-phone.7"
         ndk { abiFilters += "arm64-v8a" }
     }
 
