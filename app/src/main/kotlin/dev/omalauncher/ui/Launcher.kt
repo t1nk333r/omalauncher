@@ -264,7 +264,7 @@ private fun DesktopScreen(
     // except the bar. A phone's landscape folds them into a rail beside the grid, and unfolds them over it, centered.
     val side = homeSide()
     if (side != null && !panelShown) {
-        if (runtime.terminals.active == null) {
+        if (!runtime.terminals.typing) {
             SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().safePadding())
         }
     } else {
@@ -295,8 +295,8 @@ private fun DesktopScreen(
                     )
                 }
             }
-            // Hidden while a terminal tile types: it would sit on the keyboard, over the tile.
-            if (runtime.terminals.active == null || runtime.terminals.keyboardLeaving) {
+            // Hidden while a tile types: it would sit on the keyboard, over the tile.
+            if (!runtime.terminals.typing || runtime.terminals.keyboardLeaving) {
                 // Home only: the open app list has everything.
                 // Swiping up or down from any of them does what it does on home, as from the dock on stock launchers.
                 if (!panelShown) SettingsStrip(runtime, state)

@@ -3,8 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Target SDK 37+: LAN (Cast, printers, local HTTP, Arch curl to 192.168.x) needs this
-         runtime permission; INTERNET alone only covers the public internet. -->
+    <!-- Android 17+: widgets and Linux reaching 192.168.x and other local addresses. Asked for
+         at start and before Linux starts (PR #47), and from a row in settings while it's missing
+         (LocalNetwork.kt). -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />

@@ -68,4 +68,15 @@ class FitIntoRowsTest {
         }
         assertTrue(cells.all { it.second.bottom <= 9 })
     }
+
+    @Test fun onFewerColumnsTilesStayInsideThem() {
+        // home.columns down to 4 rescales the cells first (Cell.rescaled), then home.rows fits them on that grid.
+        val wide = Cell(0, 0, 6, 9).rescaled(6, 4)
+        val low = Cell(3, 10, 3, 2).rescaled(6, 4)
+        val moved = fitIntoRows(listOf(FitTile("wide", 1, wide, true), FitTile("low", 1, low, true)), listOf(1), cols = 4, rows = 9)
+        assertEquals(Cell(0, 0, 4, 9), wide)
+        // The page is full, so it goes to a new one, and no wider than the 4 columns.
+        assertEquals(2 to Cell(0, 0, 2, 2), moved["low"])
+        assertTrue(moved.values.all { (_, c) -> c.right <= 4 && c.bottom <= 9 })
+    }
 }

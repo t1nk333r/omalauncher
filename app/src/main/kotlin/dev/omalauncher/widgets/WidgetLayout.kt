@@ -1,7 +1,10 @@
 package dev.omalauncher.widgets
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.setValue
 import dev.omalauncher.upgrade.Versioned
 import dev.omalauncher.upgrade.mapEntries
 import org.json.JSONObject
@@ -17,10 +20,25 @@ data class Cell(
     val bottom get() = y + h
 
     fun overlaps(o: Cell) = x < o.right && o.x < right && y < o.bottom && o.y < bottom
+
+    /**
+     * This cell, placed on a grid of [from] columns, moved onto one of [to]: its left edge and width scale down
+     * to whole cells, and it stays at least [minWidth] wide, or the whole width, by moving left.
+     */
+    fun rescaled(
+        from: Int,
+        to: Int,
+        minWidth: Int = 1,
+    ): Cell {
+        if (from == to) return this
+        val x = x * to / from
+        val w = maxOf((w * to / from).coerceIn(1, to - x), minWidth.coerceAtMost(to))
+        return copy(x = x.coerceAtMost(to - w), w = w)
+    }
 }
 
-/** Columns of the home grid. Saved with the layout, so changing it rescales saved cells rather than scrambling them. */
-const val GRID_COLUMNS = 6
+/** The home grid's columns before they could be set: a saved layout that doesn't say has this many. */
+const val CLASSIC_COLUMNS = 6
 
 /**
  * Where each widget and pinned app sits on the home grid, keyed by file name
@@ -38,13 +56,22 @@ class WidgetLayout(
     /** A widget's own glass opacity, set from its long-press bar; without one it has widgets.opacity. */
     private val glass = mutableStateMapOf<String, Double>()
 
+    /** Columns of the home grid the cells are on; saved with them, so [regrid] can move them onto another. */
+    var columns by mutableIntStateOf(CLASSIC_COLUMNS)
+        private set
+
     init {
-        (Versioned.read(prefs.getString(LAYOUT, null), VERSION) as? JSONObject)?.let(::load)
+        (Versioned.read(prefs.getString(LAYOUT, null), VERSION) as? JSONObject)?.let { data ->
+            columns = columnsOf(data)
+            load(data)
+        }
     }
 
+    private fun columnsOf(data: JSONObject) = data.optInt("columns", CLASSIC_COLUMNS).takeIf { it > 0 } ?: CLASSIC_COLUMNS
+
     private fun load(data: JSONObject) {
-        val columns = data.optInt("columns", GRID_COLUMNS)
-        data.optJSONObject("cells")?.mapEntries { _, c -> rescale(Cell(c.getInt("x"), c.getInt("y"), c.getInt("w"), c.getInt("h")), columns) }?.let(cells::putAll)
+        val saved = columnsOf(data)
+        data.optJSONObject("cells")?.mapEntries { _, c -> Cell(c.getInt("x"), c.getInt("y"), c.getInt("w"), c.getInt("h")).rescaled(saved, columns) }?.let(cells::putAll)
         data.optJSONObject("pages")?.let { p -> for (k in p.keys()) pages[k] = p.optInt(k, 1) }
         data.optJSONObject("glass")?.let { g -> for (k in g.keys()) glass[k] = g.optDouble(k).coerceIn(0.0, 1.0) }
     }
@@ -61,14 +88,28 @@ class WidgetLayout(
         save()
     }
 
-    /** A cell saved on a grid of [columns], moved onto today's. */
-    private fun rescale(
-        c: Cell,
-        columns: Int,
-    ): Cell {
-        if (columns == GRID_COLUMNS || columns <= 0) return c
-        val x = c.x * GRID_COLUMNS / columns
-        return c.copy(x = x, w = (c.w * GRID_COLUMNS / columns).coerceIn(1, GRID_COLUMNS - x))
+    /**
+     * Moves every cell onto a grid of [to] columns (see [Cell.rescaled]); a widget stays as wide as its
+     * [HomeItem.minSize] allows. A tile that lands on one before it on its page in [tiles] (each page's, in the
+     * order they keep their spots) loses its cell, so its page places it afresh in its first free spot, or moves
+     * it to a page with room.
+     */
+    fun regrid(
+        to: Int,
+        tiles: List<List<HomeItem>>,
+    ) {
+        if (to == columns) return
+        val minWidth = tiles.flatten().associate { it.key to it.minSize.first }
+        for ((key, c) in cells.toMap()) cells[key] = c.rescaled(columns, to, minWidth[key] ?: 1)
+        columns = to
+        for (items in tiles) {
+            val kept = ArrayList<Cell>()
+            for (item in items) {
+                val c = cells[item.key]?.let { if (item.resizable) it else it.copy(w = 1, h = 1) } ?: continue
+                if (kept.any { it.overlaps(c) }) cells.remove(item.key) else kept += c
+            }
+        }
+        save()
     }
 
     /** The page [name] was moved to on the phone, if it was. */
@@ -206,7 +247,7 @@ class WidgetLayout(
         return (across * cellW).toInt() - gap to (down * cellH).toInt() - gap
     }
 
-    /** The fewest cells, at most [GRID_COLUMNS] across, whose tile is at least [px] (width, height) big; [tilePx] the other way round. */
+    /** The fewest cells, at most [columns] across, whose tile is at least [px] (width, height) big; [tilePx] the other way round. */
     fun cellsFor(
         px: Pair<Int, Int>,
         metrics: android.util.DisplayMetrics,
@@ -215,14 +256,14 @@ class WidgetLayout(
         val across = kotlin.math.ceil((px.first + gap) / cellW).toInt().coerceAtLeast(1)
         val down = kotlin.math.ceil((px.second + gap) / cellH).toInt().coerceAtLeast(1)
         val (w, h) = if (turned) down to across else across to down
-        return w.coerceAtMost(GRID_COLUMNS) to h
+        return w.coerceAtMost(columns) to h
     }
 
     /** [geometry]; before the home grid was laid out, an estimate from the screen width. */
     private fun cellGeometry(metrics: android.util.DisplayMetrics) =
         geometry ?: run {
             val gap = Math.round(6 * metrics.density)
-            val cell = (metrics.widthPixels - gap) / GRID_COLUMNS.toFloat()
+            val cell = (metrics.widthPixels - gap) / columns.toFloat()
             Triple(cell, cell, gap)
         }
 
@@ -231,7 +272,7 @@ class WidgetLayout(
         for ((name, c) in cells) json.put(name, JSONObject().put("x", c.x).put("y", c.y).put("w", c.w).put("h", c.h))
         val data =
             JSONObject()
-                .put("columns", GRID_COLUMNS)
+                .put("columns", columns)
                 .put("cells", json)
                 .put("pages", JSONObject(pages as Map<*, *>))
                 .put("glass", JSONObject(glass.toMap() as Map<*, *>))

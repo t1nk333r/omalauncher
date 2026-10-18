@@ -19,6 +19,7 @@ import dev.omalauncher.linux.Proot
 import dev.omalauncher.linux.pacmanInstall
 import dev.omalauncher.linux.runJob
 import dev.omalauncher.ui.Palette
+import dev.omalauncher.theme.Style
 import dev.omalauncher.theme.StyleStore
 import dev.omalauncher.upgrade.Managed
 import dev.omalauncher.upgrade.Policy
@@ -111,6 +112,37 @@ class WidgetEngine(
     /** The store's widgets, and its apps. */
     val market = Market(this, OwlKind.Widget)
     val appMarket = Market(this, OwlKind.App)
+
+    /** Settings' "update all" for widgets and apps is running. */
+    var updating by mutableStateOf(false)
+        private set
+
+    /** Why the last "update all" stopped short, or null. */
+    var updateError by mutableStateOf<String?>(null)
+        private set
+
+    /** Reloads both catalogs now, on the engine's scope: leaving settings doesn't cancel it. */
+    fun checkUpdates() {
+        scope.launch { for (m in listOf(market, appMarket)) m.refresh() }
+    }
+
+    /** Installs every store update, on the engine's scope: leaving settings doesn't stop it. */
+    fun updateAll() {
+        if (updating) return
+        updating = true
+        updateError = null
+        scope.launch {
+            try {
+                for (m in listOf(market, appMarket)) {
+                    for (e in m.updates) {
+                        m.install(e, page = 0)?.let { updateError = "${e.name}: $it" }
+                    }
+                }
+            } finally {
+                updating = false
+            }
+        }
+    }
 
     /** Widgets whose packages the user already agreed to (store installs): install them without asking again. */
     private val autoInstall = HashSet<String>()
@@ -417,6 +449,10 @@ class WidgetEngine(
                         if (path != null && path.endsWith(".owl")) changes.trySend(Unit)
                     }
                 }.also { it.startWatching() }
+            launch {
+                snapshotFlow { loaded }.first { it }
+                snapshotFlow { runtime.style.style[Style.COLUMNS] }.collect { layout.regrid(it, pages.map(::itemsOn)) }
+            }
             changes.trySend(Unit)
             for (unit in changes) {
                 // Editors write in several steps (truncate, write, rename); let them finish.
@@ -514,7 +550,7 @@ class WidgetEngine(
     }
 
     /** The first load is done; see [reload]. */
-    private var loaded = false
+    private var loaded by mutableStateOf(false)
 
     private val previews = Previews(context)
     private val previewQueue = Channel<String>(Channel.UNLIMITED)
@@ -574,7 +610,7 @@ class WidgetEngine(
     }
 
     /** The tile's cells as it's laid out on home, else as the file sizes it. */
-    private fun tileCells(spec: WidgetSpec) = layout.cell(spec.file.name)?.let { it.w to it.h } ?: spec.size?.let { (w, h) -> w.coerceIn(1, GRID_COLUMNS) to h.coerceAtLeast(1) } ?: (3 to 3)
+    private fun tileCells(spec: WidgetSpec) = layout.cell(spec.file.name)?.let { it.w to it.h } ?: spec.size?.let { (w, h) -> w.coerceIn(1, layout.columns) to h.coerceAtLeast(1) } ?: (3 to 3)
 
     /** Waits until every source of [inst] has a value; what a preview draws after. */
     private fun loadedOf(inst: WidgetInstance): suspend () -> Unit = { snapshotFlow { inst.loaded() }.first { it } }

@@ -913,6 +913,12 @@ private fun StripCell(
     }
 }
 
+/** [limit] apps the user knows, for the Style menu's previews: the recent ones, topped up from the drawer's. */
+internal fun familiarApps(
+    runtime: Runtime,
+    limit: Int,
+): List<AppHit> = (recentApps(runtime, limit) + allApps(runtime)).distinctBy { it.key }.take(limit)
+
 /** The apps opened lately, last opened first; ones not installed (or not loaded yet) are skipped. */
 private fun recentApps(
     runtime: Runtime,
@@ -1017,26 +1023,7 @@ internal fun AppPanel(
                         }
                     }
                 }
-                Box(
-                    Modifier
-                        .size(44.dp)
-                        .clip(LauncherStyle.shape(22.dp))
-                        .background(Palette.surface)
-                        .clickable(onClick = onSettings),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Image(Icons.Gear, "settings", Modifier.size(22.dp), colorFilter = ColorFilter.tint(Palette.accent))
-                    // Updates are waiting: settings › system updates lists them.
-                    if ((runtime.updates.pending?.count ?: 0) > 0) {
-                        Box(
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(8.dp)
-                                .size(8.dp)
-                                .background(Palette.red, CircleShape),
-                        )
-                    }
-                }
+                SettingsButton(runtime, onSettings)
             }
             // Only as tall as its rows, so taps above a short list reach the scrim behind and close the panel.
             Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp), verticalArrangement = Arrangement.Bottom) {
@@ -1601,6 +1588,34 @@ private fun AppActions(
     Popup(popupPositionProvider = position, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         MenuItems(actions, onDismiss, minWidth = 160.dp, itemPadding = 12.dp, fontSize = TextSize.Item) {
             if (menu != null) ShortcutRows(offered, menu, onDismiss, TextSize.Item)
+        }
+    }
+}
+
+/** The gear that opens settings, in the drawer and the home menu; a dot while system updates wait. */
+@Composable
+internal fun SettingsButton(
+    runtime: Runtime,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier
+            .size(44.dp)
+            .clip(LauncherStyle.shape(22.dp))
+            .background(Palette.surface)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(Icons.Gear, "settings", Modifier.size(22.dp), colorFilter = ColorFilter.tint(Palette.accent))
+        // Updates are waiting: settings › system updates lists them.
+        if ((runtime.updates.pending?.count ?: 0) > 0) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(8.dp)
+                    .background(Palette.red, CircleShape),
+            )
         }
     }
 }

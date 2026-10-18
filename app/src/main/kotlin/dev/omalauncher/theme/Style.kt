@@ -48,6 +48,19 @@ sealed class Setting<T>(
         override fun decode(value: Any): String? = nonBlank(value, "takes a name in quotes")
     }
 
+    class Count(
+        key: String,
+        default: Int,
+        val range: IntRange,
+        doc: String,
+    ) : Setting<Int>(key, default, doc) {
+        override fun decode(value: Any): Int {
+            val v = value as? Double
+            require(v != null && v == Math.rint(v) && v.toInt() in range) { "takes a whole number from ${range.first} to ${range.last}" }
+            return v.toInt()
+        }
+    }
+
     class Text(
         key: String,
         default: String,
@@ -182,6 +195,13 @@ class Style(
                     "\"https://duckduckgo.com/?q=%s\". Unset: Google.",
             ) { require(isWebSearch(it)) { "takes a web address with %s where the words go" } }
         val HOME_ROWS = Setting.Number("home.rows", 9.0, 0.0..14.0, "Rows of the home grid in portrait: 0 as many square cells as fit, or a number to stretch or squeeze the cells to. Tiles below the last row move up, or to the next page with room.")
+        val COLUMNS = Setting.Count("home.columns", 6, 4..9, "Columns of home's grid. Fewer make bigger cells, and apps show their names under their icons once a cell is tall enough.")
+        val FORCE_SINGLE_PAGE =
+            Setting.Flag(
+                "home.single-page",
+                false,
+                "One page even on a screen shaped like an unfolded foldable's; false shows two there, auto-detected from the screen's shape and width.",
+            )
 
         val GAPS_IN = Setting.Number("widgets.gaps-in", 6.0, 0.0..24.0, "Space in dp between two of home's widgets (all of it, unlike Hyprland's gaps_in, which each window has on its side).")
         val GAPS_OUT = Setting.Number("widgets.gaps-out", 6.0, 0.0..48.0, "Space in dp from home's widgets, the strip and the prompt bar to the screen's edges.")
@@ -216,6 +236,10 @@ class Style(
         val DRAWER_BLUR = Setting.Number("drawer.blur", 0.0, 0.0..48.0, "Blurs home behind the drawer, in dp (Android 12 and later).")
         val DRAWER_LOCK = Setting.Flag("drawer.lock-hidden", false, "Showing hidden apps asks for the fingerprint, face or screen lock first.")
 
+        /** [FONT]'s value for Android's own monospace font. */
+        const val SYSTEM_FONT = "system"
+
+        val FONT = Setting.Text("font", SYSTEM_FONT, "The font family of the launcher's text and widgets: \"system\" is Android's monospace; fc-list :spacing=100 lists those Linux has.")
         val TERMINAL_FONT = Setting.Text("terminal.font", "JetBrains Mono", "The terminals' font family; fc-list :spacing=100 lists those installed.")
         val TERMINAL_TEXT = Setting.Number("terminal.text", 12.0, 6.0..32.0, "The terminals' em size in dp, before Android's font size: 10 smaller, 12 default, 14 larger.")
         val TERMINAL_OPACITY = Setting.Number("terminal.opacity", 1.0, 0.0..1.0, "How much the terminals' background covers the wallpaper: foot's alpha, for new terminals and open ones alike.")
@@ -265,7 +289,8 @@ object StyleFile {
 
     val ALL: List<Setting<*>> =
         with(Style) {
-            listOf(THEME, BACKGROUND, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, WEB_SEARCH, HOME_ROWS, GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
+            listOf(THEME, BACKGROUND, FONT, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, WEB_SEARCH, HOME_ROWS, COLUMNS, FORCE_SINGLE_PAGE) +
+                listOf(GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, MONOCHROME_ICONS, ICON_PACK, CORNER_SCALE) +
                 listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +
                 listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, EXTRA_KEYS)

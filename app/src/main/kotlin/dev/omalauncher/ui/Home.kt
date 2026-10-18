@@ -3,7 +3,6 @@ package dev.omalauncher.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.ui.platform.LocalWindowInfo
 import android.app.WallpaperManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.snapshotFlow
@@ -46,6 +45,7 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import dev.omalauncher.Runtime
+import dev.omalauncher.widgets.render.LocalHomeTiles
 import dev.omalauncher.widgets.editWidgetCommand
 import dev.omalauncher.widgets.fixDependenciesCommand
 import dev.omalauncher.landingSlot
@@ -77,7 +78,7 @@ fun HomeScreen(
     // An empty page waits after the last one only while a tile is carried, to drop it on; otherwise home is just the
     // pages that hold something. Pages only exist while they do, so a page a tile was dropped on stays.
     // Unfolded, pages show in pairs: the pager counts pairs, and an odd last page gets an empty partner.
-    val per = if (showsTwoPages(LocalWindowInfo.current.containerSize)) 2 else 1
+    val per = if (showsTwoPages(windowSize())) 2 else 1
     val pageNumbers =
         engine.pages
             .let { if (arrange.carry == null || engine.itemsOn(it.last()).isEmpty()) it else it + (it.last() + 1) }
@@ -93,9 +94,9 @@ fun HomeScreen(
     var menuFor by remember { mutableStateOf<HomeItem?>(null) }
 
     val terminals = runtime.terminals
-    // Whether home's swipes are on: not while editing, in a folder or typing in a tile.
-    val swipesOn = terminals.active == null && state.editing == null && arrange.folder == null
-    BackHandler(enabled = terminals.active != null) { terminals.deactivate() }
+    // Whether home's swipes are on: not while editing, in a folder or typing in a tile (its terminal or a widget's text field).
+    val swipesOn = !terminals.typing && state.editing == null && arrange.folder == null
+    BackHandler(enabled = terminals.typing) { terminals.deactivate() }
     BackHandler(enabled = state.homeMenuOpen) { state.homeMenuOpen = false }
     BackHandler(enabled = state.editing != null && !state.homeMenuOpen) { state.editing = null }
     BackHandler(enabled = arrange.folder != null && !state.homeMenuOpen) { arrange.folder = null }
@@ -188,14 +189,16 @@ fun HomeScreen(
     // Back with the soft keyboard up only reaches the keyboard app, which closes itself. Closed like that
     // (not by the tile's ⌨ button), the tile lets go too, so the bar and recent apps come back. Only once it's gone:
     // hiding it again mid-way, while a back swipe still drives its animation, left home taking no touches.
+    // A widget's text field the same: its keyboard closed without it losing focus.
     LaunchedEffect(terminals) {
         snapshotFlow { ime.getBottom(density) > 0 }.collect { shown ->
-            if (!shown && terminals.keyboard?.wanted == true) terminals.deactivate()
+            if (!shown && (terminals.keyboard?.wanted == true || terminals.field != null)) terminals.deactivate()
         }
     }
     // The bar and recent apps don't wait for that: back as the keyboard starts closing, like the pages.
     LaunchedEffect(terminals) {
-        snapshotFlow { imeTarget.getBottom(density) == 0 && terminals.keyboard?.wanted == true }.collect { terminals.keyboardLeaving = it }
+        snapshotFlow { imeTarget.getBottom(density) == 0 && (terminals.keyboard?.wanted == true || terminals.field != null) }
+            .collect { terminals.keyboardLeaving = it }
     }
     var origin by remember { mutableStateOf(Offset.Zero) }
     val extraKeys = terminals.active != null && extraKeysWanted()
@@ -246,7 +249,7 @@ fun HomeScreen(
                         tracker.addPosition(change.uptimeMillis, change.position)
                         if (!scrolling && !turnedPage && !homing && term != null && delta.getDistance() > slop) {
                             // Read now, not when the press began: home's swipes stay off while a tile is in use.
-                            val homeTakes = terminals.active == null && state.editing == null && arrange.folder == null && swiper.wants(delta.y)
+                            val homeTakes = !terminals.typing && state.editing == null && arrange.folder == null && swiper.wants(delta.y)
                             when (terminalGesture(wasActive, delta.x, delta.y, homeTakes)) {
                                 TerminalGesture.TurnPage -> turnedPage = true
                                 TerminalGesture.ScrollTile -> scrolling = true
@@ -306,6 +309,8 @@ fun HomeScreen(
             onRelease = { if (terminals.keyboard === it) terminals.keyboard = null },
             modifier = Modifier.size(1.dp),
         )
+    // A widget's text field on a tile lifts it like a terminal does.
+    CompositionLocalProvider(LocalHomeTiles provides terminals) {
     Column(
         Modifier
             .fillMaxSize()
@@ -315,8 +320,8 @@ fun HomeScreen(
             .homeSwipe(runtime, state, enabled = swipesOn)
             // A widget's list at its end hands on the swipe, so pulling one down at its top still opens search.
             .homeSwipeAfterScroll(swiper, enabled = swipesOn)
-            // Typing in a terminal tile: lift the pages so the tile stays above the keyboard, but not under the status
-            // bar; a tile too tall for both gives up the rest at its bottom.
+            // Typing in a tile (its terminal or a widget's text field): lift the pages so the tile stays above the keyboard,
+            // but not under the status bar; a tile too tall for both gives up the rest at its bottom.
             .graphicsLayer {
                 val keys = if (extraKeys) ExtraKeysHeight.toPx() else 0f
                 translationY =
@@ -333,7 +338,7 @@ fun HomeScreen(
             // nothing lifted under the status bar.
             .drawWithContent {
                 val keyboard = ime.getBottom(density)
-                if (terminals.active == null || keyboard == 0) {
+                if (!terminals.typing || keyboard == 0) {
                     drawContent()
                 } else {
                     val keys = if (extraKeys) ExtraKeysHeight.toPx() else 0f
@@ -403,7 +408,8 @@ fun HomeScreen(
                 when (item) {
                     is WidgetItem -> {
                         // Whose terminal has the keyboard: the tile gives up what the keyboard covers once the lift is spent.
-                        val typing = engine.instance(item.spec)?.owns(terminals.active) == true
+                        val instance = engine.instance(item.spec)
+                        val typing = instance != null && (instance.owns(terminals.active) || terminals.field?.widget === instance)
                         WidgetTile(
                             spec = item.spec,
                             instance = engine.instance(item.spec),
@@ -487,6 +493,7 @@ fun HomeScreen(
             onReorder = { app, before -> engine.shortcuts.moveBefore(app.key, before) },
             onRenameFolder = { folder, name -> engine.shortcuts.rename(folder.key, name) },
         )
+    }
     }
 
     if (extraKeys) {
