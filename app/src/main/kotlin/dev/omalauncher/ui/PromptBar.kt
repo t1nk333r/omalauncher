@@ -96,9 +96,9 @@ val PromptBarHeight = 48.dp
  * The one input at the bottom of the home screen: it finds apps, searches the web and asks agents.
  * Focusing it opens the app panel above it; typing narrows that panel, and Enter
  * opens the highlighted app, sends the text to the default agent in a terminal, or
- * searches the web with it (the send button says which; the web without an agent).
- * The mic always asks the agent: hold to talk and release to send, tap to dictate
- * into the field (it stops at the next pause).
+ * searches the web with it (the send button says which; the web with "web" picked
+ * in the menu at its start, or without an agent). The mic sends there too: hold to
+ * talk and release to send, tap to dictate into the field (it stops at the next pause).
  */
 @Composable
 internal fun PromptBar(
@@ -128,6 +128,8 @@ internal fun PromptBar(
     val linuxState by runtime.bootstrap.state.collectAsState()
     // Agents run in Linux: without it, the bar offers to install it instead.
     val linux = linuxState == LinuxState.Installed
+    // Where Enter, the bar's button and the held mic send what's typed: the agent, or the web.
+    val asks = barAsksAgent(runtime, linuxState)
 
     fun offerLinux() {
         focusManager.clearFocus()
@@ -180,6 +182,9 @@ internal fun PromptBar(
         }
     }
 
+    /** What's said into the held mic: to the agent, or the web; looked up now, as [send] does. */
+    fun sendSpoken(prompt: String) = if (barAsksAgent(runtime, runtime.bootstrap.state.value)) send(prompt) else searchWeb(prompt)
+
     /** Moves the highlight up the panel (away from the bar) or back down; the ask row sits lowest, the web's above it. */
     fun pick(step: Int) {
         if (text.isBlank()) return
@@ -197,7 +202,7 @@ internal fun PromptBar(
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         speech.start(hold) { heard ->
             val full = listOf(typed, heard).filter { it.isNotBlank() }.joinToString(" ") { it.trim() }
-            if (sendWhenDone && heard.isNotEmpty()) send(full) else state.query = full
+            if (sendWhenDone && heard.isNotEmpty()) sendSpoken(full) else state.query = full
         }
     }
 
@@ -207,8 +212,8 @@ internal fun PromptBar(
             if (granted) listen(hold = false)
         }
 
+    // No Linux needed: without an agent, what's said goes to the web.
     fun talk(hold: Boolean) {
-        if (!linux) return offerLinux()
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             listen(hold)
         } else {
@@ -291,7 +296,7 @@ internal fun PromptBar(
                     .padding(start = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                DefaultAgentMenu(runtime, onManage = { if (linux) state.show(SettingsPage.Agents) else offerLinux() })
+                DefaultAgentMenu(runtime, asks, onManage = { if (linux) state.show(SettingsPage.Agents) else offerLinux() })
                 val shown = if (listening) speech.text else text
                 BasicTextField(
                     value = shown,
@@ -334,7 +339,7 @@ internal fun PromptBar(
                             val hint =
                                 when {
                                     listening -> "listening…"
-                                    !linux || agent == null -> "open an app or search the web…"
+                                    !asks || agent == null -> "open an app or search the web…"
                                     else -> "open an app or ask ${agent.bin}…"
                                 }
                             BasicText(hint, style = Mono.copy(color = Palette.muted, fontSize = TextSize.Item), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -382,6 +387,12 @@ internal fun PromptBar(
         }
     }
 }
+
+/** Whether the bar sends what's typed to the agent rather than the web: one is installed in Linux, and web isn't picked in its menu. */
+internal fun barAsksAgent(
+    runtime: Runtime,
+    linux: LinuxState,
+) = !runtime.barToWeb && linux == LinuxState.Installed && runtime.agents.default != null
 
 /** How long a press on the mic waits before it counts as hold-to-talk rather than a tap or a passing swipe. */
 private const val HOLD_MILLIS = 250L
@@ -487,10 +498,14 @@ internal fun MicIcon(color: Color) {
     }
 }
 
-/** The agent's name at the start of the bar; tapping it lists the installed agents to send prompts to. */
+/**
+ * Where the bar sends what's typed, at its start: the agent's name, or "web" while it [asks] none; tapping it lists the
+ * installed agents and the web to send to. Picking an agent makes it the default one too.
+ */
 @Composable
 private fun DefaultAgentMenu(
     runtime: Runtime,
+    asks: Boolean,
     onManage: () -> Unit,
 ) {
     val store = runtime.agents
@@ -499,23 +514,27 @@ private fun DefaultAgentMenu(
     Box {
         Row(
             Modifier
-                .clickable { if (agent == null) onManage() else open = !open }
+                .clickable { open = !open }
                 .padding(start = 10.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BasicText(agent?.bin ?: "agent", style = Mono.copy(color = if (agent == null) Palette.muted else Palette.accent))
+            BasicText(if (asks) agent?.bin.orEmpty() else "web", style = Mono.copy(color = Palette.accent))
             Symbol(if (open) Glyph.ChevronUp else Glyph.ChevronDown, Palette.muted, Modifier.padding(start = 4.dp))
         }
         if (open) {
+            // The agents, then the web (null), which sends to style's web search.
             ChoicePopup(
-                store.installed,
-                store.installed.firstOrNull { it.bin == agent?.bin },
+                store.installed + listOf(null),
+                if (asks) store.installed.firstOrNull { it.bin == agent?.bin } else null,
                 AboveAnchor,
                 onDismiss = { open = false },
-                onPick = store::choose,
-                label = { it.name },
+                onPick = { picked ->
+                    if (picked != null) store.choose(picked)
+                    runtime.sendBarToWeb(picked == null)
+                },
+                label = { it?.name ?: "web" },
                 minWidth = 200.dp,
-                sublabel = { it.bin },
+                sublabel = { it?.bin ?: "search ${webSearchName(LauncherStyle.style[Style.WEB_SEARCH])}" },
             ) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(Palette.border))
                 Box(

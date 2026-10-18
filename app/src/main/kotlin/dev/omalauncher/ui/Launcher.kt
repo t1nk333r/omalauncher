@@ -174,9 +174,9 @@ private fun DesktopScreen(
         }
     }
     val search by remember(runtime, state) { derivedStateOf { searchApps(runtime, state.query, state.showHidden) } }
-    // Agents run in Linux; without one to ask, Enter searches the web instead.
+    // Agents run in Linux; without one to ask, or with web picked in the bar's menu, Enter searches the web.
     val linuxState by runtime.bootstrap.state.collectAsState()
-    val highlighted = search.highlighted(state.picked, canAsk = linuxState == LinuxState.Installed && runtime.agents.default != null)
+    val highlighted = search.highlighted(state.picked, canAsk = barAsksAgent(runtime, linuxState))
 
     fun launch(hit: AppHit) {
         runtime.usage.record(hit.key)

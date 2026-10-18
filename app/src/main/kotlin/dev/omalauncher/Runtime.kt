@@ -140,6 +140,15 @@ class Runtime(
     var launcherReady by mutableStateOf(prefs.getBoolean(SETUP_DONE, false) || bootstrap.wanted)
         private set
 
+    /** The prompt bar sends to the web instead of the agent: "web" picked in its menu, until an agent is picked again. */
+    var barToWeb by mutableStateOf(prefs.getBoolean(BAR_TO_WEB, false))
+        private set
+
+    fun sendBarToWeb(web: Boolean) {
+        barToWeb = web
+        prefs.edit().putBoolean(BAR_TO_WEB, web).apply()
+    }
+
     /** Linux is installed and its services run: guest commands (like the update check) can go. */
     private var linux = false
 
@@ -635,5 +644,6 @@ class Runtime(
     companion object {
         private const val TAG = "runtime"
         private const val SETUP_DONE = "setup_done"
+        private const val BAR_TO_WEB = "bar_to_web"
     }
 }

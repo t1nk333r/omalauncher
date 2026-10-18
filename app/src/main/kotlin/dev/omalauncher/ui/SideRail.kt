@@ -146,7 +146,7 @@ private fun PromptRail(
     val agent = runtime.agents.default
     // The longest that fits the rail: a letter takes a whole line.
     val hints =
-        listOfNotNull(agent?.takeIf { linuxState == LinuxState.Installed }?.let { "open an app or ask ${it.bin}" } ?: "open an app or search the web", "open an app", "apps")
+        listOfNotNull(agent?.takeIf { barAsksAgent(runtime, linuxState) }?.let { "open an app or ask ${it.bin}" } ?: "open an app or search the web", "open an app", "apps")
     val style = Mono.copy(fontSize = TextSize.Item, color = Palette.muted)
     Column(
         Modifier
