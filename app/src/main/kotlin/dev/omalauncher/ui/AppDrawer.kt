@@ -289,7 +289,7 @@ internal fun barStep(
     return order[(at + step).coerceIn(0, order.lastIndex)]
 }
 
-private fun allApps(runtime: Runtime): List<AppHit> =
+internal fun allApps(runtime: Runtime): List<AppHit> =
     runtime.widgets.apps().map { AppHit.Owl(it) } + runtime.linuxApps.apps.map { AppHit.Linux(it) } + runtime.androidApps.apps.map { AppHit.Android(it) } +
         runtime.androidApps.shortcuts.map { AppHit.Shortcut(it) }
 
@@ -469,6 +469,35 @@ internal fun AppHit.icons(runtime: Runtime): Pair<ImageBitmap?, ImageBitmap?> {
         is AppHit.Owl -> runtime.owlIcon(spec, mono = false) to runtime.owlIcon(spec, mono = true)
         is AppHit.Android -> runtime.androidApps.icons[app.key] to runtime.androidApps.masks[app.key]
         is AppHit.Shortcut -> runtime.androidApps.icons[shortcut.key] to runtime.androidApps.masks[shortcut.key]
+    }
+}
+
+/** Opens the app and counts it for the recent strip and search, wherever it was tapped. */
+internal fun AppHit.open(runtime: Runtime) {
+    runtime.usage.record(key)
+    when (this) {
+        is AppHit.Linux -> runtime.launch(app)
+        is AppHit.Android -> runtime.androidApps.open(app)
+        is AppHit.Shortcut -> runtime.androidApps.open(shortcut)
+        is AppHit.Owl -> runtime.openOwlApp(spec.file.name)
+    }
+}
+
+/**
+ * The icon of the app whose [AppHit.key] is [key], or its silhouette with [mono]; null until loaded or if it
+ * has none. Looked up by kind rather than through [allApps]: widgets ask for it while drawing.
+ */
+internal fun appIconOf(
+    runtime: Runtime,
+    key: String,
+    mono: Boolean,
+): ImageBitmap? {
+    val id = key.substringAfter(':')
+    return when (key.substringBefore(':')) {
+        "a", "s" -> (if (mono) runtime.androidApps.masks else runtime.androidApps.icons)[id]
+        "l" -> (if (mono) runtime.linuxApps.masks else runtime.linuxApps.icons)[id]
+        "o" -> runtime.widgets.apps().firstOrNull { it.file.name == id }?.let { runtime.owlIcon(it, mono) }
+        else -> null
     }
 }
 
@@ -920,7 +949,7 @@ internal fun familiarApps(
 ): List<AppHit> = (recentApps(runtime, limit) + allApps(runtime)).distinctBy { it.key }.take(limit)
 
 /** The apps opened lately, last opened first; ones not installed (or not loaded yet) are skipped. */
-private fun recentApps(
+internal fun recentApps(
     runtime: Runtime,
     limit: Int,
 ): List<AppHit> {

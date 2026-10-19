@@ -68,6 +68,8 @@ import dev.omalauncher.widgets.checkSecretsCommand
 import dev.omalauncher.widgets.editWidgetCommand
 import dev.omalauncher.widgets.publishWidgetCommand
 import dev.omalauncher.widgets.reviewSharedWidgetCommand
+import dev.omalauncher.widgets.render.Backdrop as FaceBackdrop
+import dev.omalauncher.widgets.render.LocalBackdrop
 import dev.omalauncher.widgets.render.LocalHomeCovered
 import dev.omalauncher.widgets.render.LocalInputFocus
 import androidx.compose.ui.graphics.BlurEffect
@@ -153,12 +155,15 @@ private fun DesktopScreen(
             }
         }
     }
-    SystemBarFrames()
+    // A face runs under them, so their bands make way for it.
+    if (!state.faceShowing) SystemBarFrames()
     val covered = remember(state) { { state.homeCovered || runtime.widgets.openScreen != null } }
-    CompositionLocalProvider(LocalHomeCovered provides covered) {
-        Column(Modifier.fillMaxSize().safePadding()) {
-            HomeScreen(runtime, state, Modifier.weight(1f).blurUnderDrawer(state))
-        }
+    // What owl's frosted nodes blur (not the tiles' glass, which is Backdrop): the background drawn above, or by our live
+    // wallpaper, slid as far as the pages.
+    val backdrop = remember(runtime, state) { FaceBackdrop({ runtime.themes.background }, { state.wallpaperOffset }) }
+    CompositionLocalProvider(LocalHomeCovered provides covered, LocalBackdrop provides backdrop) {
+        // The whole window: a face fills it, and tiles keep clear of the system bars and the bar themselves.
+        HomeScreen(runtime, state, Modifier.fillMaxSize().blurUnderDrawer(state))
     }
     HomeMenu(runtime, state)
 
@@ -179,15 +184,9 @@ private fun DesktopScreen(
     val highlighted = search.highlighted(state.picked, canAsk = barAsksAgent(runtime, linuxState))
 
     fun launch(hit: AppHit) {
-        runtime.usage.record(hit.key)
         state.query = ""
         state.closeNow()
-        when (hit) {
-            is AppHit.Linux -> runtime.launch(hit.app)
-            is AppHit.Android -> runtime.androidApps.open(hit.app)
-            is AppHit.Shortcut -> runtime.androidApps.open(hit.shortcut)
-            is AppHit.Owl -> runtime.openOwlApp(hit.spec.file.name)
-        }
+        hit.open(runtime)
     }
 
     val handlers =
@@ -265,7 +264,7 @@ private fun DesktopScreen(
     val side = homeSide()
     if (side != null && !panelShown) {
         if (!runtime.terminals.typing) {
-            SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().safePadding())
+            SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().graphicsLayer { translationX = state.barShift() * size.width }.safePadding())
         }
     } else {
         Column(
@@ -295,36 +294,39 @@ private fun DesktopScreen(
                     )
                 }
             }
-            // Hidden while a tile types: it would sit on the keyboard, over the tile.
+            // Hidden while a tile types: it would sit on the keyboard, over the tile. They slide with the tile pages,
+            // out past a face; swiping up there opens the drawer, which brings them back.
             if (!runtime.terminals.typing || runtime.terminals.keyboardLeaving) {
-                // Home only: the open app list has everything.
-                // Swiping up or down from any of them does what it does on home, as from the dock on stock launchers.
-                if (!panelShown) SettingsStrip(runtime, state)
-                if (LauncherStyle.homePill && !panelShown) {
-                    HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
-                    Spacer(Modifier.height(HomeGap))
+                Column(Modifier.graphicsLayer { if (!panelShown) translationX = state.barShift() * size.width }) {
+                    // Home only: the open app list has everything.
+                    // Swiping up or down from any of them does what it does on home, as from the dock on stock launchers.
+                    if (!panelShown) SettingsStrip(runtime, state)
+                    if (LauncherStyle.homePill && !panelShown) {
+                        HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
+                        Spacer(Modifier.height(HomeGap))
+                    }
+                    if (LauncherStyle.recentApps && !panelShown) AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state))
+                    // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
+                    // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
+                    // Dictation stops as it goes: there'd be no mic to show it listening.
+                    val barShown = barOnHome(runtime) || panelShown
+                    if (!barShown) Spacer(Modifier.height(EdgeGap))
+                    // Insets itself by the grid gap, so it lines up with the tiles and the gap still takes taps.
+                    PromptBar(
+                        runtime,
+                        state,
+                        search = search,
+                        highlighted = highlighted,
+                        onLaunch = handlers.launch,
+                        shown = barShown,
+                        modifier =
+                            Modifier
+                                .homeSwipe(runtime, state)
+                                .then(if (barShown) Modifier else Modifier.collapsed())
+                                // Unseen while an app is carried out of the drawer, keeping its room so the drawer stays put.
+                                .graphicsLayer { alpha = if (state.drawerDrag) 0f else 1f },
+                    )
                 }
-                if (LauncherStyle.recentApps && !panelShown) AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state))
-                // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
-                // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
-                // Dictation stops as it goes: there'd be no mic to show it listening.
-                val barShown = barOnHome(runtime) || panelShown
-                if (!barShown) Spacer(Modifier.height(EdgeGap))
-                // Insets itself by the grid gap, so it lines up with the tiles and the gap still takes taps.
-                PromptBar(
-                    runtime,
-                    state,
-                    search = search,
-                    highlighted = highlighted,
-                    onLaunch = handlers.launch,
-                    shown = barShown,
-                    modifier =
-                        Modifier
-                            .homeSwipe(runtime, state)
-                            .then(if (barShown) Modifier else Modifier.collapsed())
-                            // Unseen while an app is carried out of the drawer, keeping its room so the drawer stays put.
-                            .graphicsLayer { alpha = if (state.drawerDrag) 0f else 1f },
-                )
             }
         }
     }
