@@ -154,6 +154,13 @@ class Runtime(
     /** Linux is installed and its services run: guest commands (like the update check) can go. */
     private var linux = false
 
+    /**
+     * Whether the Linux session runs right now. False after [stopLinux] while Linux
+     * stays installed; the UI and the notification's stop action read it.
+     */
+    var linuxRunning by mutableStateOf(false)
+        private set
+
     /** The Linux install and removal; one at a time. */
     private var linuxJob: Job? = null
 
@@ -238,7 +245,13 @@ class Runtime(
             widgets.start()
             // On the first-run screen the download is the screen's job, with progress.
             if (launcherReady) scope.launch { themes.ensureRelease() }
-            if (bootstrap.wanted) runLinux { bootstrap.run() } else bootstrap.run()
+            if (bootstrap.wanted) {
+                // A session the user stopped stays stopped across a process restart: mark it installed
+                // without running its steps, so settings can start it again.
+                if (prefs.getBoolean(LINUX_STOPPED, false)) bootstrap.restoreInstalled() else runLinux { bootstrap.run() }
+            } else {
+                bootstrap.run()
+            }
         }
     }
 
@@ -273,6 +286,7 @@ class Runtime(
     /** Runs [work] with the foreground service up, so it goes on outside the app; then starts Linux if it's installed. */
     private fun runLinux(work: suspend () -> Unit) {
         if (linuxJob?.isActive == true) return
+        prefs.edit().putBoolean(LINUX_STOPPED, false).apply()
         linuxJob =
             scope.launch {
                 setService(true)
@@ -296,6 +310,7 @@ class Runtime(
         linuxJob =
             scope.launch {
                 linux = false
+                linuxRunning = false
                 // A reinstall lists them afresh; until then a docked Linux app isn't known to be gone.
                 linuxAppsListed = false
                 launcherFont.forget()
@@ -311,6 +326,31 @@ class Runtime(
                 linuxApps.clear()
                 setService(false)
             }
+    }
+
+    /**
+     * Ends the Linux session but keeps it installed: kills proot and its guests,
+     * stops the audio bridge and the foreground service. The launcher and its home
+     * screen stay up; [startLinux] brings the session back. Unlike [removeLinux],
+     * nothing on disk is deleted.
+     */
+    fun stopLinux() {
+        if (!bootstrap.isInstalled || !linuxRunning || linuxJob?.isActive == true) return
+        prefs.edit().putBoolean(LINUX_STOPPED, true).apply()
+        scope.launch {
+            linux = false
+            linuxRunning = false
+            widgets.linuxChanged(false)
+            audio.stop()
+            withContext(Dispatchers.IO) { proot.killAll() }
+            setService(false)
+        }
+    }
+
+    /** Starts the Linux session again after [stopLinux]; a no-op while it already runs. */
+    fun startLinux() {
+        if (linuxRunning || !bootstrap.isInstalled) return
+        runLinux { bootstrap.run() }
     }
 
     /** The foreground service keeps the process, and with it Linux, alive; only while Linux is installed or installing. */
@@ -352,6 +392,7 @@ class Runtime(
             terminalFont.write()
         }
         linux = true
+        linuxRunning = true
         // A font picked from Linux that wasn't remembered at start (or was installed since) loads now.
         scope.launch { launcherFont.apply() }
         // The recent apps strip on home lists Linux apps before the app list is ever opened.
@@ -653,5 +694,8 @@ class Runtime(
         private const val TAG = "runtime"
         private const val SETUP_DONE = "setup_done"
         private const val BAR_TO_WEB = "bar_to_web"
+
+        /** Set while the user stopped the session (see [stopLinux]); cleared by [runLinux]. */
+        private const val LINUX_STOPPED = "linux_stopped"
     }
 }
