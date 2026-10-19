@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Build
 import android.os.UserHandle
 import android.service.notification.StatusBarNotification
+import androidx.core.app.NotificationCompat
 import dev.omalauncher.widgets.lang.Lst
 import dev.omalauncher.widgets.lang.Null
 import dev.omalauncher.widgets.lang.Num
@@ -44,14 +45,16 @@ class Notifications(
 
     private fun text(sbn: StatusBarNotification) = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
 
-    /** The conversation's messages of a MessagingStyle notification, oldest first. */
+    /**
+     * The conversation's messages of a MessagingStyle notification, oldest first; [NotificationCompat] reads them back
+     * from the extras, as there's no public way to on the platform. A message without a sender is the user's own.
+     */
     private fun messages(sbn: StatusBarNotification): List<Value> {
-        val style = sbn.notification.extras.getParcelableArray(Notification.EXTRA_MESSAGING_STYLE)
-            ?.filterIsInstance<Notification.MessagingStyle>()?.lastOrNull() ?: return emptyList()
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(sbn.notification) ?: return emptyList()
         return style.messages.map { m ->
             Obj(
                 mapOf(
-                    "sender" to Str(m.senderPerson?.name?.toString().orEmpty()),
+                    "sender" to Str(m.person?.name?.toString().orEmpty()),
                     "text" to Str(m.text?.toString().orEmpty()),
                     "time" to Num(Math.floor(m.timestamp / 1000.0)),
                 ),
