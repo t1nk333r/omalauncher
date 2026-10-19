@@ -89,16 +89,18 @@ fun HomeScreen(
     val swiper = rememberHomeSwiper(runtime, state)
     // The dock frames the slot a carried app would take: cleared with the carry, however it ends.
     LaunchedEffect(arrange) { snapshotFlow { arrange.dockSlot }.collect { state.dockHover = it } }
-    // An empty page waits after the last one only while a tile is carried, to drop it on; otherwise home is just the
-    // pages that hold something. Pages only exist while they do, so a page a tile was dropped on stays.
+    // An empty page waits after the last one only while arranging (a tile selected or carried, as in #156), to drop
+    // tiles on; otherwise home is just the pages that hold something. Pages only exist while they do, so a page a tile
+    // was dropped on stays.
     // Left of page 1 an empty one always waits, for faces: like a stock launcher's feed, but the user's own. It's left
     // of the leftmost, page 0 at first, then -1, -2, ... as they fill.
     // Unfolded, tile pages show in pairs and a face across both halves: the pager counts slots (see slotsOf).
     val per = if (showsTwoPages(windowSize())) 2 else 1
+    val arranging = state.editing != null || arrange.carry != null
     val pageNumbers =
         engine.pages
             .let { listOf(minOf(it.first(), FACE_PAGE + 1) - 1) + it }
-            .let { if (arrange.carry == null || engine.itemsOn(it.last()).isEmpty()) it else it + (it.last() + 1) }
+            .let { if (!arranging || engine.itemsOn(it.last()).isEmpty()) it else it + (it.last() + 1) }
     // Only faces on screen, or the empty one waiting left of them: they get it whole, the bar's room too (see
     // LauncherState.faceShowing), and the status bar's while all of them say statusBar: false.
     fun faceOn(page: Int?) = page?.let { engine.layout.owner(engine.itemsOn(it)) as? WidgetItem }?.takeIf { it.isFace }
@@ -114,6 +116,8 @@ fun HomeScreen(
         if (i >= 0) pager.scrollToPage(i)
         showPage = null
     }
+    // Finishing arranging drops the empty page; leave it if the pager was showing it.
+    LaunchedEffect(slots.size) { if (pager.currentPage >= pager.pageCount && pager.pageCount > 0) pager.scrollToPage(pager.pageCount - 1) }
     var menuFor by remember { mutableStateOf<HomeItem?>(null) }
 
     val terminals = runtime.terminals
