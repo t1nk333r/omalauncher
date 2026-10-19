@@ -395,6 +395,8 @@ private fun TerminalSection(
     NumberOption("text", TerminalText.entries.map { it.label to it.em.toDouble() }, Style.TERMINAL_TEXT, style, unit = " dp")
     OpacityStepper("opacity", style, Style.TERMINAL_OPACITY)
     OptionHint("see-through also needs foot's alpha, under [colors] in ~/.config/foot/foot.ini", Modifier.padding(bottom = 4.dp))
+    Flag("keyboard", "voice + clipboard", "plain keys", style, Style.TERMINAL_KEYBOARD_TEXT)
+    OptionHint("voice + clipboard shows the keyboard's mic and clipboard; it may autocorrect commands · from the next time the keyboard opens", Modifier.padding(bottom = 4.dp))
     // In portrait, where columns run short; landscape has plenty.
     val metrics = LocalContext.current.resources.displayMetrics
     val columns = font.columns(minOf(metrics.widthPixels, metrics.heightPixels))

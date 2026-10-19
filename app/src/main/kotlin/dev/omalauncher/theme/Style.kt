@@ -251,6 +251,7 @@ class Style(
                     "Swipe a key up to send its popup. Up to ${ExtraKeysLayout.MAX_ROWS} rows of ${ExtraKeysLayout.MAX_KEYS}; '[]' hides the bar. " +
                     "Unset: esc / - home up end pgup copy, tab ctrl alt left down right pgdn paste.",
             ) { ExtraKeysLayout.parse(it) }
+        val TERMINAL_KEYBOARD_TEXT = Setting.Flag("terminal.keyboard-text", false, "Offer the terminals to the keyboard as a plain text field, so Gboard shows its microphone (voice typing) and clipboard; false is a password-style field without suggestions or autocorrect, like Termux.")
     }
 
     /** A system bar's band on home; [name] is its section in the file. */
@@ -293,7 +294,7 @@ object StyleFile {
                 listOf(GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, MONOCHROME_ICONS, ICON_PACK, CORNER_SCALE) +
                 listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +
-                listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, EXTRA_KEYS)
+                listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, TERMINAL_KEYBOARD_TEXT, EXTRA_KEYS)
         }
 
     private val byKey = ALL.associateBy { it.key }
