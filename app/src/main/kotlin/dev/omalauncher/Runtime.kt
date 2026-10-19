@@ -314,7 +314,7 @@ class Runtime(
 
     /**
      * Ends the Linux session but keeps it installed: kills proot and its guests,
-     * stops the audio bridge and the foreground service. The launcher and its home
+     * stops the audio bridge, Claude Code's daemon and the foreground service. The launcher and its home
      * screen stay up; [startLinux] brings the session back. Unlike [removeLinux],
      * nothing on disk is deleted.
      */
@@ -326,6 +326,8 @@ class Runtime(
             linuxRunning = false
             widgets.linuxChanged(false)
             audio.stop()
+            // Ended with the other guest processes, and not started again until Linux is.
+            agentDaemon.stop()
             withContext(Dispatchers.IO) { proot.killAll() }
             setService(false)
         }

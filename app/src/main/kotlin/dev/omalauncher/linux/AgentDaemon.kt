@@ -21,7 +21,7 @@ class AgentDaemon(
     private val proot: Proot,
     private val agents: AgentStore,
 ) {
-    /** Whether the daemon should run; off while Linux is being removed. */
+    /** Whether the daemon should run; off while Linux is stopped or being removed. */
     @Volatile
     private var running = false
     private var started = false
