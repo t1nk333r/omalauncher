@@ -22,10 +22,11 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.security.DigestInputStream
 import java.security.MessageDigest
+import java.net.URL
 import java.util.zip.GZIPInputStream
 
 private const val TAG = "bootstrap"
-private const val ROOTFS_URL = "http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
+private const val ROOTFS_URL = "https://de3.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
 private const val TARBALL = "ArchLinuxARM-aarch64-latest.tar.gz"
 
 /** Attempts per network step before setup (or an update) reports a failure. */
@@ -362,15 +363,37 @@ class Bootstrap(
     private fun installRootfs() {
         // Unpacking replaces the rootfs: the user's home, packages and agents. Only ever before a setup finished.
         check(!journal.setupComplete) { "refusing to replace a set-up system" }
-        val tarball = obtainTarball()
+        val obtained = obtainTarball()
+        // External storage can change independently: verify and extract the same internal snapshot.
+        val supplied = obtained.parentFile != context.cacheDir
+        val tarball = if (supplied) File(context.cacheDir, "$TARBALL.supplied") else obtained
+        var verificationStarted = false
         try {
+            if (supplied) {
+                check(obtained.length() <= 3L * 1024 * 1024 * 1024) { "Linux archive is too large" }
+                obtained.copyTo(tarball, overwrite = true)
+            }
+            report(Stage.Download, "Verifying Arch Linux ARM signature")
+            val signature = if (supplied) {
+                val detached = File(obtained.path + ".sig")
+                check(detached.isFile && detached.length() <= 16 * 1024) { "Provide the matching .tar.gz.sig beside the Linux archive" }
+                detached.readBytes()
+            } else {
+                readHttps(URL("$ROOTFS_URL.sig"), 16 * 1024)
+            }
+            verificationStarted = true
+            context.assets.open("security/archlinuxarm.asc").use { key ->
+                signature.inputStream().use { RootfsSignature.verify(tarball, it, key) }
+            }
             extract(tarball)
         } catch (e: Exception) {
-            // A truncated or bogus download (a captive portal's page) would fail every retry otherwise.
-            if (tarball.parentFile == context.cacheDir) tarball.delete()
+            // Discard a failed image, but keep a complete download if only fetching its signature failed.
+            if (verificationStarted) tarball.delete()
             throw e
+        } finally {
+            if (supplied) tarball.delete()
         }
-        tarball.delete() // ~830 MB we no longer need
+        obtained.delete() // ~830 MB we no longer need
     }
 
     /**
@@ -386,9 +409,11 @@ class Bootstrap(
         val partial = File(context.cacheDir, "$TARBALL.part")
         val validator = File(context.cacheDir, "$TARBALL.version")
         report(Stage.Download, "Downloading Arch Linux ARM", 0f)
-        val conn = openHttp(ROOTFS_URL)
+        val have = if (partial.exists() && validator.exists()) partial.length() else 0L
+        val headers = if (have > 0) mapOf("Range" to "bytes=$have-", "If-Range" to validator.readText()) else emptyMap()
+        val conn = openHttps(URL(ROOTFS_URL), headers)
         try {
-            download(conn, partial, validator)
+            download(conn, partial, validator, have)
         } finally {
             conn.disconnect()
         }
@@ -403,12 +428,8 @@ class Bootstrap(
         conn: HttpURLConnection,
         partial: File,
         validator: File,
+        have: Long,
     ) {
-        val have = if (partial.exists() && validator.exists()) partial.length() else 0L
-        if (have > 0) {
-            conn.setRequestProperty("Range", "bytes=$have-")
-            conn.setRequestProperty("If-Range", validator.readText())
-        }
         val resumed = conn.responseCode == HttpURLConnection.HTTP_PARTIAL
         if (conn.responseCode !in 200..299) error("download failed: HTTP ${conn.responseCode}")
         val start = if (resumed) have else 0L
@@ -424,6 +445,7 @@ class Bootstrap(
                     if (n < 0) break
                     out.write(buf, 0, n)
                     done += n
+                    check(done <= 3L * 1024 * 1024 * 1024) { "Linux download is too large" }
                     if (done - lastReport > 4 shl 20) {
                         lastReport = done
                         report(
