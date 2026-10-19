@@ -28,6 +28,12 @@
         android:name="android.permission.BIND_APPWIDGET"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- The phone's shared storage as /sdcard in Linux (linux/SharedStorage.kt): Android 11+'s all-files access, which
+         the user turns on from settings › linux; nothing asks for it on its own. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
     <uses-feature
         android:name="android.software.live_wallpaper"
         android:required="false" />

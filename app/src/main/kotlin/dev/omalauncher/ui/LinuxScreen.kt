@@ -32,6 +32,7 @@ import dev.omalauncher.Runtime
 import dev.omalauncher.linux.AGENTS
 import dev.omalauncher.linux.JobState
 import dev.omalauncher.linux.LinuxState
+import dev.omalauncher.linux.SharedStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -144,6 +145,10 @@ private fun Installed(runtime: Runtime) {
         Spacer(Modifier.height(8.dp))
         GpuRow(runtime)
     }
+    if (SharedStorage.supported) {
+        Spacer(Modifier.height(8.dp))
+        SharedStorageRow()
+    }
     Spacer(Modifier.height(16.dp))
     BasicText(
         if (runtime.linuxRunning) {
@@ -171,6 +176,34 @@ private fun Installed(runtime: Runtime) {
                 BracketAction("remove", Palette.red, runtime::removeLinux)
                 BracketAction("cancel", Palette.muted) { confirm = false }
             }
+        }
+    }
+}
+
+/**
+ * The phone's storage as /sdcard in Linux, off until the user allows Android's all-files access on its own page; see
+ * [SharedStorage]. Read again on coming back from that page.
+ */
+@Composable
+private fun SharedStorageRow() {
+    val context = LocalContext.current
+    var allowed by remember { mutableStateOf(SharedStorage.allowed()) }
+    val open = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { allowed = SharedStorage.allowed() }
+    Row(Modifier.card(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            BasicText("phone storage", style = Mono.copy(fontSize = TextSize.Item))
+            BasicText(
+                if (allowed) {
+                    "on · /sdcard in Linux is the phone's storage; Linux apps and agents can read and change every file there"
+                } else {
+                    "off · lets Linux see the phone's files at /sdcard; asks Android for all-files access"
+                },
+                style = Mono.copy(color = if (allowed) Palette.green else Palette.muted, fontSize = TextSize.Small),
+            )
+        }
+        // Android's own toggle on its own page is the switch; the bind follows it from the next Linux command.
+        BracketAction(if (allowed) "turn off" else "turn on", if (allowed) Palette.red else Palette.accent) {
+            open.launch(SharedStorage.settings(context))
         }
     }
 }

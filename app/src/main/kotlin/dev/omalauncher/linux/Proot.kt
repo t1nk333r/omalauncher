@@ -55,8 +55,8 @@ class Proot(
      */
     private val cjkFont = File("/system/fonts/NotoSansCJK-Regular.ttc")
 
-    /** Host directories bound over guest paths by [command]. */
-    private val binds = listOf("/tmp" to tmpDir, "/dev/shm" to tmpDir, GUEST_RUNTIME_DIR to runtimeDir) + dataBinds
+    /** Host directories bound over guest paths by [command]; the phone's storage too while [SharedStorage] allows it. */
+    private val binds get() = listOf("/tmp" to tmpDir, "/dev/shm" to tmpDir, GUEST_RUNTIME_DIR to runtimeDir) + dataBinds + SharedStorage.binds()
 
     /**
      * Where an absolute guest path lives on the Android side, following the
@@ -93,6 +93,8 @@ class Proot(
             host.mkdirs()
             if (rootfs.isDirectory) File(rootfs, guest.removePrefix("/")).mkdirs()
         }
+        // Allowed later on, proot makes its mount point up as it binds; it just won't show in a listing of / until then.
+        if (rootfs.isDirectory && SharedStorage.allowed()) File(rootfs, SharedStorage.GUEST.removePrefix("/")).mkdirs()
         File(rootfs, "var/lib/pacman/db.lck").delete()
         // An empty stand-in, so fontconfig lists the bound font when it reads the directory.
         if (rootfs.isDirectory) {
