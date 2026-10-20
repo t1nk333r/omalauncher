@@ -840,8 +840,8 @@ class WidgetServices(
             // Groups are the personal tab's: none for work apps.
             "group" -> hits.filter { !it.isWork }.map { it.key }.toSet().takeIf { it.isNotEmpty() }?.let(handlers.group)
             "similar" -> groupSimilar(hits)
-            // Android asks to confirm each in turn; started last first, so the first picked is asked about first.
-            "uninstall" -> hits.filterIsInstance<AppHit.Android>().filter { !it.app.system }.asReversed().forEach { handlers.uninstall(it.app) }
+            // Android asks to confirm each in turn, in an order of its own (Android 17 keeps the first one started on top).
+            "uninstall" -> hits.filterIsInstance<AppHit.Android>().filter { !it.app.system }.forEach { handlers.uninstall(it.app) }
         }
     }
 

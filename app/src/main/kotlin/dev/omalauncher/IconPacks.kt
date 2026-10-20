@@ -17,6 +17,9 @@ import org.xmlpull.v1.XmlPullParser
 class AppFilter {
     private val entries = HashMap<String, String>()
 
+    /** The activities each drawable stands for, in the file's order: many packs name their drawables with codes. */
+    private val mapped = LinkedHashMap<String, MutableList<String>>()
+
     /** Takes one of the file's tags: `<item component="…" drawable="…"/>` maps an app; the rest (calendar, iconback) is left. */
     fun add(
         tag: String,
@@ -26,7 +29,7 @@ class AppFilter {
         val component = attribute("component")?.let(::componentKey) ?: return
         val drawable = attribute("drawable")?.trim()?.takeIf { it.isNotEmpty() } ?: return
         // A pack listing an activity twice means the first.
-        entries.putIfAbsent(component, drawable)
+        if (entries.putIfAbsent(component, drawable) == null) mapped.getOrPut(drawable) { ArrayList(1) }.add(component)
     }
 
     /** The drawable for [packageName]'s activity [className], or null when the pack has none for it. */
@@ -35,8 +38,11 @@ class AppFilter {
         className: String,
     ): String? = entries["$packageName/$className"]
 
-    /** Every drawable the pack maps an app to, once each, by name. */
-    fun drawables(): List<String> = entries.values.distinct().sorted()
+    /** Every drawable the pack maps an app to, once each, by the first app it stands for (its package, then activity). */
+    fun drawables(): List<String> = mapped.entries.sortedBy { it.value.first() }.map { it.key }
+
+    /** The activities [drawable] stands for, as `package/class`; empty for one the pack maps no app to. */
+    fun componentsOf(drawable: String): List<String> = mapped[drawable].orEmpty()
 
     val isEmpty get() = entries.isEmpty()
 
@@ -74,14 +80,22 @@ class IconPack(
     /** [component]'s icon from the pack, or null to draw the app's own. Blocking. */
     fun iconFor(component: ComponentName): Drawable? = drawableFor(component)?.let(::drawable)
 
-    /** Every icon the pack offers, by drawable name: drawable.xml's list, the one packs make for icon pickers, else the ones its apps map to. */
+    /**
+     * Every icon the pack offers, by drawable name: drawable.xml's list, the one packs make for icon pickers, then the
+     * rest its apps map to. Some packs' list is only their own few (the system's, folders: Glassify's 551 of its
+     * 39,000), the apps' icons being in appfilter.xml alone.
+     */
     val icons: List<String> by lazy {
         val listed = LinkedHashSet<String>()
         read("drawable") { parser ->
             if (parser.name == "item") parser.getAttributeValue(null, "drawable")?.trim()?.takeIf { it.isNotEmpty() }?.let(listed::add)
         }
-        listed.toList().ifEmpty { filter.drawables() }
+        listed.addAll(filter.drawables())
+        listed.toList()
     }
+
+    /** The apps the pack's icon [name] stands for, as `package/class`: what finds it in a search when its name is a code. */
+    fun appsOf(name: String): List<String> = filter.componentsOf(name)
 
     /** The pack's drawable [name], a copy of its own to draw on any thread; null when the pack doesn't have it. Blocking. */
     fun drawable(name: String): Drawable? {
@@ -232,25 +246,38 @@ class IconPackStore(
     }
 }
 
-/** [icons] whose names have every word of [query] in them; the names' underscores read as spaces. */
+/**
+ * [icons] with every word of [query] in their name or in what [about] says of them: the apps each stands for (their
+ * packages and names), as packs that name their drawables with codes are searched. The names' underscores read as spaces.
+ */
 fun searchPackIcons(
     icons: List<String>,
     query: String,
+    about: (String) -> String = { "" },
 ): List<String> {
     val words = query.lowercase().split(' ', '_', '-').filter { it.isNotEmpty() }
     if (words.isEmpty()) return icons
-    return icons.filter { name -> name.lowercase().let { n -> words.all { it in n } } }
+    return icons.filter { name -> "$name ${about(name)}".lowercase().let { n -> words.all { it in n } } }
 }
 
-/** Icons likely meant for an app named [label]: the one its pack maps it to ([mapped]), then names that spell the label, closest first. */
+/**
+ * Icons likely meant for an app named [label]: the one its pack maps it to ([mapped]), then those whose name, or what
+ * [about] says of them, spells the label, closest first.
+ */
 fun suggestPackIcons(
     icons: List<String>,
     label: String,
     mapped: String?,
     max: Int = 12,
+    about: (String) -> String = { "" },
 ): List<String> {
     fun squash(s: String) = s.lowercase().filter(Char::isLetterOrDigit)
     val key = squash(label)
-    val spelled = if (key.length < 2) emptyList() else icons.filter { key in squash(it) }.sortedBy { it.length }
+    val spelled =
+        if (key.length < 2) {
+            emptyList()
+        } else {
+            icons.mapNotNull { name -> squash("$name ${about(name)}").takeIf { key in it }?.let { name to it.length } }.sortedBy { it.second }.map { it.first }
+        }
     return (listOfNotNull(mapped) + spelled).distinct().take(max)
 }

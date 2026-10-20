@@ -86,7 +86,8 @@ fun IconPackScreen(
 
 /**
  * One of an icon pack's icons for [hit], from its customize: the packs on the phone (straight to the only one),
- * then a pack's icons, the ones meant for the app first, searchable by name. [onPick] gets the one tapped.
+ * then a pack's icons, the ones meant for the app first, searchable by the apps they stand for or by name. [onPick]
+ * gets the one tapped.
  */
 @Composable
 internal fun PackIconDialog(
@@ -148,8 +149,15 @@ private fun PackIcons(
     }
     var query by remember(packageName) { mutableStateOf("") }
     val component = (hit as? AppHit.Android)?.app?.component
-    val suggested = remember(p) { suggestPackIcons(p.icons, hit.label, component?.let(p::drawableFor)) }
-    val shown = remember(p, query) { searchPackIcons(p.icons, query) }
+    // The phone's apps' names, by the icon the pack draws each with: "signal" finds Signal's icon whatever its
+    // drawable is called. With the apps each icon stands for, what a search or a suggestion matches beside its name.
+    val names = remember(p) { runtime.androidApps.apps.mapNotNull { app -> p.drawableFor(app.component)?.let { it to app.label } }.groupBy({ it.first }, { it.second }) }
+    val about = remember(p, names) { { name: String -> (p.appsOf(name) + names[name].orEmpty()).joinToString(" ") } }
+    // Tens of thousands in a big pack: matched off the main thread, the last result shown until the next is ready.
+    val suggested by produceState(emptyList(), p) {
+        value = withContext(Dispatchers.Default) { suggestPackIcons(p.icons, hit.label, component?.let(p::drawableFor), about = about) }
+    }
+    val shown by produceState(p.icons, p, query) { value = withContext(Dispatchers.Default) { searchPackIcons(p.icons, query, about) } }
     // Drawn icons, so scrolling back doesn't draw them again; by their bytes, which a dense screen makes many.
     val cache =
         remember(p) {
@@ -160,9 +168,9 @@ private fun PackIcons(
                 ) = value.width * value.height * 4
             }
         }
-    SearchField(query, { query = it }, onGo = {}, placeholder = "search ${p.icons.size} icons")
+    SearchField(query, { query = it }, onGo = {}, placeholder = "search ${p.icons.size} icons by app")
     Spacer(Modifier.height(8.dp))
-    if (shown.isEmpty()) BasicText(if (p.icons.isEmpty()) "this pack lists no icons" else "no icon named that", Modifier.padding(4.dp), style = Mono.copy(color = Palette.muted))
+    if (shown.isEmpty()) BasicText(if (p.icons.isEmpty()) "this pack lists no icons" else "no icon for that", Modifier.padding(4.dp), style = Mono.copy(color = Palette.muted))
     LazyVerticalGrid(GridCells.Adaptive(64.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (query.isBlank() && suggested.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel("for ${hit.label.lowercase()}") }
