@@ -147,7 +147,7 @@ private fun Installed(runtime: Runtime) {
     }
     if (SharedStorage.supported) {
         Spacer(Modifier.height(8.dp))
-        SharedStorageRow()
+        SharedStorageRow(runtime)
     }
     Spacer(Modifier.height(16.dp))
     BasicText(
@@ -185,10 +185,15 @@ private fun Installed(runtime: Runtime) {
  * [SharedStorage]. Read again on coming back from that page.
  */
 @Composable
-private fun SharedStorageRow() {
+private fun SharedStorageRow(runtime: Runtime) {
     val context = LocalContext.current
     var allowed by remember { mutableStateOf(SharedStorage.allowed()) }
-    val open = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { allowed = SharedStorage.allowed() }
+    val open =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            allowed = SharedStorage.allowed()
+            // Phone build: listed in / and in Files at once, not from the next Linux start.
+            runtime.proot.showSharedStorage()
+        }
     Row(Modifier.card(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             BasicText("phone storage", style = Mono.copy(fontSize = TextSize.Item))

@@ -94,8 +94,7 @@ class Proot(
             host.mkdirs()
             if (rootfs.isDirectory) File(rootfs, guest.removePrefix("/")).mkdirs()
         }
-        // Allowed later on, proot makes its mount point up as it binds; it just won't show in a listing of / until then.
-        if (rootfs.isDirectory && SharedStorage.allowed()) File(rootfs, SharedStorage.GUEST.removePrefix("/")).mkdirs()
+        showSharedStorage()
         File(rootfs, "var/lib/pacman/db.lck").delete()
         // An empty stand-in, so fontconfig lists the bound font when it reads the directory.
         if (rootfs.isDirectory) {
@@ -183,9 +182,18 @@ class Proot(
         }
     }
 
+    /**
+     * The empty mount point [SharedStorage] binds over while it's allowed: without one, proot makes it up as it binds,
+     * and /sdcard works but isn't listed in / (nor in Files). Phone build: made as soon as it's allowed, from settings ›
+     * linux or before the next guest command, not only when Linux starts.
+     */
+    fun showSharedStorage() {
+        if (rootfs.isDirectory && SharedStorage.allowed()) File(rootfs, SharedStorage.GUEST.removePrefix("/")).mkdirs()
+    }
+
     /** A guest `sh -c [script]`, stderr merged into stdout. Needs [prepare] to have run. */
     fun process(script: String): ProcessBuilder =
-        ProcessBuilder(command(script)).apply {
+        ProcessBuilder(command(script).also { showSharedStorage() }).apply {
             environment().apply {
                 clear()
                 put("PROOT_LOADER", File(nativeDir, "libproot-loader.so").path)
