@@ -22,11 +22,11 @@ import java.util.Locale
  * Android speech recognition for the prompt bar. The guest has no microphone,
  * so speech becomes text here and only text reaches Linux. Prefers the
  * on-device recognizer (offline, fast) and falls back to the regular one when
- * it can't: no model for the language, or one the phone won't bind (One UI 9
- * names Android System Intelligence, which isn't a recognition service, and
- * every try fails with 10). The regular one is asked for its offline model
- * too, then online when it has none downloaded. Main thread only, like
- * SpeechRecognizer.
+ * it has no model for the language. Phone build: or when it can't at all, as
+ * on One UI 9, which names Android System Intelligence, not a recognition
+ * service, so every try fails with 10. The regular one is asked for its
+ * offline model too, and goes online only when it has none for the language.
+ * Main thread only, like SpeechRecognizer.
  */
 class Speech(
     private val context: Context,
@@ -47,12 +47,18 @@ class Speech(
 
     private var recognizer: SpeechRecognizer? = null
 
-    /** Whether [recognizer] is the on-device one. */
+    /** Phone build: whether [recognizer] is the on-device one. */
     private var recognizerOnDevice = false
     private var onDevice = true
 
-    /** Whether the regular recognizer is asked to stay offline; until it can't, for as long as this lasts. */
+    /**
+     * Phone build: whether the regular recognizer is asked to stay offline. Each [start] asks, so a model downloaded
+     * since is used; it goes online only when there's none for the language.
+     */
     private var offline = true
+
+    /** Phone build: [stop] was asked for: whatever goes wrong then ends it, without trying another recognizer. */
+    private var stopping = false
     private var finished = ""
     private var onDone: ((String) -> Unit)? = null
 
@@ -61,12 +67,19 @@ class Speech(
 
     private val main = Handler(Looper.getMainLooper())
 
-    /** A start the system dropped gets no answer at all, which would leave the bar listening for good. */
+    /**
+     * Phone build: a start the system dropped gets no answer at all, which would leave the bar listening for good. The
+     * on-device recognizer's gives way to the regular one's, as its errors do.
+     */
     private val unanswered =
         Runnable {
-            Log.w(TAG, "the speech recognizer didn't answer")
-            if (text.isBlank()) error = "the speech recognizer didn't answer"
-            finish()
+            if (onDevice && !stopping) {
+                useRegular("the on-device recognizer didn't answer")
+            } else {
+                Log.w(TAG, "the speech recognizer didn't answer")
+                if (text.isBlank()) error = "the speech recognizer didn't answer"
+                finish()
+            }
         }
 
     private val onDeviceAvailable get() = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
@@ -88,6 +101,8 @@ class Speech(
             return
         }
         held = hold
+        stopping = false
+        offline = true
         this.onDone = onDone
         finished = ""
         text = ""
@@ -98,6 +113,7 @@ class Speech(
     /** Ends recognition now; the text so far goes to onDone. */
     fun stop() {
         held = false
+        stopping = true
         recognizer?.stopListening() ?: finish()
     }
 
@@ -120,8 +136,8 @@ class Speech(
     private var language: String? = null
 
     /**
-     * Starts a segment, on the recognizer already bound when it's the kind wanted: one destroyed and made again
-     * at once binds to a service still being torn down, and its start is dropped without a word.
+     * Starts a segment. Phone build: on the recognizer already bound when it's the kind wanted: one destroyed and made
+     * again at once binds to a service still being torn down, and its start is dropped without a word.
      */
     private fun listen() {
         main.removeCallbacks(unanswered)
@@ -153,6 +169,15 @@ class Speech(
                 }
             },
         )
+    }
+
+    /** The regular recognizer from now on, the on-device one having failed ([why]). */
+    private fun useRegular(why: String) {
+        Log.i(TAG, "$why, using the regular recognizer")
+        onDevice = false
+        // The regular recognizer may know other languages than the on-device one.
+        language = null
+        listen()
     }
 
     private fun newRecognizer(useOnDevice: Boolean): SpeechRecognizer {
@@ -251,16 +276,13 @@ class Speech(
                 // Silence or nothing understood: fine while the button is held.
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> if (held) listen() else finish()
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> fail("microphone permission needed")
-                // Anything else the on-device recognizer can't do, the regular one may: for as long as this lasts.
+                // Phone build: anything else the on-device recognizer can't do, the regular one may, for as long as
+                // this lasts; and the regular one without an offline model may online. Not once stopped: it would
+                // start listening again.
                 else ->
-                    if (onDevice) {
-                        Log.i(TAG, "on-device recognition failed ($code), using the regular recognizer")
-                        onDevice = false
-                        // The regular recognizer may know other languages than the on-device one.
-                        language = null
-                        listen()
-                    } else if (offline && code != SpeechRecognizer.ERROR_NETWORK && code != SpeechRecognizer.ERROR_NETWORK_TIMEOUT) {
-                        // No offline model downloaded for the language comes back as a client error (5).
+                    if (onDevice && !stopping) {
+                        useRegular("on-device recognition failed ($code)")
+                    } else if (offline && !stopping && code in NO_OFFLINE_MODEL) {
                         Log.i(TAG, "offline recognition failed ($code), recognizing online")
                         offline = false
                         listen()
@@ -308,5 +330,12 @@ class Speech(
 
         /** How long a start may go unanswered: a cold Speech Services takes about 300 ms. */
         private const val ANSWER_MS = 5000L
+
+        /**
+         * What the regular recognizer says, asked to stay offline, when it has no model for the language: Speech
+         * Services by Google has said both 13 and 5 for a language pack it hasn't downloaded.
+         */
+        private val NO_OFFLINE_MODEL =
+            setOf(SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)
     }
 }

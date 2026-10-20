@@ -124,10 +124,13 @@ object LauncherStyle {
     val drawerIcon: Dp get() = style[Style.DRAWER_ICON].toFloat().dp
     val drawerLabels get() = style[Style.DRAWER_LABELS]
     val drawerSections get() = style[Style.DRAWER_SECTIONS]
+    /** Phone build: the drawer in one list or in pages ([Style.DRAWER_LAYOUT]). */
     val drawerLayout get() = style[Style.DRAWER_LAYOUT]
+
+    /** Phone build: what the drawer's pages sort Android apps into ([Style.DRAWER_CATEGORIES]). */
     val drawerCategories get() = style[Style.DRAWER_CATEGORIES]
 
-    /** Smart Launcher's extra categories added as pages, in its order. */
+    /** Phone build: Smart Launcher's extra categories added as pages, in its order. */
     val drawerExtras: List<String> get() = style[Style.DRAWER_EXTRAS].orEmpty().split(',').map { it.trim() }.let { set -> SmartCategories.EXTRAS.filter { it in set } }
     val drawerOpacity get() = style[Style.DRAWER_OPACITY].toFloat()
     val drawerBlur: Dp get() = style[Style.DRAWER_BLUR].toFloat().dp

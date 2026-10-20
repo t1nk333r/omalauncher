@@ -106,9 +106,9 @@ panel "app drawer" {
 
   // With style's drawer.layout "pages", as Smart Launcher's app page: a page for each category Android apps fall in
   // (drawer.categories: Smart Launcher's six, or the kinds apps declare), each of your groups, then Linux apps,
-  // shortcuts, owl apps and work apps. A group named for a category adds its apps to that page, so the group pickers
-  // move an app to one. Pages with no apps are left out, but your groups, and the offers to install Linux and to turn
-  // work apps on.
+  // shortcuts, owl apps and work apps. A group named for a category, in any case, adds its apps to that page, so the
+  // group pickers move an app to one. Pages with no apps are left out, but your groups, and the offers to install Linux
+  // and to turn work apps on.
   let smart = st.categories != "android"
   // Smart Launcher's six, then its further categories as style adds them (drawer.extra-categories). An app goes to
   // its extra category once that's added, else to its first six's, as Smart Launcher sorts them.
@@ -124,15 +124,14 @@ panel "app drawer" {
     group: iGroup, linux: iLinux, shortcuts: iShortcuts, apps: iApps, work: iWork
   }
   let slIcons = d.categoryIcons ?? {}
-  let groupNames = d.groups.map(g => g.name)
   let pages = !paged ? [] : flatten([
       kinds.map(k => {
-        id: "c:" + k, title: k, icon: get(slIcons, k, get(ownIcons, k)), group: indexOf(groupNames, k) >= 0 ? k : null,
-        apps: ordered.filter(a => !a.work && (indexOf(grouped, a.key) >= 0 ? any(d.groups, g => g.name == k && indexOf(g.keys, a.key) >= 0) : a.kind == "android" && (smart ? (a.smartExtra != null && indexOf(extras, a.smartExtra) >= 0 ? a.smartExtra : a.smart) : a.category ?? "other") == k))
+        id: "c:" + k, title: k, icon: get(slIcons, k, get(ownIcons, k)), group: find(d.groups, g => lower(g.name) == k).name,
+        apps: ordered.filter(a => !a.work && (indexOf(grouped, a.key) >= 0 ? any(d.groups, g => lower(g.name) == k && indexOf(g.keys, a.key) >= 0) : a.kind == "android" && (smart ? (a.smartExtra != null && indexOf(extras, a.smartExtra) >= 0 ? a.smartExtra : a.smart) : a.category ?? "other") == k))
       }),
       // A group named for a category not shown has that category's icon, else a folder.
-      d.groups.filter(g => indexOf(kinds, g.name) < 0).map(g => {
-        id: "g:" + g.name, title: g.name, icon: get(slIcons, g.name, get(ownIcons, g.name, get(slIcons, "group", iGroup))), group: g.name, keep: true,
+      d.groups.filter(g => indexOf(kinds, lower(g.name)) < 0).map(g => {
+        id: "g:" + g.name, title: g.name, icon: get(slIcons, lower(g.name), get(ownIcons, lower(g.name), get(slIcons, "group", iGroup))), group: g.name, keep: true,
         apps: ordered.filter(a => !a.work && indexOf(g.keys, a.key) >= 0)
       }),
       [

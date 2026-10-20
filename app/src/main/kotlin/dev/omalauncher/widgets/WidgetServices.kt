@@ -38,7 +38,6 @@ import android.widget.Toast
 import dev.omalauncher.MainActivity
 import dev.omalauncher.R
 import dev.omalauncher.Runtime
-import dev.omalauncher.SmartCategories
 import dev.omalauncher.linux.Agent
 import dev.omalauncher.linux.LinuxState
 import dev.omalauncher.linux.agentInvocation
@@ -273,6 +272,7 @@ class WidgetServices(
         return if (LauncherStyle.monochromeIcons) apps.masks[key] else apps.icons[key]
     }
 
+    // Phone build: owl's res: images, Smart Launcher's category icons in the drawer.
     override fun appDrawable(
         pkg: String,
         name: String,
@@ -559,7 +559,7 @@ class WidgetServices(
                 "asks" to bool(barAsksAgent(runtime, linux)),
                 "web" to Str(webSearchName(LauncherStyle.style[Style.WEB_SEARCH])),
                 // Phone build: Smart Launcher's own category icons while it's on the phone, as res: sources by category.
-                "categoryIcons" to (apps.smartIcons?.let { pkg -> Obj(SmartCategories.icons(pkg).mapValues { Str(it.value) }) } ?: Null),
+                "categoryIcons" to (apps.categoryIcons.takeIf { it.isNotEmpty() }?.let { icons -> Obj(icons.mapValues { Str(it.value) }) } ?: Null),
             ),
         )
     }

@@ -365,6 +365,14 @@ class DrawerOwlTest {
         assertEquals("contacts", ((drawer["pages"] as Lst).items[0] as Obj).fields["group"].toString())
     }
 
+    @Test fun aGroupNamedForACategoryInAnyCaseIsThatPage() {
+        val apps = listOf(app("Signal", smart = "contacts"), app("Notes"))
+        val drawer = Drawer(apps, layout = "pages", groups = listOf("Contacts" to listOf("a:Notes")))
+        // One page, not "Contacts" beside "contacts"; it renames and ungroups the group by its own name.
+        assertEquals(listOf("contacts: Notes Signal"), drawer.pages())
+        assertEquals("Contacts", ((drawer["pages"] as Lst).items[0] as Obj).fields["group"].toString())
+    }
+
     @Test fun androidsKindsPutAppsThatDeclareNoneUnderOther() {
         val apps = listOf(app("Chess", category = "games"), app("Notes"), app("Maps", category = "maps"))
         assertEquals(listOf("games: Chess", "maps: Maps", "other: Notes"), Drawer(apps, layout = "pages", categories = "android").pages())

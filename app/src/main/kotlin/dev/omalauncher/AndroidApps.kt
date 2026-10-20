@@ -239,8 +239,8 @@ class AndroidAppCatalog(
     var listsShortcuts by mutableStateOf(false)
         private set
 
-    /** Phone build: the Smart Launcher on the phone, whose category icons the drawer's pages draw; null without one. */
-    var smartIcons by mutableStateOf<String?>(null)
+    /** Phone build: the Smart Launcher on the phone's category icons, which the drawer's pages draw, by category; empty without one. */
+    var categoryIcons by mutableStateOf<Map<String, String>>(emptyMap())
         private set
 
     /** Icon edge in px: the drawer's 52dp icon at this screen's density. */
@@ -527,7 +527,7 @@ class AndroidAppCatalog(
                 var clones = emptySet<Long>()
                 var works = emptySet<Long>()
                 var canList = false
-                var smartPackage: String? = null
+                var smartIcons = emptyMap<String, String>()
                 // With what to draw each icon from; null for those of a paused profile, kept as they were.
                 var made = emptyList<Pair<ShortcutInfo?, AndroidShortcut>>()
                 val listed = shortcuts.toList()
@@ -539,7 +539,7 @@ class AndroidAppCatalog(
                         canList = canListShortcuts()
                         // What each app handles, for the drawer's categories; the same package is the same app in every profile.
                         val roles = SmartCategories.roles(context)
-                        smartPackage = SmartCategories.iconPackage(context)
+                        smartIcons = SmartCategories.icons(context)
                         profiles
                             .flatMap { user ->
                                 val profile = if (user == me) null else userManager.getSerialNumberForUser(user)
@@ -572,7 +572,7 @@ class AndroidAppCatalog(
                             .sortedWith(compareBy({ it.second.label.lowercase() }, { it.second.profile != null }))
                     }
                 listsShortcuts = canList
-                smartIcons = smartPackage
+                categoryIcons = smartIcons
                 pausedProfiles = paused
                 cloneProfiles = clones
                 workProfiles = works

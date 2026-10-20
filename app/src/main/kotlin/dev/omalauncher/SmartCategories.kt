@@ -42,7 +42,8 @@ object SmartCategories {
             CONTACTS to "phone", UTILITIES to "utility", "photography" to "camera", "entertainment" to "entertain",
             "personalization" to "theming", "smart home" to "iot", "group" to "folder",
             // The kinds Android apps declare, drawn with the nearest of Smart Launcher's.
-            "audio" to "music", "video" to "entertain", "photos" to "camera", "maps" to "navigation", "other" to "utility",
+            "audio" to "music", "video" to "entertain", "photos" to "camera", "news" to "reading", "maps" to "navigation",
+            "accessibility" to SETTINGS, "other" to "utility",
         )
 
     /** Where an app goes: one of [NAMES], and one of [EXTRAS] or none. */
@@ -79,7 +80,9 @@ object SmartCategories {
 
     /**
      * Words in an app's package or name, in the order they're tried: the first that matches says where it goes. Short
-     * or common words are left out, as they'd match too much ("tv" is in "activity", "chat" in ChatGPT, "read" in Threads).
+     * or common words are left out, as they'd match too much ("tv" is in "activity", "chat" in ChatGPT, "read" in Threads),
+     * and those under five letters only count at the start of a word ([has]): "trip" isn't Stripe, nor "book" Facebook.
+     * Travel comes before reading, as "booking" starts with "book", and medical before fitness, which takes "health".
      */
     private val WORDS =
         listOf(
@@ -92,6 +95,7 @@ object SmartCategories {
                 ),
             Category(MEDIA, "photography") to listOf("camera", "photo", "gallery", "immich", "snapseed", "lightroom", "picsart"),
             Category(UTILITIES, "navigation") to listOf("maps", "navigation", "gps", "waze", "osmand", "organicmaps", "hudhud"),
+            Category(UTILITIES, "travel") to listOf("travel", "booking", "airbnb", "flight", "airline", "trip", "uber", "careem", "taxi", "hotel", "saudia", "flynas", "almosafer", "wego"),
             Category(INTERNET, "reading") to listOf("rss", "feed", "news", "wikipedia"),
             Category(UTILITIES, "reading") to listOf("reader", "book", "kindle", "manga", "comic", "pdf", "quran"),
             Category(MEDIA, "music") to listOf("music", "spotify", "podcast", "radio", "soundcloud", "deezer", "tidal", "shazam"),
@@ -100,13 +104,12 @@ object SmartCategories {
             Category(SETTINGS, "personalization") to listOf("theme", "wallpaper", "iconpack", "icon pack", "kwgt", "klwp", "kustom", "widget", "goodlock", "launcher", "font"),
             Category(UTILITIES, "finance") to listOf("bank", "wallet", "finance", "money", "crypto", "coin", "alinma", "rajhi", "barq", "stcpay", "paypal", "revolut", "binance", "invest", "stock"),
             Category(UTILITIES, "education") to listOf("learn", "duolingo", "school", "course", "dictionary", "translat", "anki", "quizlet", "khan"),
-            Category(UTILITIES, "travel") to listOf("travel", "booking", "airbnb", "flight", "airline", "trip", "uber", "careem", "taxi", "hotel", "saudia", "flynas", "almosafer", "wego"),
             Category(UTILITIES, "lifestyle") to listOf("food", "recipe", "delivery", "talabat", "hungerstation", "jahez", "keeta", "dating", "athkar", "azan", "adhan", "prayer", "muslim", "qibla"),
+            Category(UTILITIES, "medical") to listOf("medical", "doctor", "clinic", "hospital", "pharmacy", "sehhaty", "tawakkalna", "mawid", "nahdi"),
             Category(UTILITIES, "fitness") to listOf("fitness", "workout", "strava", "steps", "shealth", "health"),
             Category(INTERNET, "sport") to listOf("sport", "football", "soccer", "espn", "fifa", "livescore", "fotmob", "sofascore"),
             Category(UTILITIES, "weather") to listOf("weather", "forecast"),
             Category(UTILITIES, "smart home") to listOf("homeassistant", "home assistant", "smartthings", "philips.lighting", "tuya", "smartlife", "alexa", "chromecast", "iot"),
-            Category(UTILITIES, "medical") to listOf("medical", "doctor", "clinic", "hospital", "pharmacy", "sehhaty", "tawakkalna", "mawid", "nahdi"),
             Category(SETTINGS, "wearable") to listOf("wearable", "watchmanager", "gadgetbridge", "buds", "watch"),
             Category(UTILITIES, "productivity") to listOf("notes", "office", "docs", "sheets", "calendar", "todo", "task", "drive", "notion", "obsidian", "markor", "joplin", "cloud"),
             // Where only the base is clear.
@@ -140,7 +143,7 @@ object SmartCategories {
             ApplicationInfo.CATEGORY_MAPS -> return Category(UTILITIES, "navigation")
         }
         val text = "${pkg.lowercase()} ${label.lowercase()}"
-        WORDS.firstOrNull { (_, words) -> words.any { it in text } }?.let { return it.first }
+        WORDS.firstOrNull { (_, words) -> words.any { has(text, it) } }?.let { return it.first }
         return when (category) {
             ApplicationInfo.CATEGORY_PRODUCTIVITY -> Category(UTILITIES, "productivity")
             ApplicationInfo.CATEGORY_ACCESSIBILITY -> Category(SETTINGS)
@@ -148,25 +151,49 @@ object SmartCategories {
         }
     }
 
-    /** The Smart Launcher on the phone with its category icons, by package; null without one. Blocking. */
-    fun iconPackage(context: Context): String? =
-        PACKAGES.firstOrNull { pkg ->
-            runCatching {
-                val res = context.packageManager.getResourcesForApplication(pkg)
-                @Suppress("DiscouragedApi")
-                res.getIdentifier("cat_phone", "drawable", pkg) != 0
-            }.getOrDefault(false)
+    /**
+     * [word] in [text] as [of] matches words: anywhere when it's five letters or more, else only at the start of a
+     * word, after anything but a letter or digit.
+     */
+    private fun has(
+        text: String,
+        word: String,
+    ): Boolean {
+        if (word.length >= 5) return word in text
+        var at = text.indexOf(word)
+        while (at >= 0) {
+            if (at == 0 || !text[at - 1].isLetterOrDigit()) return true
+            at = text.indexOf(word, at + 1)
         }
+        return false
+    }
+
+    /** The category icons of the Smart Launcher on the phone, as [icons] gives them; empty without one. Blocking. */
+    fun icons(context: Context): Map<String, String> {
+        for (pkg in PACKAGES) {
+            val res = runCatching { context.packageManager.getResourcesForApplication(pkg) }.getOrNull() ?: continue
+            @Suppress("DiscouragedApi")
+            val icons = icons(pkg) { res.getIdentifier(it, "drawable", pkg) != 0 }
+            if (icons.isNotEmpty()) return icons
+        }
+        return emptyMap()
+    }
 
     /**
      * Each category's icon as owl's `res:` draws it, from the Smart Launcher in [pkg]: the six, the extras, the kinds
-     * Android apps declare, and "group" for your groups.
+     * Android apps declare, and "group" for your groups. Only those whose drawable it [has], so a category it has none
+     * for keeps the drawer's own icon rather than drawing nothing.
      */
-    fun icons(pkg: String): Map<String, String> =
-        (NAMES + EXTRAS + ANDROID_KINDS + "group").associateWith { "res:$pkg/cat_" + (SMART_IDS[it] ?: it) }
+    fun icons(
+        pkg: String,
+        has: (String) -> Boolean,
+    ): Map<String, String> =
+        (NAMES + EXTRAS + ANDROID_KINDS + "group")
+            .mapNotNull { name -> ("cat_" + (SMART_IDS[name] ?: name)).takeIf(has)?.let { name to "res:$pkg/$it" } }
+            .toMap()
 
     /** The kinds the drawer's "android" categories list, as icons() names them. */
-    private val ANDROID_KINDS = listOf("games", "audio", "video", "photos", "social", "news", "maps", "productivity", "other")
+    private val ANDROID_KINDS = listOf("games", "audio", "video", "photos", "social", "news", "maps", "productivity", "accessibility", "other")
 
     /** Smart Launcher's packages: 6's, then older ones'. */
     private val PACKAGES = listOf("ginlemon.flowerfree", "ginlemon.flowerpro", "ginlemon.flower")

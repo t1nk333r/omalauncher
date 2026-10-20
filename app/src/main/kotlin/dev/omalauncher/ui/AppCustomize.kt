@@ -102,7 +102,7 @@ internal fun AppCustomizeDialog(
         // Groups are the personal tab's: a work app stays on the work tab.
         if (!hit.isWork) {
             FieldLabel("drawer group")
-            GroupChips((groups.groups.map { it.name } + pageCategories()).distinct(), group, onPick = { group = it }, onNew = { naming = true })
+            GroupChips((groups.groups.map { it.name } + pageCategories()).distinctBy { it.lowercase() }, group, onPick = { group = it }, onNew = { naming = true })
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             BracketAction("cancel", Palette.muted, onDismiss)
@@ -138,7 +138,7 @@ internal fun GroupPickDialog(
     DialogFrame(onDismiss) {
         BasicText("drawer group", style = Mono.copy(fontSize = TextSize.Title))
         BasicText("${keys.size} picked", style = Mono.copy(color = Palette.muted))
-        GroupChips((groups.groups.map { it.name } + pageCategories()).distinct(), chosen = null, onPick = apply, onNew = { naming = true }, noneLabel = "no group")
+        GroupChips((groups.groups.map { it.name } + pageCategories()).distinctBy { it.lowercase() }, chosen = null, onPick = apply, onNew = { naming = true }, noneLabel = "no group")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { BracketAction("cancel", Palette.muted, onDismiss) }
     }
     if (naming) TextDialog("new group", "", "add", onDismiss = { naming = false }) { new -> apply(new) }

@@ -19,12 +19,22 @@ class SmartCategoriesTest {
         assertEquals(listOf("contacts", "internet", "games", "media", "utilities", "settings"), SmartCategories.NAMES)
         assertEquals(20, SmartCategories.EXTRAS.size)
         // Its icons by its own names: phone, utility, camera, theming, iot.
-        val icons = SmartCategories.icons("ginlemon.flowerfree")
+        val icons = SmartCategories.icons("ginlemon.flowerfree") { true }
         assertEquals("res:ginlemon.flowerfree/cat_phone", icons["contacts"])
         assertEquals("res:ginlemon.flowerfree/cat_utility", icons["utilities"])
         assertEquals("res:ginlemon.flowerfree/cat_iot", icons["smart home"])
         assertEquals("res:ginlemon.flowerfree/cat_music", icons["music"])
         assertEquals("res:ginlemon.flowerfree/cat_folder", icons["group"])
+        // Android's kinds with its nearest, every one of them.
+        assertEquals("res:ginlemon.flowerfree/cat_reading", icons["news"])
+        assertEquals("res:ginlemon.flowerfree/cat_settings", icons["accessibility"])
+    }
+
+    @Test fun aCategoryItHasNoIconForKeepsTheDrawersOwn() {
+        val icons = SmartCategories.icons("ginlemon.flowerfree") { it != "cat_wearable" }
+        assertEquals(null, icons["wearable"])
+        assertEquals("res:ginlemon.flowerfree/cat_sport", icons["sport"])
+        assertEquals(emptyMap<String, String>(), SmartCategories.icons("ginlemon.flowerfree") { false })
     }
 
     @Test fun whatAnAppHandlesSaysItsCategories() {
@@ -62,6 +72,20 @@ class SmartCategoriesTest {
         assertEquals(Category("games"), of("com.supercell.games.clash", "Clash"))
         // ChatGPT isn't a chat with people; productivity is all it declares.
         assertEquals(Category("utilities", "productivity"), of("com.openai.chatgpt", "ChatGPT", ApplicationInfo.CATEGORY_PRODUCTIVITY))
+    }
+
+    @Test fun aShortWordOnlyCountsAtTheStartOfOne() {
+        // Booking.com is travel, though "booking" starts with reading's "book".
+        assertEquals(Category("utilities", "travel"), of("com.booking", "Booking.com"))
+        // "trip" isn't in Stripe, nor "book" in a notebook.
+        assertEquals(Category("utilities"), of("com.stripe.android.dashboard", "Stripe"))
+        assertEquals(Category("utilities"), of("com.example.notebook", "Notebook"))
+        assertEquals(Category("utilities", "travel"), of("com.tripadvisor.tripadvisor", "Tripadvisor"))
+    }
+
+    @Test fun aClinicIsMedicalAndSamsungHealthFitness() {
+        assertEquals(Category("utilities", "medical"), of("com.example.healthclinic", "Health Clinic"))
+        assertEquals(Category("utilities", "fitness"), of("com.sec.android.app.shealth", "Samsung Health"))
     }
 
     @Test fun nothingToGoOnIsUtilities() {
