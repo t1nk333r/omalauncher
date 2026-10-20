@@ -803,6 +803,18 @@ class LangTest {
         assertTrue(compileError("panel {\n meta { owl: 11 }\n Text { text: 1; onTap: drawerGroup(\"sing\", \"chat\") } }").contains("drawerGroup takes"))
     }
 
+    @Test fun pagesSwipeSidewaysAndARowScrolls() {
+        // The drawer's categories: a page per item, turned by page, told of swipes by onPage; their bar scrolls.
+        Compiler.compile(
+            "panel {\n meta { owl: 11 }\n state at = 0\n Column {\n Pages { weight: 1; page: at; onPage: at = value\n" +
+                " for c in [\"a\", \"b\"] key c { Column { lazy: true; fill: true; Text { text: c } } } }\n" +
+                " Row { scroll: true; for c in [\"a\", \"b\"] { Text { text: c; onTap: at = 1 } } } } }",
+        )
+        assertTrue(compileError("panel {\n meta { owl: 11 }\n Column { Text { text: 1; onPage: close() } } }").contains("onPage only works on Pages"))
+        assertTrue(compileError("panel {\n meta { owl: 11 }\n Row { scroll: true; wrap: true } }").contains("nothing to scroll"))
+        assertTrue(compileError("panel {\n meta { owl: 10 }\n Pages { } }").contains("needs owl 11"))
+    }
+
     @Test fun panelsAreViewsAGestureOpens() {
         val p = Compiler.compile("panel \"apps\" {\n meta { owl: 11 }\n state sent = \"\"\n onSubmit: sent = value\n Text { text: query; onTap: close() } }")
         assertEquals(OwlKind.Panel, p.kind)

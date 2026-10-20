@@ -762,6 +762,7 @@ class Compiler private constructor(
             since("${n.type}.${p.name}", p.pos)
             if (p.name == "reverse" && body.props.none { it.name == "lazy" }) fail("reverse lists a lazy ${n.type} from its end: add lazy: true", p.pos)
             if (p.name == "rail" && body.props.none { it.name == "lazy" }) fail("rail jumps along a lazy ${n.type}'s items: add lazy: true", p.pos)
+            if (n.type == "Row" && p.name == "scroll" && body.props.any { it.name == "wrap" }) fail("a Row that wraps has nothing to scroll: drop wrap or scroll", p.pos)
             if (p.name == "background" && gradient(p.value)) since(GRADIENT_BACKGROUND, p.pos)
             if (p.name == "frost") since("frost", p.pos)
             if (p.name == "dragApp") since("dragApp", p.pos)

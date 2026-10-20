@@ -34,6 +34,7 @@ class DrawerOwlTest {
         hidden: Boolean = false,
         category: String? = null,
         actions: List<String> = listOf("pin"),
+        smart: String? = if (kind == "android") "utilities" else null,
     ): Value =
         Obj(
             mapOf(
@@ -57,6 +58,7 @@ class DrawerOwlTest {
                 "installed" to Num(installed),
                 "isNew" to bool(false),
                 "category" to (category?.let(::Str) ?: Null),
+                "smart" to (smart?.let(::Str) ?: Null),
             ),
         )
 
@@ -73,6 +75,9 @@ class DrawerOwlTest {
         var query: String = "",
         var selection: List<String>? = null,
         var showHidden: Boolean = false,
+        layout: String = "list",
+        categories: String = "smart",
+        private val linux: Boolean = true,
     ) : Host {
         override val budget = Budget(10_000_000)
         val slots = Array<Value>(program.globals.size) { Null }
@@ -83,7 +88,7 @@ class DrawerOwlTest {
                 Obj(
                     mapOf(
                         "apps" to Lst(apps),
-                        "linux" to Str("installed"),
+                        "linux" to Str(if (linux) "installed" else "missing"),
                         "monochrome" to bool(false),
                         "work" to (if (work) Obj(mapOf("paused" to bool(false))) else Null),
                         "updates" to Num(0.0),
@@ -97,6 +102,8 @@ class DrawerOwlTest {
                                     "labels" to bool(true),
                                     "columns" to Num(columns.toDouble()),
                                     "icon" to Num(52.0),
+                                    "layout" to Str(layout),
+                                    "categories" to Str(categories),
                                 ),
                             ),
                         "groups" to Lst(groups.map { (n, keys) -> Obj(mapOf("name" to Str(n), "keys" to Lst(keys.map(::Str)))) }),
@@ -133,7 +140,7 @@ class DrawerOwlTest {
                 "query" -> Str(query)
                 "picked" -> selection?.let { keys -> Lst(keys.map(::Str)) } ?: Null
                 "showHidden" -> bool(showHidden)
-                "linux" -> bool(true)
+                "linux" -> bool(linux)
                 "screenWidth" -> Num(400.0)
                 "corners" -> Num(1.0)
                 else -> Null
@@ -162,6 +169,27 @@ class DrawerOwlTest {
         fun submit() = program.onSubmit!!.run(Env.root(this), listOf(Str(query)))
 
         fun key(k: String) = program.onKey!!.run(Env.root(this), listOf(Str(k)))
+
+        /** The pages, in order, each as "title: its apps' names". */
+        fun pages(): List<String> =
+            (this["pages"] as Lst).items.map { pg ->
+                val f = (pg as Obj).fields
+                "${f["title"]}: " + (f["apps"] as Lst).items.joinToString(" ") { (it as Obj).fields["name"].toString() }
+            }
+
+        /** Runs Pages' onPage with [index], as a swipe settling on that page does. */
+        fun swipeTo(index: Int) = handler("onPage").run(Env.root(this), listOf(Num(index.toDouble())))
+
+        private fun handler(name: String): dev.omalauncher.widgets.lang.Action {
+            fun find(nodes: List<WNode>): WNode.Element? =
+                nodes.firstNotNullOfOrNull { n ->
+                    when (n) {
+                        is WNode.Element -> n.takeIf { name in it.handlers } ?: find(n.children)
+                        else -> null
+                    }
+                }
+            return find(program.screen ?: program.root)!!.handlers[name]!!
+        }
 
         /** Runs the list's onSwipe with [way], as a sideways swipe on it does. */
         fun swipe(way: String) {
@@ -308,5 +336,52 @@ class DrawerOwlTest {
         assertTrue(android["similar"]!!.truthy)
         // Grouped already, or alone in its kind (a hidden one doesn't count): nothing left to offer.
         assertFalse(Drawer(apps, groups = listOf("chat" to listOf("a:Signal", "a:WhatsApp")))["canGroupSimilar"].truthy)
+    }
+
+    @Test fun pagesAreSmartLaunchersCategoriesWithAppsThenYourGroupsThenTheRest() {
+        val apps =
+            listOf(
+                app("Signal", smart = "communication"), app("Brave", smart = "internet"), app("VLC", smart = "media"),
+                app("Calculator"), app("WhatsApp", smart = "communication"), app("btop", "linux"), app("Notes"),
+            )
+        val drawer = Drawer(apps, layout = "pages", groups = listOf("work stuff" to listOf("a:Notes"), "empty" to emptyList()))
+        // Empty categories are left out, groups stay even empty; the list's rows aren't built.
+        assertEquals(
+            listOf("communication: Signal WhatsApp", "internet: Brave", "media: VLC", "utilities: Calculator", "work stuff: Notes", "empty: ", "linux: btop"),
+            drawer.pages(),
+        )
+        assertEquals(emptyList<String>(), drawer.rows())
+    }
+
+    @Test fun aGroupNamedForACategoryAddsItsAppsToThatPage() {
+        val apps = listOf(app("Signal", smart = "communication"), app("Notes"), app("Gallery", smart = "media"))
+        val drawer = Drawer(apps, layout = "pages", groups = listOf("communication" to listOf("a:Notes")))
+        assertEquals(listOf("communication: Notes Signal", "media: Gallery"), drawer.pages())
+        // The page is the group's too: it renames and ungroups it.
+        assertEquals("communication", ((drawer["pages"] as Lst).items[0] as Obj).fields["group"].toString())
+    }
+
+    @Test fun androidsKindsPutAppsThatDeclareNoneUnderOther() {
+        val apps = listOf(app("Chess", category = "games"), app("Notes"), app("Maps", category = "maps"))
+        assertEquals(listOf("games: Chess", "maps: Maps", "other: Notes"), Drawer(apps, layout = "pages", categories = "android").pages())
+    }
+
+    @Test fun workAppsAndTheLinuxOfferGetPagesOfTheirOwn() {
+        val apps = listOf(app("Signal", smart = "communication"), app("Slack", work = true))
+        assertEquals(listOf("communication: Signal", "linux apps: ", "work apps: Slack"), Drawer(apps, layout = "pages", work = true, linux = false).pages())
+    }
+
+    @Test fun swipingOrTappingTurnsThePageAndItStaysAsPagesComeAndGo() {
+        val apps = listOf(app("Signal", smart = "communication"), app("Brave", smart = "internet"), app("VLC", smart = "media"))
+        val drawer = Drawer(apps, layout = "pages")
+        assertEquals(0.0, (drawer["pageAt"] as Num).v, 0.0)
+        drawer.swipeTo(2)
+        assertEquals("c:media", drawer["at"].toString())
+        assertEquals(2.0, (drawer["pageAt"] as Num).v, 0.0)
+        assertEquals("media", ((drawer["shownPage"] as Obj).fields["title"]).toString())
+        // Its page gone (the last media app uninstalled, say), the first shows.
+        val fewer = Drawer(apps.take(2), layout = "pages")
+        fewer.swipeTo(1)
+        assertEquals(1.0, (fewer["pageAt"] as Num).v, 0.0)
     }
 }

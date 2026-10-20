@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -500,6 +503,65 @@ private fun lazyIndex(
     return null
 }
 
+/**
+ * Phone build: `Pages`, one page for each of its nodes (a `for` right inside, one for each item), swiped sideways one
+ * at a time like home's pages. `page` turns to the page at that index, as a tab bar beside it does; `onPage` hears of a
+ * swipe to another once it settles, with its index, so `page` can follow. Pages next to the one showing are built as a
+ * swipe brings them in.
+ */
+@Composable
+private fun PagesNode(
+    el: WNode.Element,
+    p: Props,
+    mod: Modifier,
+    env: Env,
+    inst: WidgetInstance,
+) {
+    val slices = el.children.mapIndexed { at, n -> if (n is WNode.For) forSlice(n, at, env, inst) else Slice.One(n) }
+    val count = slices.sumOf { if (it is Slice.Many) it.items.size else 1 }
+    val wanted = (p.observe("page")?.num() ?: 0.0).toInt().coerceIn(0, (count - 1).coerceAtLeast(0))
+    val state = rememberPagerState(initialPage = wanted) { count }
+    val asked = rememberUpdatedState(wanted)
+    LaunchedEffect(wanted, count) {
+        if (count > 0 && state.currentPage != wanted) state.animateScrollToPage(wanted)
+    }
+    val onPage = el.handlers["onPage"]
+    LaunchedEffect(state, onPage) {
+        snapshotFlow { state.settledPage }.collect { i -> if (i != asked.value && i < state.pageCount) onPage?.run(p.env, listOf(Num(i.toDouble()))) }
+    }
+    HorizontalPager(state, mod, key = { i -> pageKey(slices, i) }) { i ->
+        Box(Modifier.fillMaxSize()) {
+            var base = 0
+            for (slice in slices) {
+                val size = if (slice is Slice.Many) slice.items.size else 1
+                if (i < base + size) {
+                    when (slice) {
+                        is Slice.One -> Node(slice.node, env, inst, this)
+                        is Slice.Many -> ForItem(slice.node, slice.items[i - base], i - base, env, inst)
+                    }
+                    break
+                }
+                base += size
+            }
+        }
+    }
+}
+
+/** The key of page [i] among [slices]: its `for` item's, as a lazy list's, or the node's place. */
+private fun pageKey(
+    slices: List<Slice>,
+    i: Int,
+): Any {
+    var base = 0
+    slices.forEachIndexed { at, slice ->
+        when (slice) {
+            is Slice.One -> if (i == base) return "$at" else base += 1
+            is Slice.Many -> if (i < base + slice.items.size) return slice.keys[i - base] else base += slice.items.size
+        }
+    }
+    return i
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Element(
@@ -551,12 +613,15 @@ private fun Element(
                         Nodes(children, env, inst, this)
                     }
                 } else {
-                    Row(m, horizontalArrangement = arr, verticalAlignment = vertical) { Nodes(children, env, inst, this) }
+                    // Phone build: `scroll`, sideways, for more than fit across.
+                    val scrolls = if (p.observe("scroll")?.truthy == true) Modifier.horizontalScroll(rememberScrollState()) else Modifier
+                    Row(m.then(scrolls), horizontalArrangement = arr, verticalAlignment = vertical) { Nodes(children, env, inst, this) }
                 }
             }
         }
         "Box" -> Box(mod, contentAlignment = boxAlign(p.observe("align")?.toString())) { Nodes(el.children, env, inst, this) }
         "Popup" -> PopupNode(el, p, mod, env, inst)
+        "Pages" -> PagesNode(el, p, mod, env, inst)
         "Grid" -> {
             val columns = (p.observe("columns")?.num() ?: 2.0).toInt().coerceIn(1, 12)
             val gap = (p.observe("gap")?.num() ?: 6.0).dp

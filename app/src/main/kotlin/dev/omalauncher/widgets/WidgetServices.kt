@@ -78,6 +78,7 @@ import dev.omalauncher.ui.isNew
 import dev.omalauncher.ui.isWork
 import dev.omalauncher.ui.name
 import dev.omalauncher.ui.railLetter
+import dev.omalauncher.ui.smart
 import dev.omalauncher.theme.Style
 import dev.omalauncher.webSearchName
 import dev.omalauncher.ui.appIconOf
@@ -500,6 +501,7 @@ class WidgetServices(
                         "installed" to Num((hit.installed / 1000).toDouble()),
                         "isNew" to bool(LauncherStyle.drawerNewBadge && isNew(hit.installed, score, now)),
                         "category" to (hit.category?.let(::Str) ?: Null),
+                        "smart" to (hit.smart?.let(::Str) ?: Null),
                     ),
                 )
             }
@@ -515,6 +517,8 @@ class WidgetServices(
                     "labels" to bool(LauncherStyle.drawerLabels),
                     "columns" to (LauncherStyle.drawerColumns?.let { Num(it.toDouble()) } ?: Null),
                     "icon" to Num(LauncherStyle.drawerIcon.value.toDouble()),
+                    "layout" to Str(LauncherStyle.drawerLayout),
+                    "categories" to Str(LauncherStyle.drawerCategories),
                 ),
             )
         val groups = Lst(runtime.drawerGroups.groups.map { g -> Obj(mapOf("name" to Str(g.name), "keys" to Lst(g.keys.map(::Str)))) })

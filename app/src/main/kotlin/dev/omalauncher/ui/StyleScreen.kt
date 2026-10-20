@@ -164,6 +164,14 @@ fun StyleScreen(
             Flag("letter rail", "shown", "hidden", style, Style.DRAWER_LETTERS)
             Flag("most used row", "shown", "hidden", style, Style.DRAWER_SUGGESTIONS)
             Flag("new apps", "dot", "no dot", style, Style.DRAWER_NEW)
+            // Phone build: one list, or a page per category as Smart Launcher's app page.
+            StyleOption("layout", listOf("list", "pages"), Style.DRAWER_LAYOUT.options.indexOf(style.style[Style.DRAWER_LAYOUT])) { i ->
+                style.update { it.with(Style.DRAWER_LAYOUT, Style.DRAWER_LAYOUT.options[i]) }
+            }
+            StyleOption("categories", listOf("smart launcher", "android"), Style.DRAWER_CATEGORIES.options.indexOf(style.style[Style.DRAWER_CATEGORIES])) { i ->
+                style.update { it.with(Style.DRAWER_CATEGORIES, Style.DRAWER_CATEGORIES.options[i]) }
+            }
+            OptionHint("pages: swipe sideways between categories, or tap one in the bar under them; your groups get pages too")
             Flag("list", "sections", "one list", style, Style.DRAWER_SECTIONS)
             NumberOption("columns", listOf("auto" to 0.0) + (4..7).map { "$it" to it.toDouble() }, Style.DRAWER_COLUMNS, style)
             NumberOption("icons", listOf("small" to 44.0, "normal" to 52.0, "large" to 64.0), Style.DRAWER_ICON, style, unit = "dp")

@@ -1,6 +1,7 @@
 package dev.omalauncher.ui
 
 import android.content.pm.ApplicationInfo
+import dev.omalauncher.SmartCategories
 
 /** When an app was first installed, in millis; 0 for Linux apps and shortcuts, which don't say. */
 internal val AppHit.installed: Long get() = (this as? AppHit.Android)?.app?.installed ?: 0L
@@ -38,6 +39,23 @@ internal fun categoryName(category: Int): String? =
 
 /** The kind of app it is, for "group similar": an Android app's declared one; null for the rest, and one that says none. */
 internal val AppHit.category: String? get() = (this as? AppHit.Android)?.app?.category?.let(::categoryName)
+
+/** The kinds [categoryName] gives, in the order the drawer's pages list them, then "other" for apps that declare none. */
+internal val ANDROID_KINDS = listOf("games", "audio", "video", "photos", "social", "news", "maps", "productivity", "accessibility", "other")
+
+/**
+ * Phone build: what the group pickers offer beside your groups. With the drawer in pages, its categories: a group of a
+ * category's name adds its apps to that page, so picking one moves an app there.
+ */
+internal fun pageCategories(): List<String> =
+    when {
+        LauncherStyle.drawerLayout != "pages" -> emptyList()
+        LauncherStyle.drawerCategories == "android" -> ANDROID_KINDS
+        else -> SmartCategories.NAMES
+    }
+
+/** Which of Smart Launcher's categories an Android app is in, for the drawer's pages; null for the rest. */
+internal val AppHit.smart: String? get() = (this as? AppHit.Android)?.app?.smart
 
 /**
  * Where "group similar" puts apps, by group name. For each of [asked] (keys with their kind), every app of that kind

@@ -22,7 +22,7 @@ internal class DrawOp(
 internal val KINDS: Map<String, Kind> =
     mapOf(
         "Column" to Kind(setOf("gap", "align", "justify", "scroll", "lazy", "reverse", "rail"), Children.UI),
-        "Row" to Kind(setOf("gap", "align", "justify", "wrap"), Children.UI),
+        "Row" to Kind(setOf("gap", "align", "justify", "wrap", "scroll"), Children.UI),
         "Flow" to Kind(setOf("gap", "align", "justify"), Children.UI),
         "Box" to Kind(setOf("align"), Children.UI),
         "Grid" to Kind(setOf("columns", "gap", "lazy", "reverse", "rail"), Children.UI),
@@ -42,6 +42,8 @@ internal val KINDS: Map<String, Kind> =
         "Input" to Kind(setOf("text", "placeholder", "color", "fontSize", "clear", "focus", "underline"), Children.NONE),
         // owl 10: a menu over everything else, next to the node that holds it.
         "Popup" to Kind(setOf("position", "gap", "align"), Children.UI),
+        // Phone build: pages swiped sideways one at a time, as the drawer's categories are.
+        "Pages" to Kind(setOf("page"), Children.UI),
     )
 
 internal val COMMON =
@@ -123,8 +125,8 @@ internal val SINCE =
         listOf("Column.lazy", "Grid.lazy", "Column.reverse", "Grid.reverse", "Image.label", "Text.minLines", "rank", "strongMatch", "chunk").associateWith { 11 } +
         // Phone build, with owl 11's panels: what the phone's app drawer needs that upstream's doesn't have. A letter
         // rail beside a lazy list; a sideways swipe; apps carried out of a panel onto home; the drawer's hidden apps,
-        // and the app being carried, as a panel reads them; groups of apps.
-        listOf("Column.rail", "Grid.rail", "onSwipe", "dragApp", DRAGGING, SHOW_HIDDEN, PICKED, "drawerGroup").associateWith { 11 }
+        // and the app being carried, as a panel reads them; groups of apps; pages swiped sideways, and a Row that scrolls.
+        listOf("Column.rail", "Grid.rail", "onSwipe", "dragApp", DRAGGING, SHOW_HIDDEN, PICKED, "drawerGroup", "Pages", "onPage", "Row.scroll").associateWith { 11 }
 
 internal const val FACE_FILE = "face \"…\" { }"
 
@@ -184,12 +186,14 @@ internal val HANDLER_PARAMS =
         "onDismiss" to emptyList(),
         // Phone build: a sideways swipe, "left" or "right" as the finger went, once it's gone far enough.
         "onSwipe" to listOf("value"),
+        // Phone build: Pages swiped to another page, its index.
+        "onPage" to listOf("value"),
         // A panel's, at its top: a key pressed in the prompt bar while it's open.
         "onKey" to listOf("value"),
     )
 
 /** Handlers only some nodes have. */
-internal val HANDLER_KINDS = mapOf("onChange" to setOf("Slider", "Input"), "onSubmit" to setOf("Input"), "onDismiss" to setOf("Popup"))
+internal val HANDLER_KINDS = mapOf("onChange" to setOf("Slider", "Input"), "onSubmit" to setOf("Input"), "onDismiss" to setOf("Popup"), "onPage" to setOf("Pages"))
 
 /** What triggers bind in their statements. */
 internal val TRIGGER_PARAMS = mapOf("on" to listOf("value", "old"))

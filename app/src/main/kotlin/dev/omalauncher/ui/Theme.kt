@@ -123,6 +123,8 @@ object LauncherStyle {
     val drawerIcon: Dp get() = style[Style.DRAWER_ICON].toFloat().dp
     val drawerLabels get() = style[Style.DRAWER_LABELS]
     val drawerSections get() = style[Style.DRAWER_SECTIONS]
+    val drawerLayout get() = style[Style.DRAWER_LAYOUT]
+    val drawerCategories get() = style[Style.DRAWER_CATEGORIES]
     val drawerOpacity get() = style[Style.DRAWER_OPACITY].toFloat()
     val drawerBlur: Dp get() = style[Style.DRAWER_BLUR].toFloat().dp
     val drawerLock get() = style[Style.DRAWER_LOCK]
@@ -304,7 +306,8 @@ object TextSize {
 
 /**
  * The few Nerd Font glyphs omarchy uses that Android lacks: weather (U+E300–E3E3, see
- * weatherIcon()) plus the launcher's own [Glyph]s. A subset of Symbols Nerd Font 3.5.1, made
+ * weatherIcon()) plus the launcher's own [Glyph]s and, in the phone build, the drawer's page icons
+ * (drawer.owl's `glyphs`). A subset of Symbols Nerd Font 3.5.1 (SymbolsNerdFont-Regular), made
  * with pyftsubset; Weather Icons by Erik Flowers, SIL OFL 1.1; Material Design Icons, Apache 2.0.
  */
 val NerdSymbols = FontFamily(Font(R.font.nerd_symbols))

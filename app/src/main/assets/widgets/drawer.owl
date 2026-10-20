@@ -3,9 +3,10 @@ panel "app drawer" {
   // other, so it's yours to change: ask your agent to edit it. .stock-drawer.owl next to it is this file as the launcher
   // ships it, kept up to date: compare the two to see what changed in a newer launcher.
   //
-  // Phone build: style.toml's drawer.* settings (sort, sections, most used, letters, labels, columns, icon size) shape
-  // it; groups, hidden apps and picking several apps are the launcher's, and android.drawer and `picked` tell it them.
-  meta { description: "The launcher's app drawer, written in owl: your apps by kind and your groups, the most used, a letter rail, search as you type in the prompt bar, each app's long-press menu, picking several, and dragging an app onto home"; version: "1.0"; license: "MIT"; category: "system"; owl: 11 }
+  // Phone build: style.toml's drawer.* settings (layout, categories, sort, sections, most used, letters, labels, columns,
+  // icon size) shape it; groups, hidden apps and picking several apps are the launcher's, and android.drawer and
+  // `picked` tell it them.
+  meta { description: "The launcher's app drawer, written in owl: your apps by kind and your groups, in one list or a page per category as Smart Launcher's, the most used, a letter rail, search as you type in the prompt bar, each app's long-press menu, picking several, and dragging an app onto home"; version: "1.1"; license: "MIT"; category: "system"; owl: 11 }
   // The launcher's gear, as its settings buttons draw it; currentColor takes the accent.
   asset gear = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iY3VycmVudENvbG9yIiBkPSJNMTkuMTQsMTIuOTRjMC4wNCwtMC4zIDAuMDYsLTAuNjEgMC4wNiwtMC45NGMwLC0wLjMyIC0wLjAyLC0wLjY0IC0wLjA3LC0wLjk0bDIuMDMsLTEuNThjMC4xOCwtMC4xNCAwLjIzLC0wLjQxIDAuMTIsLTAuNjFsLTEuOTIsLTMuMzJjLTAuMTIsLTAuMjIgLTAuMzcsLTAuMjkgLTAuNTksLTAuMjJsLTIuMzksMC45NmMtMC41LC0wLjM4IC0xLjAzLC0wLjcgLTEuNjIsLTAuOTRMMTQuNCwyLjgxYy0wLjA0LC0wLjI0IC0wLjI0LC0wLjQxIC0wLjQ4LC0wLjQxaC0zLjg0Yy0wLjI0LDAgLTAuNDMsMC4xNyAtMC40NywwLjQxTDkuMjUsNS4zNUM4LjY2LDUuNTkgOC4xMiw1LjkyIDcuNjMsNi4yOUw1LjI0LDUuMzNjLTAuMjIsLTAuMDggLTAuNDcsMCAtMC41OSwwLjIyTDIuNzQsOC44N0MyLjYyLDkuMDggMi42Niw5LjM0IDIuODYsOS40OGwyLjAzLDEuNThDNC44NCwxMS4zNiA0LjgsMTEuNjkgNC44LDEyczAuMDIsMC42NCAwLjA3LDAuOTRsLTIuMDMsMS41OGMtMC4xOCwwLjE0IC0wLjIzLDAuNDEgLTAuMTIsMC42MWwxLjkyLDMuMzJjMC4xMiwwLjIyIDAuMzcsMC4yOSAwLjU5LDAuMjJsMi4zOSwtMC45NmMwLjUsMC4zOCAxLjAzLDAuNyAxLjYyLDAuOTRsMC4zNiwyLjU0YzAuMDUsMC4yNCAwLjI0LDAuNDEgMC40OCwwLjQxaDMuODRjMC4yNCwwIDAuNDQsLTAuMTcgMC40NywtMC40MWwwLjM2LC0yLjU0YzAuNTksLTAuMjQgMS4xMywtMC41NiAxLjYyLC0wLjk0bDIuMzksMC45NmMwLjIyLDAuMDggMC40NywwIDAuNTksLTAuMjJsMS45MiwtMy4zMmMwLjEyLC0wLjIyIDAuMDcsLTAuNDcgLTAuMTIsLTAuNjFMMTkuMTQsMTIuOTR6TTEyLDE1LjZjLTEuOTgsMCAtMy42LC0xLjYyIC0zLjYsLTMuNnMxLjYyLC0zLjYgMy42LC0zLjZzMy42LDEuNjIgMy42LDMuNlMxMy45OCwxNS42IDEyLDE1LjZ6Ii8+PC9zdmc+"
   source d = android.drawer
@@ -17,6 +18,8 @@ panel "app drawer" {
   state tab = "personal"
   // The result picked with the arrow or Tab keys: -1 for the ask row, -2 for the web's; null follows the ranking.
   state pick = null
+  // With style's drawer.layout "pages", the page showing, by its id: it stays put as pages come and go.
+  state at = ""
 
   let st = d.style
   let icon = st.icon ?? 52
@@ -25,6 +28,7 @@ panel "app drawer" {
   let typed = trim(query)
   let searching = typed != ""
   let picking = picked != null
+  let paged = st.layout == "pages"
   let workTab = d.work != null && tab == "work"
   // Hidden apps are listed, dimmed, only while showHidden; the most-used row never has them.
   let shown = d.apps.filter(a => !a.hidden || showHidden)
@@ -34,7 +38,7 @@ panel "app drawer" {
   let grouped = flatten(d.groups.map(g => g.keys))
   let rest = ordered.filter(a => !a.work && indexOf(grouped, a.key) < 0)
   let top = st.suggestions ? d.apps.filter(a => !a.work && !a.hidden && a.score > 0).sortBy(a => -a.score).take(cols) : []
-  let sections = workTab ? [
+  let sections = paged ? [] : workTab ? [
       {id: "w-shortcuts", title: "shortcuts", apps: ordered.filter(a => a.work && a.kind == "shortcut")},
       {id: "w-apps", title: d.work.paused ? "work apps paused" : "work apps", apps: ordered.filter(a => a.work && a.kind == "android"), work: true}
     ] : flatten([
@@ -60,6 +64,35 @@ panel "app drawer" {
   let firsts = groupBy(railCells, c => c.letter)
   let letters = flatten([sort(keys(firsts).filter(l => l != "#")), get(firsts, "#") != null ? ["#"] : []])
   let rail = st.letters && !searching ? letters.map(l => {label: l, key: first(get(firsts, l)).key}) : []
+
+  // With style's drawer.layout "pages", as Smart Launcher's app page: a page for each category Android apps fall in
+  // (drawer.categories: Smart Launcher's six, or the kinds apps declare), each of your groups, then Linux apps,
+  // shortcuts, owl apps and work apps. A group named for a category adds its apps to that page, so the group pickers
+  // move an app to one. Pages with no apps are left out, but your groups, and the offers to install Linux and to turn
+  // work apps on.
+  let smart = st.categories != "android"
+  let kinds = smart ? ["communication", "internet", "games", "media", "utilities", "settings"] : ["games", "audio", "video", "photos", "social", "news", "maps", "productivity", "accessibility", "other"]
+  // Each page's icon in the bar, from the launcher's Nerd Font subset (font: icon).
+  let glyphs = {communication: "󰭹", internet: "󰖟", games: "󰊗", media: "󰐌", utilities: "󰦬", settings: "󰒓", audio: "󰝚", video: "󰕧", photos: "󰋩", social: "󰡉", news: "󰎕", maps: "󰍍", productivity: "󰃖", accessibility: "󰋦", other: "󰟃", group: "󰉋", linux: "󰌽", shortcuts: "󰌹", apps: "󰏒", work: "󰳰"}
+  let groupNames = d.groups.map(g => g.name)
+  let pages = !paged ? [] : flatten([
+      kinds.map(k => {
+        id: "c:" + k, title: k, glyph: get(glyphs, k), group: indexOf(groupNames, k) >= 0 ? k : null,
+        apps: ordered.filter(a => !a.work && (indexOf(grouped, a.key) >= 0 ? any(d.groups, g => g.name == k && indexOf(g.keys, a.key) >= 0) : a.kind == "android" && (smart ? a.smart : a.category ?? "other") == k))
+      }),
+      d.groups.filter(g => indexOf(kinds, g.name) < 0).map(g => {id: "g:" + g.name, title: g.name, glyph: get(glyphs, "group"), group: g.name, keep: true, apps: ordered.filter(a => !a.work && indexOf(g.keys, a.key) >= 0)}),
+      [
+        {id: "linux", title: linux ? "linux" : "linux apps", glyph: get(glyphs, "linux"), apps: rest.filter(a => a.kind == "linux"), offer: !linux, keep: !linux},
+        {id: "shortcuts", title: "shortcuts", glyph: get(glyphs, "shortcuts"), apps: rest.filter(a => a.kind == "shortcut")},
+        {id: "apps", title: "apps", glyph: get(glyphs, "apps"), apps: rest.filter(a => a.kind == "owl")},
+        {id: "work", title: d.work != null && d.work.paused ? "work apps paused" : "work apps", glyph: get(glyphs, "work"), apps: ordered.filter(a => a.work), work: true, keep: d.work != null}
+      ]
+    ]).filter(pg => len(pg.apps) > 0 || pg.keep == true)
+  let pageIds = pages.map(pg => pg.id)
+  let pageAt = max(0, indexOf(pageIds, at))
+  let shownPage = len(pages) > 0 ? pages[pageAt] : null
+  // The bar's slots: as wide as they all fit across, 36 to 56, and past that the bar scrolls.
+  let tabWidth = clamp(floor(((screenWidth ?? 400) - 24) / max(1, len(pages))), 36, 56)
 
   // Every profile's apps match while typing, best first; the list runs up from the bar, so the best sits right above it.
   let hits = searching ? rank(shown, typed) : []
@@ -206,8 +239,11 @@ panel "app drawer" {
       align: center
       padding: [0, 12, 0, 8]
       gap: 0
-      // Typing searches every profile, so the tabs step aside.
-      for t in d.work != null && !searching ? ["personal", "work"] : [] {
+      // Pages: the one showing, as Smart Launcher titles its app page, and how many apps it has.
+      Text { visible: paged && !searching && shownPage != null; text: shownPage != null ? shownPage.title : ""; fontSize: 20; maxLines: 1; padding: [8, 6] }
+      Text { visible: paged && !searching && shownPage != null; text: shownPage != null ? "" + len(shownPage.apps) : ""; color: muted; maxLines: 1 }
+      // Typing searches every profile, so the tabs step aside; pages give work apps one of their own.
+      for t in d.work != null && !searching && !paged ? ["personal", "work"] : [] {
         Text { text: t; color: tab == t ? accent : muted; background: tab == t ? surface : transparent; radius: 18 * corners; padding: [14, 10]; onTap: tab = t }
       }
       Spacer { weight: 1 }
@@ -233,7 +269,7 @@ panel "app drawer" {
       }
     }
     Column {
-      visible: !searching
+      visible: !searching && !paged
       lazy: true
       weight: 1
       fill: width
@@ -268,6 +304,65 @@ panel "app drawer" {
             for a in row.cells { Cell { a: a; framed: false; named: st.labels } }
             // A short last row keeps its cells the width of the others'.
             for s in range(0, cols - len(row.cells)) { Spacer { weight: 1 } }
+          }
+        }
+      }
+    }
+    // Pages: one category at a time, swiped sideways; in each its apps in rows, as the list has them.
+    Pages {
+      visible: paged && !searching
+      weight: 1
+      fill: width
+      page: pageAt
+      onPage: at = pageIds[value]
+      for pg in pages key pg.id {
+        Column {
+          lazy: true
+          fill: true
+          gap: 0
+          for row in flatten([pg.group != null || pg.work == true || pg.offer == true ? [{key: "do"}] : [], chunk(pg.apps, cols).map((cells, r) => {key: "" + r, cells: cells})]) key row.key {
+            if row.cells == null {
+              // A group's rename and ungroup, the work switch or the offer to install Linux, above its apps.
+              Row {
+                fill: width
+                gap: 0
+                align: center
+                justify: end
+                padding: [8, 0, 0, 4]
+                Text { visible: pg.group != null; text: "[rename]"; color: accent; padding: [6, 8]; onTap: drawerGroup("rename", pg.group) }
+                Text { visible: pg.group != null; text: "[ungroup]"; color: accent; padding: [6, 8]; onTap: drawerGroup("ungroup", pg.group) }
+                Text { visible: pg.work == true; text: "[" + (d.work != null && d.work.paused ? "turn on" : "pause") + "]"; color: accent; padding: [6, 8]; onTap: workApps("toggle") }
+                Text { visible: pg.offer == true; text: "[" + (d.linux == "installing" ? "installing…" : "install linux") + "]"; color: accent; padding: [6, 8]; onTap: launcher("linux") }
+              }
+            } else {
+              Row {
+                fill: width
+                gap: 0
+                for a in row.cells { Cell { a: a; framed: false; named: st.labels } }
+                for s in range(0, cols - len(row.cells)) { Spacer { weight: 1 } }
+              }
+            }
+          }
+        }
+      }
+    }
+    // The pages' icons, as Smart Launcher's bar: a tap turns to that page, and the one showing is underlined.
+    Box {
+      visible: paged && !searching && len(pages) > 1
+      fill: width
+      align: center
+      Row {
+        scroll: true
+        gap: 0
+        for pg in pages key pg.id {
+          Column {
+            width: tabWidth
+            align: center
+            gap: 4
+            padding: [0, 10, 0, 6]
+            onTap: at = pg.id
+            Text { text: pg.glyph; font: icon; fontSize: 22; color: shownPage != null && pg.id == shownPage.id ? accent : muted }
+            Box { width: 16; height: 2; background: shownPage != null && pg.id == shownPage.id ? accent : transparent }
           }
         }
       }

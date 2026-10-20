@@ -59,6 +59,8 @@ data class AndroidApp(
     val installed: Long = 0L,
     /** The kind of app its developer declared (ApplicationInfo.category: games, social, ...); -1 when none. */
     val category: Int = -1,
+    /** Phone build: which of Smart Launcher's categories it's in ([SmartCategories]), for the drawer's pages. */
+    val smart: String = SmartCategories.UTILITIES,
 ) {
     /** Stable across restarts and unique across profiles; icons, usage and pinned apps go by it. */
     val key get() = androidAppKey(component, profile)
@@ -528,6 +530,8 @@ class AndroidAppCatalog(
                         // Ours first; the system lists the profiles it lets a launcher see, ours included.
                         val profiles = listOf(me) + runCatching { launcherApps.profiles }.getOrDefault(emptyList()).filter { it != me }
                         canList = canListShortcuts()
+                        // What each app handles, for the drawer's categories; the same package is the same app in every profile.
+                        val roles = SmartCategories.roles(context)
                         profiles
                             .flatMap { user ->
                                 val profile = if (user == me) null else userManager.getSerialNumberForUser(user)
@@ -541,7 +545,16 @@ class AndroidAppCatalog(
                                     .onFailure { Log.w(TAG, "cannot list apps in $user", it) }
                                     .getOrDefault(emptyList())
                                     .filter { it.componentName.packageName != context.packageName }
-                                    .map { it to AndroidApp(it.label.toString(), it.componentName, user, profile, it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0, clone = clone, installed = it.firstInstallTime, category = it.applicationInfo.category) }
+                                    .map {
+                                        val info = it.applicationInfo
+                                        val label = it.label.toString()
+                                        val pkg = it.componentName.packageName
+
+                                        @Suppress("DEPRECATION")
+                                        val game = info.flags and ApplicationInfo.FLAG_IS_GAME != 0
+                                        val smart = SmartCategories.of(pkg, label, info.category, game, roles[pkg].orEmpty())
+                                        it to AndroidApp(label, it.componentName, user, profile, info.flags and ApplicationInfo.FLAG_SYSTEM != 0, clone = clone, installed = it.firstInstallTime, category = info.category, smart = smart)
+                                    }
                             }
                             // The same app in two profiles: the owner's one first.
                             .sortedWith(compareBy({ it.second.label.lowercase() }, { it.second.profile != null }))
