@@ -51,11 +51,14 @@ internal fun pageCategories(): List<String> =
     when {
         LauncherStyle.drawerLayout != "pages" -> emptyList()
         LauncherStyle.drawerCategories == "android" -> ANDROID_KINDS
-        else -> SmartCategories.NAMES
+        else -> SmartCategories.NAMES + LauncherStyle.drawerExtras
     }
 
-/** Which of Smart Launcher's categories an Android app is in, for the drawer's pages; null for the rest. */
+/** Which of Smart Launcher's six categories an Android app is in, for the drawer's pages; null for the rest. */
 internal val AppHit.smart: String? get() = (this as? AppHit.Android)?.app?.smart
+
+/** Which of Smart Launcher's extra categories an Android app goes to once that's added; null for none, and for the rest. */
+internal val AppHit.smartExtra: String? get() = (this as? AppHit.Android)?.app?.smartExtra
 
 /**
  * Where "group similar" puts apps, by group name. For each of [asked] (keys with their kind), every app of that kind

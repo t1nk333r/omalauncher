@@ -11,55 +11,114 @@ import android.util.Log
 import android.view.inputmethod.InputMethodManager
 
 /**
- * Phone build: Smart Launcher's six app-page categories, which the drawer's pages sort Android apps into while style's
- * drawer.categories is "smart". Smart Launcher looks apps up online; these are guessed on the phone, from what an app
+ * Phone build: Smart Launcher's app-page categories, which the drawer's pages sort Android apps into while style's
+ * drawer.categories is "smart". As Smart Launcher 6 has them: six to start with, and twenty more to add. Its server
+ * gives each app a base category, one of the six, and a finer extra one; an app shows under its extra category once
+ * that's added, else under its base. Here both are guessed on the phone, nothing sent anywhere: from what an app
  * handles (calls, links, music...), the kind its developer declared, then words in its package and name.
  */
 object SmartCategories {
-    const val COMMUNICATION = "communication"
+    const val CONTACTS = "contacts"
     const val INTERNET = "internet"
     const val GAMES = "games"
     const val MEDIA = "media"
     const val UTILITIES = "utilities"
     const val SETTINGS = "settings"
 
-    /** In Smart Launcher's order, the order of the drawer's pages. */
-    val NAMES = listOf(COMMUNICATION, INTERNET, GAMES, MEDIA, UTILITIES, SETTINGS)
+    /** The six, in Smart Launcher's order, the order of the drawer's pages; by the names it shows. */
+    val NAMES = listOf(CONTACTS, INTERNET, GAMES, MEDIA, UTILITIES, SETTINGS)
+
+    /** The categories Smart Launcher adds on request, in its order, by the names it shows. */
+    val EXTRAS =
+        listOf(
+            "social", "photography", "navigation", "reading", "music", "entertainment", "productivity", "shopping",
+            "personalization", "finance", "business", "education", "travel", "lifestyle", "fitness", "sport", "weather",
+            "smart home", "medical", "wearable",
+        )
+
+    /** Smart Launcher's own name for those it names differently, whose drawable cat_<name> is its icon; the rest are the same. */
+    private val SMART_IDS =
+        mapOf(
+            CONTACTS to "phone", UTILITIES to "utility", "photography" to "camera", "entertainment" to "entertain",
+            "personalization" to "theming", "smart home" to "iot", "group" to "folder",
+            // The kinds Android apps declare, drawn with the nearest of Smart Launcher's.
+            "audio" to "music", "video" to "entertain", "photos" to "camera", "maps" to "navigation", "other" to "utility",
+        )
+
+    /** Where an app goes: one of [NAMES], and one of [EXTRAS] or none. */
+    data class Category(
+        val base: String,
+        val extra: String? = null,
+    )
 
     /** What an app does, as Android tells from the intents it handles. */
-    enum class Role { DIALER, SMS, EMAIL, CONTACTS, MESSAGING, BROWSER, VPN, MUSIC, VIDEO, GALLERY, CAMERA, STORE, HOME, ICON_PACK, KEYBOARD, WALLPAPER, SYSTEM_SETTINGS }
+    enum class Role { DIALER, SMS, EMAIL, CONTACTS, MESSAGING, BROWSER, VPN, MUSIC, VIDEO, GALLERY, CAMERA, MAPS, STORE, HOME, ICON_PACK, KEYBOARD, WALLPAPER, SYSTEM_SETTINGS }
 
-    private val COMMUNICATING = setOf(Role.DIALER, Role.SMS, Role.EMAIL, Role.CONTACTS, Role.MESSAGING)
-    private val ONLINE = setOf(Role.BROWSER, Role.VPN)
-    private val PLAYING = setOf(Role.MUSIC, Role.VIDEO, Role.GALLERY, Role.CAMERA)
-    private val SETTING_UP = setOf(Role.STORE, Role.HOME, Role.ICON_PACK, Role.KEYBOARD, Role.WALLPAPER, Role.SYSTEM_SETTINGS)
-
-    /**
-     * Words in an app's package or name, in the order they're tried: the first category with one wins. Short or common
-     * words are left out, as they'd match too much ("tv" is in "activity", "line" in "online", "chat" in ChatGPT).
-     */
-    private val WORDS =
+    /** What each role makes an app, the first an app has winning; Settings' own first, as a launcher is one too. */
+    private val ROLES =
         listOf(
-            SETTINGS to listOf("settings", "launcher", "iconpack", "icon pack", "wallpaper", "theme", "goodlock", "keyboard"),
-            COMMUNICATION to
-                listOf(
-                    "whatsapp", "telegram", "signal", "securesms", "messag", "messeng", "sms", "mail", "wechat", "discord",
-                    "snapchat", "instagram", "facebook", "twitter", "mastodon", "tusky", "matrix", "slack", "skype",
-                    "viber", "dialer", "contacts",
-                ),
-            INTERNET to listOf("browser", "chrome", "firefox", "fennec", "iceraven", "brave", "cromite", "vivaldi", "opera", "duckduckgo", "torproject", "vpn", "proxy", "rss", "feed", "news", "wikipedia"),
-            MEDIA to
-                listOf(
-                    "music", "player", "audio", "radio", "podcast", "video", "movie", "camera", "gallery", "photo",
-                    "spotify", "youtube", "newpipe", "jellyfin", "findroid", "plex", "kodi", "vlc", "mpv", "netflix",
-                    "twitch", "soundcloud", "recorder",
-                ),
-            GAMES to listOf("game"),
+            Role.SYSTEM_SETTINGS to Category(SETTINGS),
+            Role.HOME to Category(SETTINGS, "personalization"),
+            Role.ICON_PACK to Category(SETTINGS, "personalization"),
+            Role.WALLPAPER to Category(SETTINGS, "personalization"),
+            Role.KEYBOARD to Category(SETTINGS, "personalization"),
+            Role.STORE to Category(SETTINGS),
+            Role.BROWSER to Category(INTERNET),
+            Role.VPN to Category(INTERNET),
+            Role.SMS to Category(CONTACTS, "social"),
+            Role.MESSAGING to Category(CONTACTS, "social"),
+            Role.DIALER to Category(CONTACTS),
+            Role.CONTACTS to Category(CONTACTS),
+            Role.EMAIL to Category(CONTACTS, "productivity"),
+            Role.CAMERA to Category(MEDIA, "photography"),
+            Role.GALLERY to Category(MEDIA, "photography"),
+            Role.MUSIC to Category(MEDIA, "music"),
+            Role.VIDEO to Category(MEDIA, "entertainment"),
+            Role.MAPS to Category(UTILITIES, "navigation"),
         )
 
     /**
-     * [pkg]'s category, from what it handles ([roles]), its declared [category] (ApplicationInfo.category) or [game]
-     * flag, and its package and [label]; utilities when nothing says otherwise.
+     * Words in an app's package or name, in the order they're tried: the first that matches says where it goes. Short
+     * or common words are left out, as they'd match too much ("tv" is in "activity", "chat" in ChatGPT, "read" in Threads).
+     */
+    private val WORDS =
+        listOf(
+            Category(UTILITIES, "business") to listOf("w4b", "business", "slack", "teams", "zoom", "linkedin"),
+            Category(CONTACTS, "social") to
+                listOf(
+                    "whatsapp", "telegram", "signal", "securesms", "instagram", "facebook", "twitter", "threads", "snapchat",
+                    "discord", "reddit", "redreader", "mastodon", "tusky", "bluesky", "lemmy", "tiktok", "messeng", "viber",
+                    "wechat", "skype", "matrix",
+                ),
+            Category(MEDIA, "photography") to listOf("camera", "photo", "gallery", "immich", "snapseed", "lightroom", "picsart"),
+            Category(UTILITIES, "navigation") to listOf("maps", "navigation", "gps", "waze", "osmand", "organicmaps", "hudhud"),
+            Category(INTERNET, "reading") to listOf("rss", "feed", "news", "wikipedia"),
+            Category(UTILITIES, "reading") to listOf("reader", "book", "kindle", "manga", "comic", "pdf", "quran"),
+            Category(MEDIA, "music") to listOf("music", "spotify", "podcast", "radio", "soundcloud", "deezer", "tidal", "shazam"),
+            Category(MEDIA, "entertainment") to listOf("video", "youtube", "netflix", "twitch", "jellyfin", "findroid", "plex", "kodi", "movie", "anime", "player", "vlc", "mpv"),
+            Category(INTERNET, "shopping") to listOf("shop", "amazon", "ebay", "aliexpress", "temu", "shein", "noon", "namshi", "jarir", "ikea"),
+            Category(SETTINGS, "personalization") to listOf("theme", "wallpaper", "iconpack", "icon pack", "kwgt", "klwp", "kustom", "widget", "goodlock", "launcher", "font"),
+            Category(UTILITIES, "finance") to listOf("bank", "wallet", "finance", "money", "crypto", "coin", "alinma", "rajhi", "barq", "stcpay", "paypal", "revolut", "binance", "invest", "stock"),
+            Category(UTILITIES, "education") to listOf("learn", "duolingo", "school", "course", "dictionary", "translat", "anki", "quizlet", "khan"),
+            Category(UTILITIES, "travel") to listOf("travel", "booking", "airbnb", "flight", "airline", "trip", "uber", "careem", "taxi", "hotel", "saudia", "flynas", "almosafer", "wego"),
+            Category(UTILITIES, "lifestyle") to listOf("food", "recipe", "delivery", "talabat", "hungerstation", "jahez", "keeta", "dating", "athkar", "azan", "adhan", "prayer", "muslim", "qibla"),
+            Category(UTILITIES, "fitness") to listOf("fitness", "workout", "strava", "steps", "shealth", "health"),
+            Category(INTERNET, "sport") to listOf("sport", "football", "soccer", "espn", "fifa", "livescore", "fotmob", "sofascore"),
+            Category(UTILITIES, "weather") to listOf("weather", "forecast"),
+            Category(UTILITIES, "smart home") to listOf("homeassistant", "home assistant", "smartthings", "philips.lighting", "tuya", "smartlife", "alexa", "chromecast", "iot"),
+            Category(UTILITIES, "medical") to listOf("medical", "doctor", "clinic", "hospital", "pharmacy", "sehhaty", "tawakkalna", "mawid", "nahdi"),
+            Category(SETTINGS, "wearable") to listOf("wearable", "watchmanager", "gadgetbridge", "buds", "watch"),
+            Category(UTILITIES, "productivity") to listOf("notes", "office", "docs", "sheets", "calendar", "todo", "task", "drive", "notion", "obsidian", "markor", "joplin", "cloud"),
+            // Where only the base is clear.
+            Category(SETTINGS) to listOf("settings", "keyboard", "samsungapps", "appstore", "app store"),
+            Category(CONTACTS) to listOf("dialer", "contacts", "messag", "sms", "mail"),
+            Category(INTERNET) to listOf("browser", "chrome", "firefox", "fennec", "iceraven", "brave", "cromite", "vivaldi", "opera", "duckduckgo", "torproject", "vpn", "proxy", "download"),
+            Category(GAMES) to listOf("game"),
+        )
+
+    /**
+     * Where [pkg] goes, from what it handles ([roles]), its declared [category] (ApplicationInfo.category) or [game]
+     * flag, and its package and [label]; utilities, with no extra category, when nothing says.
      */
     fun of(
         pkg: String,
@@ -67,22 +126,50 @@ object SmartCategories {
         category: Int,
         game: Boolean,
         roles: Set<Role>,
-    ): String {
-        if (game || category == ApplicationInfo.CATEGORY_GAME) return GAMES
-        if (pkg == "com.android.settings" || roles.any { it in SETTING_UP }) return SETTINGS
-        if (roles.any { it in COMMUNICATING }) return COMMUNICATION
-        if (roles.any { it in ONLINE }) return INTERNET
-        if (roles.any { it in PLAYING }) return MEDIA
-        // What the developer said, where it names one of these; productivity and maps are utilities anyway.
+    ): Category {
+        if (game || category == ApplicationInfo.CATEGORY_GAME) return Category(GAMES)
+        if (pkg == "com.android.settings") return Category(SETTINGS)
+        ROLES.firstOrNull { it.first in roles }?.let { return it.second }
+        // What the developer said, where it names a kind outright; productivity is weaker than a word in the name.
         when (category) {
-            ApplicationInfo.CATEGORY_SOCIAL -> return COMMUNICATION
-            ApplicationInfo.CATEGORY_NEWS -> return INTERNET
-            ApplicationInfo.CATEGORY_AUDIO, ApplicationInfo.CATEGORY_VIDEO, ApplicationInfo.CATEGORY_IMAGE -> return MEDIA
-            ApplicationInfo.CATEGORY_ACCESSIBILITY -> return SETTINGS
+            ApplicationInfo.CATEGORY_SOCIAL -> return Category(CONTACTS, "social")
+            ApplicationInfo.CATEGORY_AUDIO -> return Category(MEDIA, "music")
+            ApplicationInfo.CATEGORY_VIDEO -> return Category(MEDIA, "entertainment")
+            ApplicationInfo.CATEGORY_IMAGE -> return Category(MEDIA, "photography")
+            ApplicationInfo.CATEGORY_NEWS -> return Category(INTERNET, "reading")
+            ApplicationInfo.CATEGORY_MAPS -> return Category(UTILITIES, "navigation")
         }
         val text = "${pkg.lowercase()} ${label.lowercase()}"
-        return WORDS.firstOrNull { (_, words) -> words.any { it in text } }?.first ?: UTILITIES
+        WORDS.firstOrNull { (_, words) -> words.any { it in text } }?.let { return it.first }
+        return when (category) {
+            ApplicationInfo.CATEGORY_PRODUCTIVITY -> Category(UTILITIES, "productivity")
+            ApplicationInfo.CATEGORY_ACCESSIBILITY -> Category(SETTINGS)
+            else -> Category(UTILITIES)
+        }
     }
+
+    /** The Smart Launcher on the phone with its category icons, by package; null without one. Blocking. */
+    fun iconPackage(context: Context): String? =
+        PACKAGES.firstOrNull { pkg ->
+            runCatching {
+                val res = context.packageManager.getResourcesForApplication(pkg)
+                @Suppress("DiscouragedApi")
+                res.getIdentifier("cat_phone", "drawable", pkg) != 0
+            }.getOrDefault(false)
+        }
+
+    /**
+     * Each category's icon as owl's `res:` draws it, from the Smart Launcher in [pkg]: the six, the extras, the kinds
+     * Android apps declare, and "group" for your groups.
+     */
+    fun icons(pkg: String): Map<String, String> =
+        (NAMES + EXTRAS + ANDROID_KINDS + "group").associateWith { "res:$pkg/cat_" + (SMART_IDS[it] ?: it) }
+
+    /** The kinds the drawer's "android" categories list, as icons() names them. */
+    private val ANDROID_KINDS = listOf("games", "audio", "video", "photos", "social", "news", "maps", "productivity", "other")
+
+    /** Smart Launcher's packages: 6's, then older ones'. */
+    private val PACKAGES = listOf("ginlemon.flowerfree", "ginlemon.flowerpro", "ginlemon.flower")
 
     /**
      * What each package on the phone handles, by package name. Asked of Android when the apps are listed: the launcher's
@@ -120,6 +207,7 @@ object SmartCategories {
         add(Role.VIDEO, viewing("video/mp4") - anything)
         add(Role.GALLERY, viewing("image/jpeg") - anything + main(Intent.CATEGORY_APP_GALLERY))
         add(Role.CAMERA, handling(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)))
+        add(Role.MAPS, handling(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=probe"))))
         add(Role.STORE, handling(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=dev.omalauncher"))) + main(Intent.CATEGORY_APP_MARKET))
         add(Role.HOME, handling(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)))
         add(Role.ICON_PACK, IconPackStore.PACK_INTENTS.flatMap(::handling))

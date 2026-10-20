@@ -59,8 +59,10 @@ data class AndroidApp(
     val installed: Long = 0L,
     /** The kind of app its developer declared (ApplicationInfo.category: games, social, ...); -1 when none. */
     val category: Int = -1,
-    /** Phone build: which of Smart Launcher's categories it's in ([SmartCategories]), for the drawer's pages. */
+    /** Phone build: which of Smart Launcher's six categories it's in ([SmartCategories]), for the drawer's pages. */
     val smart: String = SmartCategories.UTILITIES,
+    /** Phone build: and which of its extra ones, where it shows once that's added; null for none. */
+    val smartExtra: String? = null,
 ) {
     /** Stable across restarts and unique across profiles; icons, usage and pinned apps go by it. */
     val key get() = androidAppKey(component, profile)
@@ -235,6 +237,10 @@ class AndroidAppCatalog(
 
     /** Whether the last load could list [shortcuts]: only while this is the default home app. Long-press menus offer app shortcuts only then too. */
     var listsShortcuts by mutableStateOf(false)
+        private set
+
+    /** Phone build: the Smart Launcher on the phone, whose category icons the drawer's pages draw; null without one. */
+    var smartIcons by mutableStateOf<String?>(null)
         private set
 
     /** Icon edge in px: the drawer's 52dp icon at this screen's density. */
@@ -521,6 +527,7 @@ class AndroidAppCatalog(
                 var clones = emptySet<Long>()
                 var works = emptySet<Long>()
                 var canList = false
+                var smartPackage: String? = null
                 // With what to draw each icon from; null for those of a paused profile, kept as they were.
                 var made = emptyList<Pair<ShortcutInfo?, AndroidShortcut>>()
                 val listed = shortcuts.toList()
@@ -532,6 +539,7 @@ class AndroidAppCatalog(
                         canList = canListShortcuts()
                         // What each app handles, for the drawer's categories; the same package is the same app in every profile.
                         val roles = SmartCategories.roles(context)
+                        smartPackage = SmartCategories.iconPackage(context)
                         profiles
                             .flatMap { user ->
                                 val profile = if (user == me) null else userManager.getSerialNumberForUser(user)
@@ -553,13 +561,18 @@ class AndroidAppCatalog(
                                         @Suppress("DEPRECATION")
                                         val game = info.flags and ApplicationInfo.FLAG_IS_GAME != 0
                                         val smart = SmartCategories.of(pkg, label, info.category, game, roles[pkg].orEmpty())
-                                        it to AndroidApp(label, it.componentName, user, profile, info.flags and ApplicationInfo.FLAG_SYSTEM != 0, clone = clone, installed = it.firstInstallTime, category = info.category, smart = smart)
+                                        it to
+                                            AndroidApp(
+                                                label, it.componentName, user, profile, info.flags and ApplicationInfo.FLAG_SYSTEM != 0, clone = clone,
+                                                installed = it.firstInstallTime, category = info.category, smart = smart.base, smartExtra = smart.extra,
+                                            )
                                     }
                             }
                             // The same app in two profiles: the owner's one first.
                             .sortedWith(compareBy({ it.second.label.lowercase() }, { it.second.profile != null }))
                     }
                 listsShortcuts = canList
+                smartIcons = smartPackage
                 pausedProfiles = paused
                 cloneProfiles = clones
                 workProfiles = works

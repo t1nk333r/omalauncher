@@ -11,6 +11,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.app.ActivityManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.hardware.display.DisplayManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -36,6 +38,7 @@ import android.widget.Toast
 import dev.omalauncher.MainActivity
 import dev.omalauncher.R
 import dev.omalauncher.Runtime
+import dev.omalauncher.SmartCategories
 import dev.omalauncher.linux.Agent
 import dev.omalauncher.linux.LinuxState
 import dev.omalauncher.linux.agentInvocation
@@ -79,6 +82,7 @@ import dev.omalauncher.ui.isWork
 import dev.omalauncher.ui.name
 import dev.omalauncher.ui.railLetter
 import dev.omalauncher.ui.smart
+import dev.omalauncher.ui.smartExtra
 import dev.omalauncher.theme.Style
 import dev.omalauncher.webSearchName
 import dev.omalauncher.ui.appIconOf
@@ -268,6 +272,23 @@ class WidgetServices(
         val key = androidAppKey(app.component, app.profile)
         return if (LauncherStyle.monochromeIcons) apps.masks[key] else apps.icons[key]
     }
+
+    override fun appDrawable(
+        pkg: String,
+        name: String,
+        size: Int,
+    ): Bitmap? =
+        runCatching {
+            val res = context.packageManager.getResourcesForApplication(pkg)
+
+            @Suppress("DiscouragedApi")
+            val id = res.getIdentifier(name, "drawable", pkg).takeIf { it != 0 } ?: return null
+            val drawable = res.getDrawable(id, null) ?: return null
+            Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { bitmap ->
+                drawable.setBounds(0, 0, size, size)
+                drawable.draw(Canvas(bitmap))
+            }
+        }.getOrNull()
 
     override fun launcherIcon(key: String) =
         offered[key]?.let { (_, s) -> if (LauncherStyle.monochromeIcons) s.mask else s.icon } ?: appIconOf(runtime, key, LauncherStyle.monochromeIcons)
@@ -502,6 +523,7 @@ class WidgetServices(
                         "isNew" to bool(LauncherStyle.drawerNewBadge && isNew(hit.installed, score, now)),
                         "category" to (hit.category?.let(::Str) ?: Null),
                         "smart" to (hit.smart?.let(::Str) ?: Null),
+                        "smartExtra" to (hit.smartExtra?.let(::Str) ?: Null),
                     ),
                 )
             }
@@ -519,6 +541,7 @@ class WidgetServices(
                     "icon" to Num(LauncherStyle.drawerIcon.value.toDouble()),
                     "layout" to Str(LauncherStyle.drawerLayout),
                     "categories" to Str(LauncherStyle.drawerCategories),
+                    "extras" to Lst(LauncherStyle.drawerExtras.map(::Str)),
                 ),
             )
         val groups = Lst(runtime.drawerGroups.groups.map { g -> Obj(mapOf("name" to Str(g.name), "keys" to Lst(g.keys.map(::Str)))) })
@@ -535,6 +558,8 @@ class WidgetServices(
                 "dock" to Obj(mapOf("shown" to bool(LauncherStyle.dockShown), "full" to bool(dock.full))),
                 "asks" to bool(barAsksAgent(runtime, linux)),
                 "web" to Str(webSearchName(LauncherStyle.style[Style.WEB_SEARCH])),
+                // Phone build: Smart Launcher's own category icons while it's on the phone, as res: sources by category.
+                "categoryIcons" to (apps.smartIcons?.let { pkg -> Obj(SmartCategories.icons(pkg).mapValues { Str(it.value) }) } ?: Null),
             ),
         )
     }

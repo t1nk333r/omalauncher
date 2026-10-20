@@ -127,6 +127,16 @@ interface Services {
     /** A launcher app's icon by its `android.recent` key, `Image { src: "icon:l:foot" }`: Linux, Android, owl apps and shortcuts alike. */
     fun launcherIcon(key: String): ImageBitmap? = null
 
+    /**
+     * Phone build: the drawable [name] of the Android app [pkg], `Image { src: "res:pkg/name" }`, drawn [size] pixels
+     * square; null when there's no such app or drawable. Blocking.
+     */
+    fun appDrawable(
+        pkg: String,
+        name: String,
+        size: Int,
+    ): Bitmap? = null
+
     /** The shortcuts the app [key] offers in its long-press menu, each `{key, name, icon}`, given to [done] on the main thread. */
     fun shortcuts(
         key: String,

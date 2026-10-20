@@ -1,6 +1,7 @@
 package dev.omalauncher.theme
 
 import androidx.compose.runtime.Immutable
+import dev.omalauncher.SmartCategories
 import dev.omalauncher.isWebSearch
 import dev.omalauncher.ui.ExtraKeysLayout
 
@@ -243,10 +244,18 @@ class Style(
             Setting.Choice(
                 "drawer.categories",
                 listOf("smart", "android"),
-                "What the drawer's pages sort Android apps into: \"smart\" Smart Launcher's six (communication, internet, games, media, utilities, settings), " +
-                    "guessed from what each app handles, its declared kind and its name; \"android\" the kinds apps declare (games, audio, video, photos, social, " +
-                    "news, maps, productivity, accessibility), \"other\" for the many that declare none. A group of the same name adds its apps to the page.",
+                "What the drawer's pages sort Android apps into: \"smart\" Smart Launcher's (contacts, internet, games, media, utilities, settings, and those " +
+                    "drawer.extra-categories adds), guessed from what each app handles, its declared kind and its name; \"android\" the kinds apps declare " +
+                    "(games, audio, video, photos, social, news, maps, productivity, accessibility), \"other\" for the many that declare none. " +
+                    "A group of the same name adds its apps to the page.",
             )
+        val DRAWER_EXTRAS =
+            Setting.Spec(
+                "drawer.extra-categories",
+                "Smart Launcher's further categories the drawer's pages add, as it does on request, comma-separated: social, photography, navigation, reading, " +
+                    "music, entertainment, productivity, shopping, personalization, finance, business, education, travel, lifestyle, fitness, sport, weather, " +
+                    "smart home, medical, wearable. An app goes to one of these when it's added, else to its first six's. Unset: none.",
+            ) { v -> v.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { require(it in SmartCategories.EXTRAS) { "isn't one of Smart Launcher's categories: $it" } } }
         val DRAWER_OPACITY = Setting.Number("drawer.opacity", 0.97, 0.0..1.0, "How much the drawer's background covers home behind it: 0 clear, 1 solid.")
         val DRAWER_BLUR = Setting.Number("drawer.blur", 0.0, 0.0..48.0, "Blurs home behind the drawer, in dp (Android 12 and later).")
         val DRAWER_LOCK = Setting.Flag("drawer.lock-hidden", false, "Showing hidden apps asks for the fingerprint, face or screen lock first.")
@@ -321,7 +330,7 @@ object StyleFile {
             listOf(THEME, BACKGROUND, FONT, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, WEB_SEARCH, HOME_ROWS, COLUMNS, FORCE_SINGLE_PAGE) +
                 listOf(GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, MONOCHROME_ICONS, ICON_PACK, CORNER_SCALE) +
-                listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_LAYOUT, DRAWER_CATEGORIES, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +
+                listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_LAYOUT, DRAWER_CATEGORIES, DRAWER_EXTRAS, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +
                 listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, TERMINAL_KEYBOARD_TEXT, EXTRA_KEYS, SWIPE_UP, SWIPE_DOWN)
         }
 

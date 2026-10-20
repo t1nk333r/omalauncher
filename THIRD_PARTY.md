@@ -33,6 +33,11 @@ agent in the launcher, which is not affiliated with or endorsed by any of them.
 [Nerd Fonts](https://www.nerdfonts.com) (MIT), [Weather Icons](https://erikflowers.github.io/weather-icons/)
 (SIL OFL 1.1) and [Material Design Icons](https://pictogrammers.com/library/mdi/) (Apache-2.0).
 
+## Icons
+
+`app/src/main/assets/widgets/drawer.owl`'s category icons (its `i…` assets): [Tabler Icons](https://tabler.io/icons)
+3.49.0 (MIT), Copyright (c) 2020-2026 Paweł Kuna; `iContacts` is its message-circle with three dots added.
+
 ## Omarchy themes
 
 `app/src/main/assets/themes/*.toml` and `app/src/main/assets/theme-backgrounds.txt`

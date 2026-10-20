@@ -35,6 +35,7 @@ class DrawerOwlTest {
         category: String? = null,
         actions: List<String> = listOf("pin"),
         smart: String? = if (kind == "android") "utilities" else null,
+        extra: String? = null,
     ): Value =
         Obj(
             mapOf(
@@ -59,6 +60,7 @@ class DrawerOwlTest {
                 "isNew" to bool(false),
                 "category" to (category?.let(::Str) ?: Null),
                 "smart" to (smart?.let(::Str) ?: Null),
+                "smartExtra" to (extra?.let(::Str) ?: Null),
             ),
         )
 
@@ -77,6 +79,7 @@ class DrawerOwlTest {
         var showHidden: Boolean = false,
         layout: String = "list",
         categories: String = "smart",
+        extras: List<String> = emptyList(),
         private val linux: Boolean = true,
     ) : Host {
         override val budget = Budget(10_000_000)
@@ -104,6 +107,7 @@ class DrawerOwlTest {
                                     "icon" to Num(52.0),
                                     "layout" to Str(layout),
                                     "categories" to Str(categories),
+                                    "extras" to Lst(extras.map(::Str)),
                                 ),
                             ),
                         "groups" to Lst(groups.map { (n, keys) -> Obj(mapOf("name" to Str(n), "keys" to Lst(keys.map(::Str)))) }),
@@ -341,24 +345,24 @@ class DrawerOwlTest {
     @Test fun pagesAreSmartLaunchersCategoriesWithAppsThenYourGroupsThenTheRest() {
         val apps =
             listOf(
-                app("Signal", smart = "communication"), app("Brave", smart = "internet"), app("VLC", smart = "media"),
-                app("Calculator"), app("WhatsApp", smart = "communication"), app("btop", "linux"), app("Notes"),
+                app("Signal", smart = "contacts"), app("Brave", smart = "internet"), app("VLC", smart = "media"),
+                app("Calculator"), app("WhatsApp", smart = "contacts"), app("btop", "linux"), app("Notes"),
             )
         val drawer = Drawer(apps, layout = "pages", groups = listOf("work stuff" to listOf("a:Notes"), "empty" to emptyList()))
         // Empty categories are left out, groups stay even empty; the list's rows aren't built.
         assertEquals(
-            listOf("communication: Signal WhatsApp", "internet: Brave", "media: VLC", "utilities: Calculator", "work stuff: Notes", "empty: ", "linux: btop"),
+            listOf("contacts: Signal WhatsApp", "internet: Brave", "media: VLC", "utilities: Calculator", "work stuff: Notes", "empty: ", "linux: btop"),
             drawer.pages(),
         )
         assertEquals(emptyList<String>(), drawer.rows())
     }
 
     @Test fun aGroupNamedForACategoryAddsItsAppsToThatPage() {
-        val apps = listOf(app("Signal", smart = "communication"), app("Notes"), app("Gallery", smart = "media"))
-        val drawer = Drawer(apps, layout = "pages", groups = listOf("communication" to listOf("a:Notes")))
-        assertEquals(listOf("communication: Notes Signal", "media: Gallery"), drawer.pages())
+        val apps = listOf(app("Signal", smart = "contacts"), app("Notes"), app("Gallery", smart = "media"))
+        val drawer = Drawer(apps, layout = "pages", groups = listOf("contacts" to listOf("a:Notes")))
+        assertEquals(listOf("contacts: Notes Signal", "media: Gallery"), drawer.pages())
         // The page is the group's too: it renames and ungroups it.
-        assertEquals("communication", ((drawer["pages"] as Lst).items[0] as Obj).fields["group"].toString())
+        assertEquals("contacts", ((drawer["pages"] as Lst).items[0] as Obj).fields["group"].toString())
     }
 
     @Test fun androidsKindsPutAppsThatDeclareNoneUnderOther() {
@@ -367,12 +371,12 @@ class DrawerOwlTest {
     }
 
     @Test fun workAppsAndTheLinuxOfferGetPagesOfTheirOwn() {
-        val apps = listOf(app("Signal", smart = "communication"), app("Slack", work = true))
-        assertEquals(listOf("communication: Signal", "linux apps: ", "work apps: Slack"), Drawer(apps, layout = "pages", work = true, linux = false).pages())
+        val apps = listOf(app("Signal", smart = "contacts"), app("Slack", work = true))
+        assertEquals(listOf("contacts: Signal", "linux apps: ", "work apps: Slack"), Drawer(apps, layout = "pages", work = true, linux = false).pages())
     }
 
     @Test fun swipingOrTappingTurnsThePageAndItStaysAsPagesComeAndGo() {
-        val apps = listOf(app("Signal", smart = "communication"), app("Brave", smart = "internet"), app("VLC", smart = "media"))
+        val apps = listOf(app("Signal", smart = "contacts"), app("Brave", smart = "internet"), app("VLC", smart = "media"))
         val drawer = Drawer(apps, layout = "pages")
         assertEquals(0.0, (drawer["pageAt"] as Num).v, 0.0)
         drawer.swipeTo(2)
@@ -383,5 +387,20 @@ class DrawerOwlTest {
         val fewer = Drawer(apps.take(2), layout = "pages")
         fewer.swipeTo(1)
         assertEquals(1.0, (fewer["pageAt"] as Num).v, 0.0)
+    }
+
+    @Test fun anAddedCategoryTakesItsAppsFromTheFirstSix() {
+        val apps =
+            listOf(
+                app("Signal", smart = "contacts", extra = "social"), app("Phone", smart = "contacts"),
+                app("VLC", smart = "media", extra = "entertainment"), app("Spotify", smart = "media", extra = "music"),
+            )
+        // Without it added, an app's extra category changes nothing.
+        assertEquals(listOf("contacts: Phone Signal", "media: Spotify VLC"), Drawer(apps, layout = "pages").pages())
+        // Added, in Smart Launcher's order after the six; the rest of the six keep theirs.
+        assertEquals(
+            listOf("contacts: Phone", "media: VLC", "social: Signal", "music: Spotify"),
+            Drawer(apps, layout = "pages", extras = listOf("social", "music")).pages(),
+        )
     }
 }

@@ -94,7 +94,7 @@ internal class WidgetImages(
             val remote = src.startsWith("https://")
             // The cache keeps a downloaded image fresh; one that loaded stays for as long as the widget runs.
             if (remote && images[src] != null) return@launch
-            val file = if (src.startsWith("asset:") || remote) null else services.guestFile(src)
+            val file = if (src.startsWith("asset:") || src.startsWith("res:") || remote) null else services.guestFile(src)
             val decoded =
                 withContext(Dispatchers.IO) {
                     val stamp = file?.lastModified() ?: 0L
@@ -113,6 +113,11 @@ internal class WidgetImages(
         src: String,
         file: File?,
     ): WidgetImage? {
+        // Phone build: another app's drawable, as an icon pack's are read.
+        if (src.startsWith("res:")) {
+            val (pkg, name) = src.removePrefix("res:").split('/', limit = 2).takeIf { it.size == 2 } ?: return null
+            return raster(services.appDrawable(pkg, name, RES_SIDE))
+        }
         val bytes =
             when {
                 file != null -> {
@@ -163,6 +168,9 @@ internal class WidgetImages(
 
         /** Images are decoded no larger than needed for a tile this big, in pixels. */
         private const val MAX_IMAGE_SIDE = 1080
+
+        /** How big another app's drawable is drawn, in pixels: an icon's size, sharp at any size the drawer shows it. */
+        private const val RES_SIDE = 192
 
         /** Decoded images larger than this are dropped; Android refuses to draw past 100 MB. */
         private const val MAX_IMAGE_BYTES = 32 shl 20

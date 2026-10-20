@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
@@ -72,6 +74,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupPositionProvider
 import dev.omalauncher.Runtime
+import dev.omalauncher.SmartCategories
 import dev.omalauncher.WEB_SEARCHES
 import dev.omalauncher.linux.LauncherFont
 import dev.omalauncher.linux.LinuxState
@@ -281,6 +284,7 @@ private fun StylePane(
             StyleOption("categories", listOf("smart launcher", "android"), Style.DRAWER_CATEGORIES.options.indexOf(style.style[Style.DRAWER_CATEGORIES])) { i ->
                 style.update { it.with(Style.DRAWER_CATEGORIES, Style.DRAWER_CATEGORIES.options[i]) }
             }
+            if (style.style[Style.DRAWER_CATEGORIES] == "smart") ExtraCategoriesOption(style)
             OptionHint("pages: swipe sideways between categories, or tap one in the bar under them; your groups get pages too")
             Flag("list", "sections", "one list", style, Style.DRAWER_SECTIONS)
             NumberOption("columns", listOf("auto" to 0.0) + (4..7).map { "$it" to it.toDouble() }, Style.DRAWER_COLUMNS, style)
@@ -327,6 +331,27 @@ private fun StylePane(
             Modifier.padding(top = 20.dp),
             style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
         )
+    }
+}
+
+/**
+ * Phone build: Smart Launcher's further categories, a page each once picked, as it adds them on request; its apps of
+ * that kind move there from the first six.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExtraCategoriesOption(style: StyleStore) {
+    val added = style.style[Style.DRAWER_EXTRAS].orEmpty().split(',').map { it.trim() }.toSet()
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        OptionLabel("add", Modifier.padding(top = 8.dp))
+        FlowRow(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (name in SmartCategories.EXTRAS) {
+                TabChip(name, name in added) {
+                    val now = SmartCategories.EXTRAS.filter { if (it == name) it !in added else it in added }
+                    style.update { it.with(Style.DRAWER_EXTRAS, now.joinToString(", ").ifEmpty { null }) }
+                }
+            }
+        }
     }
 }
 

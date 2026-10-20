@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.omalauncher.SmartCategories
 import dev.omalauncher.R
 import dev.omalauncher.theme.ColorSpec
 import dev.omalauncher.theme.Style
@@ -125,6 +126,9 @@ object LauncherStyle {
     val drawerSections get() = style[Style.DRAWER_SECTIONS]
     val drawerLayout get() = style[Style.DRAWER_LAYOUT]
     val drawerCategories get() = style[Style.DRAWER_CATEGORIES]
+
+    /** Smart Launcher's extra categories added as pages, in its order. */
+    val drawerExtras: List<String> get() = style[Style.DRAWER_EXTRAS].orEmpty().split(',').map { it.trim() }.let { set -> SmartCategories.EXTRAS.filter { it in set } }
     val drawerOpacity get() = style[Style.DRAWER_OPACITY].toFloat()
     val drawerBlur: Dp get() = style[Style.DRAWER_BLUR].toFloat().dp
     val drawerLock get() = style[Style.DRAWER_LOCK]
@@ -306,8 +310,7 @@ object TextSize {
 
 /**
  * The few Nerd Font glyphs omarchy uses that Android lacks: weather (U+E300–E3E3, see
- * weatherIcon()) plus the launcher's own [Glyph]s and, in the phone build, the drawer's page icons
- * (drawer.owl's `glyphs`). A subset of Symbols Nerd Font 3.5.1 (SymbolsNerdFont-Regular), made
+ * weatherIcon()) plus the launcher's own [Glyph]s. A subset of Symbols Nerd Font 3.5.1, made
  * with pyftsubset; Weather Icons by Erik Flowers, SIL OFL 1.1; Material Design Icons, Apache 2.0.
  */
 val NerdSymbols = FontFamily(Font(R.font.nerd_symbols))

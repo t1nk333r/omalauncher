@@ -9,6 +9,45 @@ panel "app drawer" {
   meta { description: "The launcher's app drawer, written in owl: your apps by kind and your groups, in one list or a page per category as Smart Launcher's, the most used, a letter rail, search as you type in the prompt bar, each app's long-press menu, picking several, and dragging an app onto home"; version: "1.1"; license: "MIT"; category: "system"; owl: 11 }
   // The launcher's gear, as its settings buttons draw it; currentColor takes the accent.
   asset gear = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iY3VycmVudENvbG9yIiBkPSJNMTkuMTQsMTIuOTRjMC4wNCwtMC4zIDAuMDYsLTAuNjEgMC4wNiwtMC45NGMwLC0wLjMyIC0wLjAyLC0wLjY0IC0wLjA3LC0wLjk0bDIuMDMsLTEuNThjMC4xOCwtMC4xNCAwLjIzLC0wLjQxIDAuMTIsLTAuNjFsLTEuOTIsLTMuMzJjLTAuMTIsLTAuMjIgLTAuMzcsLTAuMjkgLTAuNTksLTAuMjJsLTIuMzksMC45NmMtMC41LC0wLjM4IC0xLjAzLC0wLjcgLTEuNjIsLTAuOTRMMTQuNCwyLjgxYy0wLjA0LC0wLjI0IC0wLjI0LC0wLjQxIC0wLjQ4LC0wLjQxaC0zLjg0Yy0wLjI0LDAgLTAuNDMsMC4xNyAtMC40NywwLjQxTDkuMjUsNS4zNUM4LjY2LDUuNTkgOC4xMiw1LjkyIDcuNjMsNi4yOUw1LjI0LDUuMzNjLTAuMjIsLTAuMDggLTAuNDcsMCAtMC41OSwwLjIyTDIuNzQsOC44N0MyLjYyLDkuMDggMi42Niw5LjM0IDIuODYsOS40OGwyLjAzLDEuNThDNC44NCwxMS4zNiA0LjgsMTEuNjkgNC44LDEyczAuMDIsMC42NCAwLjA3LDAuOTRsLTIuMDMsMS41OGMtMC4xOCwwLjE0IC0wLjIzLDAuNDEgLTAuMTIsMC42MWwxLjkyLDMuMzJjMC4xMiwwLjIyIDAuMzcsMC4yOSAwLjU5LDAuMjJsMi4zOSwtMC45NmMwLjUsMC4zOCAxLjAzLDAuNyAxLjYyLDAuOTRsMC4zNiwyLjU0YzAuMDUsMC4yNCAwLjI0LDAuNDEgMC40OCwwLjQxaDMuODRjMC4yNCwwIDAuNDQsLTAuMTcgMC40NywtMC40MWwwLjM2LC0yLjU0YzAuNTksLTAuMjQgMS4xMywtMC41NiAxLjYyLC0wLjk0bDIuMzksMC45NmMwLjIyLDAuMDggMC40NywwIDAuNTksLTAuMjJsMS45MiwtMy4zMmMwLjEyLC0wLjIyIDAuMDcsLTAuNDcgLTAuMTIsLTAuNjFMMTkuMTQsMTIuOTR6TTEyLDE1LjZjLTEuOTgsMCAtMy42LC0xLjYyIC0zLjYsLTMuNnMxLjYyLC0zLjYgMy42LC0zLjZzMy42LDEuNjIgMy42LDMuNlMxMy45OCwxNS42IDEyLDE1LjZ6Ii8+PC9zdmc+"
+  // Each page's icon in the bar under the pages: Smart Launcher's own while it's on the phone (d.categoryIcons), else
+  // these, its look in Tabler Icons (MIT, tabler.io/icons); contacts is Tabler's message-circle with three dots.
+  asset iContacts = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyAyMGwxLjMgLTMuOWMtMi4zMjQgLTMuNDM3IC0xLjQyNiAtNy44NzIgMi4xIC0xMC4zNzRjMy41MjYgLTIuNTAxIDguNTkgLTIuMjk2IDExLjg0NSAuNDhjMy4yNTUgMi43NzcgMy42OTUgNy4yNjYgMS4wMjkgMTAuNTAxYy0yLjY2NiAzLjIzNSAtNy42MTUgNC4yMTUgLTExLjU3NCAyLjI5M2wtNC43IDEiLz48cGF0aCBkPSJNOCAxMnYuMDEiLz48cGF0aCBkPSJNMTIgMTJ2LjAxIi8+PHBhdGggZD0iTTE2IDEydi4wMSIvPjwvc3ZnPg=="
+  asset iInternet = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNS45MzEgNi45MzZsMS4yNzUgNC4yNDltNS42MDcgNS42MDlsNC4yNTEgMS4yNzUiLz48cGF0aCBkPSJNMTEuNjgzIDEyLjMxN2w1Ljc1OSAtNS43NTkiLz48cGF0aCBkPSJNNCA1LjVhMS41IDEuNSAwIDEgMCAzIDBhMS41IDEuNSAwIDEgMCAtMyAwIi8+PHBhdGggZD0iTTE3IDUuNWExLjUgMS41IDAgMSAwIDMgMGExLjUgMS41IDAgMSAwIC0zIDAiLz48cGF0aCBkPSJNMTcgMTguNWExLjUgMS41IDAgMSAwIDMgMGExLjUgMS41IDAgMSAwIC0zIDAiLz48cGF0aCBkPSJNNCAxNS41YTQuNSA0LjUgMCAxIDAgOSAwYTQuNSA0LjUgMCAxIDAgLTkgMCIvPjwvc3ZnPg=="
+  asset iGames = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTIgNWgzLjVhNSA1IDAgMCAxIDAgMTBoLTUuNWwtNC4wMTUgNC4yMjdhMi4zIDIuMyAwIDAgMSAtMy45MjMgLTIuMDM1bDEuNjM0IC04LjE3M2E1IDUgMCAwIDEgNC45MDQgLTQuMDE5aDMuNCIvPjxwYXRoIGQ9Ik0xNCAxNWw0LjA3IDQuMjg0YTIuMyAyLjMgMCAwIDAgMy45MjUgLTIuMDIzbC0xLjYgLTguMjMyIi8+PHBhdGggZD0iTTggOXYyIi8+PHBhdGggZD0iTTcgMTBoMiIvPjxwYXRoIGQ9Ik0xNCAxMGgyIi8+PC9zdmc+"
+  asset iMedia = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOSAxNWgtM2EzIDMgMCAwIDEgLTMgLTN2LTZhMyAzIDAgMCAxIDMgLTNoNmEzIDMgMCAwIDEgMyAzdjMiLz48cGF0aCBkPSJNOSAxMmEzIDMgMCAwIDEgMyAtM2g2YTMgMyAwIDAgMSAzIDN2NmEzIDMgMCAwIDEgLTMgM2gtNmEzIDMgMCAwIDEgLTMgLTNsMCAtNiIvPjxwYXRoIGQ9Ik0zIDEybDIuMjk2IC0yLjI5NmEyLjQxIDIuNDEgMCAwIDEgMy40MDggMGwuMjk2IC4yOTYiLz48cGF0aCBkPSJNMTQgMTMuNXYzbDIuNSAtMS41bC0yLjUgLTEuNSIvPjxwYXRoIGQ9Ik03IDZ2LjAxIi8+PC9zdmc+"
+  asset iUtilities = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTIgM2wtNCA3aDhsLTQgLTciLz48cGF0aCBkPSJNMTQgMTdhMyAzIDAgMSAwIDYgMGEzIDMgMCAxIDAgLTYgMCIvPjxwYXRoIGQ9Ik00IDE1YTEgMSAwIDAgMSAxIC0xaDRhMSAxIDAgMCAxIDEgMXY0YTEgMSAwIDAgMSAtMSAxaC00YTEgMSAwIDAgMSAtMSAtMWwwIC00Ii8+PC9zdmc+"
+  asset iSettings = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTAuMzI1IDQuMzE3Yy40MjYgLTEuNzU2IDIuOTI0IC0xLjc1NiAzLjM1IDBhMS43MjQgMS43MjQgMCAwIDAgMi41NzMgMS4wNjZjMS41NDMgLS45NCAzLjMxIC44MjYgMi4zNyAyLjM3YTEuNzI0IDEuNzI0IDAgMCAwIDEuMDY1IDIuNTcyYzEuNzU2IC40MjYgMS43NTYgMi45MjQgMCAzLjM1YTEuNzI0IDEuNzI0IDAgMCAwIC0xLjA2NiAyLjU3M2MuOTQgMS41NDMgLS44MjYgMy4zMSAtMi4zNyAyLjM3YTEuNzI0IDEuNzI0IDAgMCAwIC0yLjU3MiAxLjA2NWMtLjQyNiAxLjc1NiAtMi45MjQgMS43NTYgLTMuMzUgMGExLjcyNCAxLjcyNCAwIDAgMCAtMi41NzMgLTEuMDY2Yy0xLjU0MyAuOTQgLTMuMzEgLS44MjYgLTIuMzcgLTIuMzdhMS43MjQgMS43MjQgMCAwIDAgLTEuMDY1IC0yLjU3MmMtMS43NTYgLS40MjYgLTEuNzU2IC0yLjkyNCAwIC0zLjM1YTEuNzI0IDEuNzI0IDAgMCAwIDEuMDY2IC0yLjU3M2MtLjk0IC0xLjU0MyAuODI2IC0zLjMxIDIuMzcgLTIuMzdjMSAuNjA4IDIuMjk2IC4wNyAyLjU3MiAtMS4wNjUiLz48cGF0aCBkPSJNOSAxMmEzIDMgMCAxIDAgNiAwYTMgMyAwIDAgMCAtNiAwIi8+PC9zdmc+"
+  asset iSocial = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNSA3YTQgNCAwIDEgMCA4IDBhNCA0IDAgMSAwIC04IDAiLz48cGF0aCBkPSJNMyAyMXYtMmE0IDQgMCAwIDEgNCAtNGg0YTQgNCAwIDAgMSA0IDR2MiIvPjxwYXRoIGQ9Ik0xNiAzLjEzYTQgNCAwIDAgMSAwIDcuNzUiLz48cGF0aCBkPSJNMjEgMjF2LTJhNCA0IDAgMCAwIC0zIC0zLjg1Ii8+PC9zdmc+"
+  asset iPhotography = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNSA3aDFhMiAyIDAgMCAwIDIgLTJhMSAxIDAgMCAxIDEgLTFoNmExIDEgMCAwIDEgMSAxYTIgMiAwIDAgMCAyIDJoMWEyIDIgMCAwIDEgMiAydjlhMiAyIDAgMCAxIC0yIDJoLTE0YTIgMiAwIDAgMSAtMiAtMnYtOWEyIDIgMCAwIDEgMiAtMiIvPjxwYXRoIGQ9Ik05IDEzYTMgMyAwIDEgMCA2IDBhMyAzIDAgMCAwIC02IDAiLz48L3N2Zz4="
+  asset iNavigation = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOCAxNmwyIC02bDYgLTJsLTIgNmwtNiAyIi8+PHBhdGggZD0iTTMgMTJhOSA5IDAgMSAwIDE4IDBhOSA5IDAgMSAwIC0xOCAwIi8+PHBhdGggZD0iTTEyIDNsMCAyIi8+PHBhdGggZD0iTTEyIDE5bDAgMiIvPjxwYXRoIGQ9Ik0zIDEybDIgMCIvPjxwYXRoIGQ9Ik0xOSAxMmwyIDAiLz48L3N2Zz4="
+  asset iReading = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyAxOWE5IDkgMCAwIDEgOSAwYTkgOSAwIDAgMSA5IDAiLz48cGF0aCBkPSJNMyA2YTkgOSAwIDAgMSA5IDBhOSA5IDAgMCAxIDkgMCIvPjxwYXRoIGQ9Ik0zIDZsMCAxMyIvPjxwYXRoIGQ9Ik0xMiA2bDAgMTMiLz48cGF0aCBkPSJNMjEgNmwwIDEzIi8+PC9zdmc+"
+  asset iMusic = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyAxN2EzIDMgMCAxIDAgNiAwYTMgMyAwIDAgMCAtNiAwIi8+PHBhdGggZD0iTTEzIDE3YTMgMyAwIDEgMCA2IDBhMyAzIDAgMCAwIC02IDAiLz48cGF0aCBkPSJNOSAxN3YtMTNoMTB2MTMiLz48cGF0aCBkPSJNOSA4aDEwIi8+PC9zdmc+"
+  asset iEntertainment = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTMuMTkyIDloNi42MTZhMiAyIDAgMCAxIDEuOTkyIDIuMTgzbC0uNTY3IDYuMTgyYTQgNCAwIDAgMSAtMy45ODMgMy42MzVoLTEuNWE0IDQgMCAwIDEgLTMuOTgzIC0zLjYzNWwtLjU2NyAtNi4xODJhMiAyIDAgMCAxIDEuOTkyIC0yLjE4MyIvPjxwYXRoIGQ9Ik0xNSAxM2guMDEiLz48cGF0aCBkPSJNMTggMTNoLjAxIi8+PHBhdGggZD0iTTE1IDE2LjVjMSAuNjY3IDIgLjY2NyAzIDAiLz48cGF0aCBkPSJNOC42MzIgMTUuOTgyYTQuMDM3IDQuMDM3IDAgMCAxIC0uMzgyIC4wMThoLTEuNWE0IDQgMCAwIDEgLTMuOTgzIC0zLjYzNWwtLjU2NyAtNi4xODJhMiAyIDAgMCAxIDEuOTkyIC0yLjE4M2g2LjYxNmEyIDIgMCAwIDEgMiAyIi8+PHBhdGggZD0iTTYgOGguMDEiLz48cGF0aCBkPSJNOSA4aC4wMSIvPjxwYXRoIGQ9Ik02IDEyYy43NjQgLS41MSAxLjUyOCAtLjYzIDIuMjkxIC0uMzYiLz48L3N2Zz4="
+  asset iProductivity = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOSAxMWwzIDNsOCAtOCIvPjxwYXRoIGQ9Ik0yMCAxMnY2YTIgMiAwIDAgMSAtMiAyaC0xMmEyIDIgMCAwIDEgLTIgLTJ2LTEyYTIgMiAwIDAgMSAyIC0yaDkiLz48L3N2Zz4="
+  asset iShopping = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNi4zMzEgOGgxMS4zMzlhMiAyIDAgMCAxIDEuOTc3IDIuMzA0bC0xLjI1NSA4LjE1MmEzIDMgMCAwIDEgLTIuOTY2IDIuNTQ0aC02Ljg1MmEzIDMgMCAwIDEgLTIuOTY1IC0yLjU0NGwtMS4yNTUgLTguMTUyYTIgMiAwIDAgMSAxLjk3NyAtMi4zMDQiLz48cGF0aCBkPSJNOSAxMXYtNWEzIDMgMCAwIDEgNiAwdjUiLz48L3N2Zz4="
+  asset iPersonalization = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTIgMjFhOSA5IDAgMCAxIDAgLTE4YzQuOTcgMCA5IDMuNTgyIDkgOGMwIDEuMDYgLS40NzQgMi4wNzggLTEuMzE4IDIuODI4Yy0uODQ0IC43NSAtMS45ODkgMS4xNzIgLTMuMTgyIDEuMTcyaC0yLjVhMiAyIDAgMCAwIC0xIDMuNzVhMS4zIDEuMyAwIDAgMSAtMSAyLjI1Ii8+PHBhdGggZD0iTTcuNSAxMC41YTEgMSAwIDEgMCAyIDBhMSAxIDAgMSAwIC0yIDAiLz48cGF0aCBkPSJNMTEuNSA3LjVhMSAxIDAgMSAwIDIgMGExIDEgMCAxIDAgLTIgMCIvPjxwYXRoIGQ9Ik0xNS41IDEwLjVhMSAxIDAgMSAwIDIgMGExIDEgMCAxIDAgLTIgMCIvPjwvc3ZnPg=="
+  asset iFinance = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOSAxMmEzIDMgMCAxIDAgNiAwYTMgMyAwIDAgMCAtNiAwIi8+PHBhdGggZD0iTTMgOGEyIDIgMCAwIDEgMiAtMmgxNGEyIDIgMCAwIDEgMiAydjhhMiAyIDAgMCAxIC0yIDJoLTE0YTIgMiAwIDAgMSAtMiAtMmwwIC04Ii8+PHBhdGggZD0iTTE4IDEyaC4wMSIvPjxwYXRoIGQ9Ik02IDEyaC4wMSIvPjwvc3ZnPg=="
+  asset iBusiness = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyA5YTIgMiAwIDAgMSAyIC0yaDE0YTIgMiAwIDAgMSAyIDJ2OWEyIDIgMCAwIDEgLTIgMmgtMTRhMiAyIDAgMCAxIC0yIC0ybDAgLTkiLz48cGF0aCBkPSJNOCA3di0yYTIgMiAwIDAgMSAyIC0yaDRhMiAyIDAgMCAxIDIgMnYyIi8+PHBhdGggZD0iTTEyIDEybDAgLjAxIi8+PHBhdGggZD0iTTMgMTNhMjAgMjAgMCAwIDAgMTggMCIvPjwvc3ZnPg=="
+  asset iEducation = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjIgOWwtMTAgLTRsLTEwIDRsMTAgNGwxMCAtNHY2Ii8+PHBhdGggZD0iTTYgMTAuNnY1LjRhNiAzIDAgMCAwIDEyIDB2LTUuNCIvPjwvc3ZnPg=="
+  asset iTravel = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTYgMTBoNGEyIDIgMCAwIDEgMCA0aC00bC00IDdoLTNsMiAtN2gtNGwtMiAyaC0zbDIgLTRsLTIgLTRoM2wyIDJoNGwtMiAtN2gzbDQgNyIvPjwvc3ZnPg=="
+  asset iLifestyle = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOCAyMWg4Ii8+PHBhdGggZD0iTTEyIDE1djYiLz48cGF0aCBkPSJNNSA1YTcgMiAwIDEgMCAxNCAwYTcgMiAwIDEgMCAtMTQgMCIvPjxwYXRoIGQ9Ik01IDV2LjM4OGMwIC40MzIgLjEyNiAuODUzIC4zNjIgMS4yMDZsNSA3LjUwOWMuNjMzIC45NTEgMS44OCAxLjE4MyAyLjc4NSAuNTE3Yy4xOTEgLS4xNDEgLjM1OCAtLjMxNiAuNDkxIC0uNTE3bDUgLTcuNTA5Yy4yMzYgLS4zNTMgLjM2MiAtLjc3NCAuMzYyIC0xLjIwNnYtLjM4OCIvPjwvc3ZnPg=="
+  asset iFitness = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTkuNSAxMi41NzJsLTcuNSA3LjQyOGwtNy41IC03LjQyOGE1IDUgMCAxIDEgNy41IC02LjU2NmE1IDUgMCAxIDEgNy41IDYuNTcyIi8+PC9zdmc+"
+  asset iSport = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyAxMmE5IDkgMCAxIDAgMTggMGE5IDkgMCAxIDAgLTE4IDAiLz48cGF0aCBkPSJNMTIgN2w0Ljc2IDMuNDVsLTEuNzYgNS41NWgtNmwtMS43NiAtNS41NWw0Ljc2IC0zLjQ1Ii8+PHBhdGggZD0iTTEyIDd2LTRtMyAxM2wyLjUgM20tLjc0IC04LjU1bDMuNzQgLTEuNDVtLTExLjQ0IDcuMDVsLTIuNTYgMi45NW0uNzQgLTguNTVsLTMuNzQgLTEuNDUiLz48L3N2Zz4="
+  asset iWeather = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNi42NTcgMThjLTIuNTcyIDAgLTQuNjU3IC0yLjAwNyAtNC42NTcgLTQuNDgzYzAgLTIuNDc1IDIuMDg1IC00LjQ4MiA0LjY1NyAtNC40ODJjLjM5MyAtMS43NjIgMS43OTQgLTMuMiAzLjY3NSAtMy43NzNjMS44OCAtLjU3MiAzLjk1NiAtLjE5MyA1LjQ0NCAxYzEuNDg4IDEuMTkgMi4xNjIgMy4wMDcgMS43NyA0Ljc2OWguOTljMS45MTMgMCAzLjQ2NCAxLjU2IDMuNDY0IDMuNDg2YzAgMS45MjcgLTEuNTUxIDMuNDg3IC0zLjQ2NSAzLjQ4N2gtMTEuODc4Ii8+PC9zdmc+"
+  asset iSmartHome = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTkgOC43MWwtNS4zMzMgLTQuMTQ4YTIuNjY2IDIuNjY2IDAgMCAwIC0zLjI3NCAwbC01LjMzNCA0LjE0OGEyLjY2NSAyLjY2NSAwIDAgMCAtMS4wMjkgMi4xMDV2Ny4yYTIgMiAwIDAgMCAyIDJoMTJhMiAyIDAgMCAwIDIgLTJ2LTcuMmMwIC0uODIzIC0uMzggLTEuNiAtMS4wMyAtMi4xMDUiLz48cGF0aCBkPSJNMTYgMTVjLTIuMjEgMS4zMzMgLTUuNzkyIDEuMzMzIC04IDAiLz48L3N2Zz4="
+  asset iMedical = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTQgMTJsMCAuMDEiLz48cGF0aCBkPSJNMTAgMTJsMCAuMDEiLz48cGF0aCBkPSJNMTIgMTBsMCAuMDEiLz48cGF0aCBkPSJNMTIgMTRsMCAuMDEiLz48cGF0aCBkPSJNNC41IDEyLjVsOCAtOGE0Ljk0IDQuOTQgMCAwIDEgNyA3bC04IDhhNC45NCA0Ljk0IDAgMCAxIC03IC03Ii8+PC9zdmc+"
+  asset iWearable = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNiA5YTMgMyAwIDAgMSAzIC0zaDZhMyAzIDAgMCAxIDMgM3Y2YTMgMyAwIDAgMSAtMyAzaC02YTMgMyAwIDAgMSAtMyAtM3YtNiIvPjxwYXRoIGQ9Ik05IDE4djNoNnYtMyIvPjxwYXRoIGQ9Ik05IDZ2LTNoNnYzIi8+PC9zdmc+"
+  asset iVideo = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNCA2YTIgMiAwIDAgMSAyIC0yaDEyYTIgMiAwIDAgMSAyIDJ2MTJhMiAyIDAgMCAxIC0yIDJoLTEyYTIgMiAwIDAgMSAtMiAtMmwwIC0xMiIvPjxwYXRoIGQ9Ik04IDRsMCAxNiIvPjxwYXRoIGQ9Ik0xNiA0bDAgMTYiLz48cGF0aCBkPSJNNCA4bDQgMCIvPjxwYXRoIGQ9Ik00IDE2bDQgMCIvPjxwYXRoIGQ9Ik00IDEybDE2IDAiLz48cGF0aCBkPSJNMTYgOGw0IDAiLz48cGF0aCBkPSJNMTYgMTZsNCAwIi8+PC9zdmc+"
+  asset iPhotos = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTUgOGguMDEiLz48cGF0aCBkPSJNMyA2YTMgMyAwIDAgMSAzIC0zaDEyYTMgMyAwIDAgMSAzIDN2MTJhMyAzIDAgMCAxIC0zIDNoLTEyYTMgMyAwIDAgMSAtMyAtM3YtMTIiLz48cGF0aCBkPSJNMyAxNmw1IC01Yy45MjggLS44OTMgMi4wNzIgLS44OTMgMyAwbDUgNSIvPjxwYXRoIGQ9Ik0xNCAxNGwxIC0xYy45MjggLS44OTMgMi4wNzIgLS44OTMgMyAwbDMgMyIvPjwvc3ZnPg=="
+  asset iNews = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTYgNmgzYTEgMSAwIDAgMSAxIDF2MTFhMiAyIDAgMCAxIC00IDB2LTEzYTEgMSAwIDAgMCAtMSAtMWgtMTBhMSAxIDAgMCAwIC0xIDF2MTJhMyAzIDAgMCAwIDMgM2gxMSIvPjxwYXRoIGQ9Ik04IDhsNCAwIi8+PHBhdGggZD0iTTggMTJsNCAwIi8+PHBhdGggZD0iTTggMTZsNCAwIi8+PC9zdmc+"
+  asset iMaps = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyA3bDYgLTNsNiAzbDYgLTN2MTNsLTYgM2wtNiAtM2wtNiAzdi0xMyIvPjxwYXRoIGQ9Ik05IDR2MTMiLz48cGF0aCBkPSJNMTUgN3YxMyIvPjwvc3ZnPg=="
+  asset iAccessibility = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyAxMmE5IDkgMCAxIDAgMTggMGE5IDkgMCAxIDAgLTE4IDAiLz48cGF0aCBkPSJNMTAgMTYuNWwyIC0zbDIgM20tMiAtM3YtMmwzIC0xbS02IDBsMyAxIi8+PHBhdGggZD0iTTExLjUgNy41YS41IC41IDAgMSAwIDEgMGEuNSAuNSAwIDEgMCAtMSAwIiBmaWxsPSJjdXJyZW50Q29sb3IiLz48L3N2Zz4="
+  asset iOther = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyAxMmE5IDkgMCAxIDAgMTggMGE5IDkgMCAxIDAgLTE4IDAiLz48cGF0aCBkPSJNOCAxMmwwIC4wMSIvPjxwYXRoIGQ9Ik0xMiAxMmwwIC4wMSIvPjxwYXRoIGQ9Ik0xNiAxMmwwIC4wMSIvPjwvc3ZnPg=="
+  asset iGroup = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNSA0aDRsMyAzaDdhMiAyIDAgMCAxIDIgMnY4YTIgMiAwIDAgMSAtMiAyaC0xNGEyIDIgMCAwIDEgLTIgLTJ2LTExYTIgMiAwIDAgMSAyIC0yIi8+PC9zdmc+"
+  asset iLinux = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOCA5bDMgM2wtMyAzIi8+PHBhdGggZD0iTTEzIDE1bDMgMCIvPjxwYXRoIGQ9Ik0zIDZhMiAyIDAgMCAxIDIgLTJoMTRhMiAyIDAgMCAxIDIgMnYxMmEyIDIgMCAwIDEgLTIgMmgtMTRhMiAyIDAgMCAxIC0yIC0ybDAgLTEyIi8+PC9zdmc+"
+  asset iShortcuts = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNOSAxNWw2IC02Ii8+PHBhdGggZD0iTTExIDZsLjQ2MyAtLjUzNmE1IDUgMCAwIDEgNy4wNzEgNy4wNzJsLS41MzQgLjQ2NCIvPjxwYXRoIGQ9Ik0xMyAxOGwtLjM5NyAuNTM0YTUuMDY4IDUuMDY4IDAgMCAxIC03LjEyNyAwYTQuOTcyIDQuOTcyIDAgMCAxIDAgLTcuMDcxbC41MjQgLS40NjMiLz48L3N2Zz4="
+  asset iApps = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNCA1YTEgMSAwIDAgMSAxIC0xaDRhMSAxIDAgMCAxIDEgMXY0YTEgMSAwIDAgMSAtMSAxaC00YTEgMSAwIDAgMSAtMSAtMWwwIC00Ii8+PHBhdGggZD0iTTQgMTVhMSAxIDAgMCAxIDEgLTFoNGExIDEgMCAwIDEgMSAxdjRhMSAxIDAgMCAxIC0xIDFoLTRhMSAxIDAgMCAxIC0xIC0xbDAgLTQiLz48cGF0aCBkPSJNMTQgMTVhMSAxIDAgMCAxIDEgLTFoNGExIDEgMCAwIDEgMSAxdjRhMSAxIDAgMCAxIC0xIDFoLTRhMSAxIDAgMCAxIC0xIC0xbDAgLTQiLz48cGF0aCBkPSJNMTQgN2w2IDAiLz48cGF0aCBkPSJNMTcgNGwwIDYiLz48L3N2Zz4="
+  asset iWork = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyA5YTIgMiAwIDAgMSAyIC0yaDE0YTIgMiAwIDAgMSAyIDJ2OWEyIDIgMCAwIDEgLTIgMmgtMTRhMiAyIDAgMCAxIC0yIC0ydi05Ii8+PHBhdGggZD0iTTggN3YtMmEyIDIgMCAwIDEgMiAtMmg0YTIgMiAwIDAgMSAyIDJ2MiIvPjwvc3ZnPg=="
   source d = android.drawer
   source ag = android.agents
   // The app whose long-press menu is open, by key, and the shortcuts it offers: null while they load, and the menu
@@ -71,28 +110,43 @@ panel "app drawer" {
   // move an app to one. Pages with no apps are left out, but your groups, and the offers to install Linux and to turn
   // work apps on.
   let smart = st.categories != "android"
-  let kinds = smart ? ["communication", "internet", "games", "media", "utilities", "settings"] : ["games", "audio", "video", "photos", "social", "news", "maps", "productivity", "accessibility", "other"]
-  // Each page's icon in the bar, from the launcher's Nerd Font subset (font: icon).
-  let glyphs = {communication: "󰭹", internet: "󰖟", games: "󰊗", media: "󰐌", utilities: "󰦬", settings: "󰒓", audio: "󰝚", video: "󰕧", photos: "󰋩", social: "󰡉", news: "󰎕", maps: "󰍍", productivity: "󰃖", accessibility: "󰋦", other: "󰟃", group: "󰉋", linux: "󰌽", shortcuts: "󰌹", apps: "󰏒", work: "󰳰"}
+  // Smart Launcher's six, then its further categories as style adds them (drawer.extra-categories). An app goes to
+  // its extra category once that's added, else to its first six's, as Smart Launcher sorts them.
+  let extras = smart ? st.extras ?? [] : []
+  let kinds = smart ? flatten([["contacts", "internet", "games", "media", "utilities", "settings"], extras]) : ["games", "audio", "video", "photos", "social", "news", "maps", "productivity", "accessibility", "other"]
+  let ownIcons = {
+    contacts: iContacts, internet: iInternet, games: iGames, media: iMedia, utilities: iUtilities, settings: iSettings,
+    social: iSocial, photography: iPhotography, navigation: iNavigation, reading: iReading, music: iMusic,
+    entertainment: iEntertainment, productivity: iProductivity, shopping: iShopping, personalization: iPersonalization,
+    finance: iFinance, business: iBusiness, education: iEducation, travel: iTravel, lifestyle: iLifestyle, fitness: iFitness,
+    sport: iSport, weather: iWeather, "smart home": iSmartHome, medical: iMedical, wearable: iWearable,
+    audio: iMusic, video: iVideo, photos: iPhotos, news: iNews, maps: iMaps, accessibility: iAccessibility, other: iOther,
+    group: iGroup, linux: iLinux, shortcuts: iShortcuts, apps: iApps, work: iWork
+  }
+  let slIcons = d.categoryIcons ?? {}
   let groupNames = d.groups.map(g => g.name)
   let pages = !paged ? [] : flatten([
       kinds.map(k => {
-        id: "c:" + k, title: k, glyph: get(glyphs, k), group: indexOf(groupNames, k) >= 0 ? k : null,
-        apps: ordered.filter(a => !a.work && (indexOf(grouped, a.key) >= 0 ? any(d.groups, g => g.name == k && indexOf(g.keys, a.key) >= 0) : a.kind == "android" && (smart ? a.smart : a.category ?? "other") == k))
+        id: "c:" + k, title: k, icon: get(slIcons, k, get(ownIcons, k)), group: indexOf(groupNames, k) >= 0 ? k : null,
+        apps: ordered.filter(a => !a.work && (indexOf(grouped, a.key) >= 0 ? any(d.groups, g => g.name == k && indexOf(g.keys, a.key) >= 0) : a.kind == "android" && (smart ? (a.smartExtra != null && indexOf(extras, a.smartExtra) >= 0 ? a.smartExtra : a.smart) : a.category ?? "other") == k))
       }),
-      d.groups.filter(g => indexOf(kinds, g.name) < 0).map(g => {id: "g:" + g.name, title: g.name, glyph: get(glyphs, "group"), group: g.name, keep: true, apps: ordered.filter(a => !a.work && indexOf(g.keys, a.key) >= 0)}),
+      // A group named for a category not shown has that category's icon, else a folder.
+      d.groups.filter(g => indexOf(kinds, g.name) < 0).map(g => {
+        id: "g:" + g.name, title: g.name, icon: get(slIcons, g.name, get(ownIcons, g.name, get(slIcons, "group", iGroup))), group: g.name, keep: true,
+        apps: ordered.filter(a => !a.work && indexOf(g.keys, a.key) >= 0)
+      }),
       [
-        {id: "linux", title: linux ? "linux" : "linux apps", glyph: get(glyphs, "linux"), apps: rest.filter(a => a.kind == "linux"), offer: !linux, keep: !linux},
-        {id: "shortcuts", title: "shortcuts", glyph: get(glyphs, "shortcuts"), apps: rest.filter(a => a.kind == "shortcut")},
-        {id: "apps", title: "apps", glyph: get(glyphs, "apps"), apps: rest.filter(a => a.kind == "owl")},
-        {id: "work", title: d.work != null && d.work.paused ? "work apps paused" : "work apps", glyph: get(glyphs, "work"), apps: ordered.filter(a => a.work), work: true, keep: d.work != null}
+        {id: "linux", title: linux ? "linux" : "linux apps", icon: iLinux, apps: rest.filter(a => a.kind == "linux"), offer: !linux, keep: !linux},
+        {id: "shortcuts", title: "shortcuts", icon: iShortcuts, apps: rest.filter(a => a.kind == "shortcut")},
+        {id: "apps", title: "apps", icon: iApps, apps: rest.filter(a => a.kind == "owl")},
+        {id: "work", title: d.work != null && d.work.paused ? "work apps paused" : "work apps", icon: iWork, apps: ordered.filter(a => a.work), work: true, keep: d.work != null}
       ]
     ]).filter(pg => len(pg.apps) > 0 || pg.keep == true)
   let pageIds = pages.map(pg => pg.id)
   let pageAt = max(0, indexOf(pageIds, at))
   let shownPage = len(pages) > 0 ? pages[pageAt] : null
-  // The bar's slots: as wide as they all fit across, 36 to 56, and past that the bar scrolls.
-  let tabWidth = clamp(floor(((screenWidth ?? 400) - 24) / max(1, len(pages))), 36, 56)
+  // The bar's slots share its width, edge to edge, while each gets 36 dp or more; past that they're 44 dp and it scrolls.
+  let barFits = len(pages) * 36 <= (screenWidth ?? 400) - 24
 
   // Every profile's apps match while typing, best first; the list runs up from the bar, so the best sits right above it.
   let hits = searching ? rank(shown, typed) : []
@@ -232,6 +286,19 @@ panel "app drawer" {
     }
   }
 
+  // A page's icon in the bar: a tap turns to it; the one showing is in the accent and underlined.
+  component BarTab(pg) {
+    Column {
+      fill: width
+      align: center
+      gap: 4
+      padding: [0, 10, 0, 6]
+      onTap: at = pg.id
+      Image { src: pg.icon; size: 24; tint: shownPage != null && pg.id == shownPage.id ? accent : muted; label: pg.title }
+      Box { width: 16; height: 2; background: shownPage != null && pg.id == shownPage.id ? accent : transparent }
+    }
+  }
+
   Column {
     gap: 0
     padding: [12, 0]
@@ -346,26 +413,18 @@ panel "app drawer" {
         }
       }
     }
-    // The pages' icons, as Smart Launcher's bar: a tap turns to that page, and the one showing is underlined.
-    Box {
-      visible: paged && !searching && len(pages) > 1
+    // The pages' icons, as Smart Launcher's bar: spread edge to edge, no gap after the last; too many to fit, it scrolls.
+    Row {
+      visible: paged && !searching && len(pages) > 1 && barFits
       fill: width
-      align: center
-      Row {
-        scroll: true
-        gap: 0
-        for pg in pages key pg.id {
-          Column {
-            width: tabWidth
-            align: center
-            gap: 4
-            padding: [0, 10, 0, 6]
-            onTap: at = pg.id
-            Text { text: pg.glyph; font: icon; fontSize: 22; color: shownPage != null && pg.id == shownPage.id ? accent : muted }
-            Box { width: 16; height: 2; background: shownPage != null && pg.id == shownPage.id ? accent : transparent }
-          }
-        }
-      }
+      gap: 0
+      for pg in pages key pg.id { Box { weight: 1; BarTab { pg: pg } } }
+    }
+    Row {
+      visible: paged && !searching && len(pages) > 1 && !barFits
+      scroll: true
+      gap: 0
+      for pg in pages key pg.id { Box { width: 44; BarTab { pg: pg } } }
     }
     Column {
       visible: searching
