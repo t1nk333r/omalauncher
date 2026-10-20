@@ -7,6 +7,9 @@
     <files-path name="xdg" path="xdg/" />
     <files-path name="omarchy" path="omarchy/" />
     <files-path name="widgets" path="widgets/" />
+    <!-- Phone build: /sdcard, the phone's storage, while Linux sees it (linux/SharedStorage.kt). Reading it needs
+         all-files access, which the launcher has then; the app it's handed to gets just that file. -->
+    <external-path name="sdcard" path="." />
     <!-- QR codes of widgets, for sharing as an image. -->
     <cache-path name="share" path="share/" />
 </paths>
