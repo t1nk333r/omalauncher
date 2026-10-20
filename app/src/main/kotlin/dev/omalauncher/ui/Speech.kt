@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognitionSupport
 import android.speech.RecognitionSupportCallback
@@ -22,7 +24,9 @@ import java.util.Locale
  * on-device recognizer (offline, fast) and falls back to the regular one when
  * it can't: no model for the language, or one the phone won't bind (One UI 9
  * names Android System Intelligence, which isn't a recognition service, and
- * every try fails with 10). Main thread only, like SpeechRecognizer.
+ * every try fails with 10). The regular one is asked for its offline model
+ * too, then online when it has none downloaded. Main thread only, like
+ * SpeechRecognizer.
  */
 class Speech(
     private val context: Context,
@@ -42,12 +46,28 @@ class Speech(
     var error by mutableStateOf<String?>(null)
 
     private var recognizer: SpeechRecognizer? = null
+
+    /** Whether [recognizer] is the on-device one. */
+    private var recognizerOnDevice = false
     private var onDevice = true
+
+    /** Whether the regular recognizer is asked to stay offline; until it can't, for as long as this lasts. */
+    private var offline = true
     private var finished = ""
     private var onDone: ((String) -> Unit)? = null
 
     /** While held, pauses don't end recognition: a new segment starts until [stop]. */
     private var held = false
+
+    private val main = Handler(Looper.getMainLooper())
+
+    /** A start the system dropped gets no answer at all, which would leave the bar listening for good. */
+    private val unanswered =
+        Runnable {
+            Log.w(TAG, "the speech recognizer didn't answer")
+            if (text.isBlank()) error = "the speech recognizer didn't answer"
+            finish()
+        }
 
     private val onDeviceAvailable get() = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
 
@@ -85,6 +105,7 @@ class Speech(
     fun cancel() {
         held = false
         onDone = null
+        main.removeCallbacks(unanswered)
         recognizer?.destroy()
         recognizer = null
         listening = false
@@ -98,40 +119,61 @@ class Speech(
      */
     private var language: String? = null
 
+    /**
+     * Starts a segment, on the recognizer already bound when it's the kind wanted: one destroyed and made again
+     * at once binds to a service still being torn down, and its start is dropped without a word.
+     */
     private fun listen() {
-        recognizer?.destroy()
-        val r =
-            if (onDevice && onDeviceAvailable) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(context)
-            }
-        recognizer = r
-        r.setRecognitionListener(Listener(r))
+        main.removeCallbacks(unanswered)
+        main.postDelayed(unanswered, ANSWER_MS)
+        val wanted = onDevice && onDeviceAvailable
+        val r = recognizer?.takeIf { recognizerOnDevice == wanted } ?: newRecognizer(wanted)
         if (language != null || Build.VERSION.SDK_INT < 33) return r.startListening(intent())
         r.checkRecognitionSupport(
             intent(),
             context.mainExecutor,
             object : RecognitionSupportCallback {
+                // Speech Services by Google answers twice; listening starts once.
+                private var started = false
+
                 override fun onSupportResult(support: RecognitionSupport) {
-                    if (r !== recognizer) return
+                    if (r !== recognizer || started) return
                     language = closestLanguage(support)
                     Log.i(TAG, "recognizing ${language ?: "the default language"}")
-                    r.startListening(intent())
+                    start()
                 }
 
                 override fun onError(error: Int) {
-                    if (r === recognizer) r.startListening(intent())
+                    if (r === recognizer && !started) start()
+                }
+
+                private fun start() {
+                    started = true
+                    r.startListening(intent())
                 }
             },
         )
+    }
+
+    private fun newRecognizer(useOnDevice: Boolean): SpeechRecognizer {
+        recognizer?.destroy()
+        val r =
+            if (useOnDevice && Build.VERSION.SDK_INT >= 31) {
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            } else {
+                SpeechRecognizer.createSpeechRecognizer(context)
+            }
+        recognizer = r
+        recognizerOnDevice = useOnDevice
+        r.setRecognitionListener(Listener(r))
+        return r
     }
 
     private fun intent() =
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, offline)
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             .apply { language?.let { putExtra(RecognizerIntent.EXTRA_LANGUAGE, it) } }
 
@@ -167,6 +209,7 @@ class Speech(
     }
 
     private fun finish() {
+        main.removeCallbacks(unanswered)
         recognizer?.destroy()
         recognizer = null
         listening = false
@@ -195,6 +238,7 @@ class Speech(
 
         override fun onResults(results: Bundle) {
             if (!current) return
+            main.removeCallbacks(unanswered)
             finished = join(finished, results.best())
             text = finished
             if (held) listen() else finish()
@@ -202,6 +246,7 @@ class Speech(
 
         override fun onError(code: Int) {
             if (!current) return
+            main.removeCallbacks(unanswered)
             when (code) {
                 // Silence or nothing understood: fine while the button is held.
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> if (held) listen() else finish()
@@ -213,6 +258,11 @@ class Speech(
                         onDevice = false
                         // The regular recognizer may know other languages than the on-device one.
                         language = null
+                        listen()
+                    } else if (offline && code != SpeechRecognizer.ERROR_NETWORK && code != SpeechRecognizer.ERROR_NETWORK_TIMEOUT) {
+                        // No offline model downloaded for the language comes back as a client error (5).
+                        Log.i(TAG, "offline recognition failed ($code), recognizing online")
+                        offline = false
                         listen()
                     } else {
                         fail(
@@ -237,7 +287,9 @@ class Speech(
             if (current) level = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
         }
 
-        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onReadyForSpeech(params: Bundle?) {
+            if (current) main.removeCallbacks(unanswered)
+        }
 
         override fun onBeginningOfSpeech() {}
 
@@ -253,5 +305,8 @@ class Speech(
 
     companion object {
         private const val TAG = "speech"
+
+        /** How long a start may go unanswered: a cold Speech Services takes about 300 ms. */
+        private const val ANSWER_MS = 5000L
     }
 }
