@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -93,7 +94,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * Omarchy's Style menu: the theme, its background, how the home screen
- * draws itself and, with Linux, the terminal's text size.
+ * draws itself and, with Linux, the terminal's text size. Phone build: in
+ * tabs along the top ([StyleTab]), or down the side on a wide screen.
  */
 @Composable
 fun StyleScreen(
@@ -110,21 +112,128 @@ fun StyleScreen(
     var installOpen by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<OmarchyTheme?>(null) }
     val linux by runtime.bootstrap.state.collectAsState()
+    var tab by remember { mutableStateOf(lastStyleTab) }
+    // The terminal's only with Linux, whose fonts it lists.
+    val tabs = StyleTab.entries.filter { it != StyleTab.Terminal || linux == LinuxState.Installed }
+    val shown = tab.takeIf { it in tabs } ?: StyleTab.Theme
+    val pick = { t: StyleTab ->
+        tab = t
+        lastStyleTab = t
+    }
     OverlayPanel("style", onDismiss) {
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            ThemeSection(
-                store,
-                onBrowse = onBrowse,
-                onInstall = {
-                    store.clearInstallError()
-                    installOpen = true
-                },
-                onRemove = { removing = it },
-            )
-            store.current?.let { BackgroundSection(store, runtime.style, it) }
-            // Style choices don't depend on a theme, so they're offered before themes are downloaded too.
-            Heading("home screen")
-            val style = runtime.style
+        val pane = @Composable { modifier: Modifier ->
+            // Each tab opens at its top.
+            key(shown) {
+                Column(modifier.verticalScroll(rememberScrollState())) {
+                    StylePane(
+                        shown,
+                        runtime,
+                        linux,
+                        onBrowse = onBrowse,
+                        onIconPacks = onIconPacks,
+                        onInstall = {
+                            store.clearInstallError()
+                            installOpen = true
+                        },
+                        onRemove = { removing = it },
+                    )
+                }
+            }
+        }
+        BoxWithConstraints(Modifier.weight(1f)) {
+            if (maxWidth >= STYLE_PANES_WIDTH) {
+                // Side by side, as the store is on a wide screen: the tabs down the side, the one picked beside them.
+                Row {
+                    Column(Modifier.width(150.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        for (t in tabs) SideTab(t.label, t == shown) { pick(t) }
+                    }
+                    Box(Modifier.padding(horizontal = 12.dp).width(1.dp).fillMaxHeight().background(Palette.border))
+                    pane(Modifier.weight(1f))
+                }
+            } else {
+                Column {
+                    // Scrolls under the panel's padding to its frame, as the store's tabs do.
+                    Row(Modifier.bleed(PanelPadding).horizontalScroll(rememberScrollState()).padding(horizontal = PanelPadding), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (t in tabs) TabChip(t.label, t == shown) { pick(t) }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    pane(Modifier.fillMaxWidth().weight(1f))
+                }
+            }
+        }
+        if (installOpen) {
+            TextDialog(
+                "install theme",
+                "",
+                "install",
+                hint = "A theme's GitHub repo. It replaces an installed theme of the same name.",
+                onDismiss = { installOpen = false },
+            ) { url ->
+                installOpen = false
+                scope.launch { store.install(url) }
+            }
+        }
+        removing?.let { theme ->
+            val builtIn = theme.dirs.size > 1
+            ConfirmDialog(
+                "remove ${theme.title.lowercase()}?",
+                if (builtIn) "Your changes to it go; Omarchy's version stays." else "It's deleted from the phone and from Linux.",
+                "remove",
+                onDismiss = { removing = null },
+            ) {
+                removing = null
+                scope.launch { store.remove(theme) }
+            }
+        }
+    }
+}
+
+/** The Style screen's tabs, each a pane of its settings. */
+private enum class StyleTab(
+    val label: String,
+) {
+    Theme("theme"),
+    Home("home"),
+    Drawer("drawer"),
+    Widgets("widgets"),
+    Bars("bars"),
+    Terminal("terminal"),
+}
+
+/** The tab shown last: Style opens on it again while the launcher runs. */
+private var lastStyleTab = StyleTab.Theme
+
+/** How wide the panel's content is when Style's tabs go down the side, the one picked beside them, as the store's grid and page do. */
+private val STYLE_PANES_WIDTH = 720.dp
+
+/** One of Style's tabs: the theme and background, home, the drawer, widgets and screens, the system bars, the terminal. */
+@Composable
+private fun StylePane(
+    tab: StyleTab,
+    runtime: Runtime,
+    linux: LinuxState,
+    onBrowse: () -> Unit,
+    onIconPacks: () -> Unit,
+    onInstall: () -> Unit,
+    onRemove: (OmarchyTheme) -> Unit,
+) {
+    val store = runtime.themes
+    val style = runtime.style
+    when (tab) {
+        StyleTab.Theme -> {
+            ThemeSection(store, onBrowse = onBrowse, onInstall = onInstall, onRemove = onRemove)
+            store.current?.let { BackgroundSection(store, style, it) }
+            if (linux == LinuxState.Installed) {
+                // Linux's fonts, which the terminal tab lists too.
+                Heading("launcher & widgets font")
+                val fonts = listOf(Style.SYSTEM_FONT) + runtime.terminalFont.families
+                FontOption(fonts, style.style[Style.FONT], label = { if (it == Style.SYSTEM_FONT) "system default" else it }) { family ->
+                    style.update { it.with(Style.FONT, family) }
+                }
+            }
+        }
+        // Style choices don't depend on a theme, so they're offered before themes are downloaded too.
+        StyleTab.Home -> {
             Flag("icons", "monochrome", "colored", style, Style.MONOCHROME_ICONS)
             IconPackOption(runtime, onIconPacks)
             Flag("home apps", "boxed", "icon only", style, Style.APP_TILES)
@@ -157,7 +266,8 @@ fun StyleScreen(
             Flag("pages", "one", "auto", style, Style.FORCE_SINGLE_PAGE)
             NumberOption("corners", Corners.entries.map { it.label to it.scale.toDouble() }, Style.CORNER_SCALE, style)
             HomePreview(runtime)
-            Heading("app drawer")
+        }
+        StyleTab.Drawer -> {
             StyleOption("sort", listOf("a–z", "most used", "newest"), Style.DRAWER_SORT.options.indexOf(style.style[Style.DRAWER_SORT])) { i ->
                 style.update { it.with(Style.DRAWER_SORT, Style.DRAWER_SORT.options[i]) }
             }
@@ -188,6 +298,8 @@ fun StyleScreen(
                     unlock(context, "turn off the lock on hidden apps") { style.update { it.with(Style.DRAWER_LOCK, false) } }
                 }
             }
+        }
+        StyleTab.Widgets -> {
             // Like Hyprland's gaps_in, gaps_out and border_size; the colors are in style.toml.
             Heading("widgets")
             OpacityStepper("opacity", style, Style.WIDGET_OPACITY)
@@ -199,52 +311,59 @@ fun StyleScreen(
             Heading("screens")
             Stepper("gaps out", style, Style.SCREEN_GAPS_OUT)
             Stepper("border width", style, Style.SCREEN_BORDER_WIDTH)
+        }
+        StyleTab.Bars -> {
             // Both bars at once; style.toml can set them apart. Background is the band behind their icons.
-            Heading("system bars")
             Flag("status bar", "shown", "hidden", style, Style.STATUS_BAR_SHOWN)
             Flag("background", "shown", "hidden", style, Style.STATUS_BAR.framed, Style.NAVIGATION_BAR.framed)
             Stepper("border width", style, Style.STATUS_BAR.borderWidth, Style.NAVIGATION_BAR.borderWidth)
             OpacityStepper("opacity", style, Style.STATUS_BAR.opacity, Style.NAVIGATION_BAR.opacity)
-            if (linux == LinuxState.Installed) {
-                // Linux's fonts, which the terminal section lists.
-                Heading("launcher & widgets")
-                val fonts = listOf(Style.SYSTEM_FONT) + runtime.terminalFont.families
-                FontOption(fonts, style.style[Style.FONT], label = { if (it == Style.SYSTEM_FONT) "system default" else it }) { family ->
-                    style.update { it.with(Style.FONT, family) }
-                }
-                TerminalSection(runtime.terminalFont, runtime.launcherFont, style)
-                BasicText(
-                    "more settings, like border and bar colors: ~/${StyleStore.GUEST_DIR}/defaults.toml",
-                    Modifier.padding(top = 20.dp),
-                    style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
-                )
-            }
         }
-        if (installOpen) {
-            TextDialog(
-                "install theme",
-                "",
-                "install",
-                hint = "A theme's GitHub repo. It replaces an installed theme of the same name.",
-                onDismiss = { installOpen = false },
-            ) { url ->
-                installOpen = false
-                scope.launch { store.install(url) }
-            }
-        }
-        removing?.let { theme ->
-            val builtIn = theme.dirs.size > 1
-            ConfirmDialog(
-                "remove ${theme.title.lowercase()}?",
-                if (builtIn) "Your changes to it go; Omarchy's version stays." else "It's deleted from the phone and from Linux.",
-                "remove",
-                onDismiss = { removing = null },
-            ) {
-                removing = null
-                scope.launch { store.remove(theme) }
-            }
-        }
+        StyleTab.Terminal -> TerminalSection(runtime.terminalFont, runtime.launcherFont, style)
     }
+    if (linux == LinuxState.Installed) {
+        BasicText(
+            "more settings, like border and bar colors: ~/${StyleStore.GUEST_DIR}/defaults.toml",
+            Modifier.padding(top = 20.dp),
+            style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
+        )
+    }
+}
+
+/** A tab of Style along the top, framed in the accent while it's the one showing, as the store's are. */
+@Composable
+private fun TabChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    BasicText(
+        label,
+        Modifier
+            .frame(1.dp, if (selected) Palette.accent else Palette.border, if (selected) Palette.accent.copy(alpha = 0.15f) else Color.Transparent, radius = 14.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        style = Mono.copy(color = if (selected) Palette.accent else Palette.foreground),
+    )
+}
+
+/** A tab of Style down the side on a wide screen: the one showing on the surface in the accent. */
+@Composable
+private fun SideTab(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    BasicText(
+        label,
+        Modifier
+            .fillMaxWidth()
+            .clip(LauncherStyle.shape(12.dp))
+            .background(if (selected) Palette.surface else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        style = Mono.copy(color = if (selected) Palette.accent else Palette.foreground),
+    )
 }
 
 /** The installed themes in a row, starting at the current one; browse has Omarchy's whole catalog. */
