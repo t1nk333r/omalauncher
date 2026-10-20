@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -235,6 +236,17 @@ internal data class HomeSwipe(
 
     /** Whether it opens the drawer to browse, so the keyboard stays down: the drawer was closed when it started. */
     fun browses(drawer: Float) = (action == GestureAction.Drawer || action == GestureAction.Panel) && drawer == 0f
+
+    /**
+     * What a swipe cut off after going [distance] its way is let go at, in px/s down: a fling its way if it got
+     * anywhere, so what it was opening opens, else at rest, so it settles back.
+     */
+    fun cutOffVelocity(distance: Float) = if (distance > 0f) way * CUT_OFF_FLING else 0f
+
+    private companion object {
+        /** Past the 800 px/s that counts as a fling, whichever way. */
+        const val CUT_OFF_FLING = 1000f
+    }
 }
 
 /**
@@ -322,6 +334,15 @@ internal class HomeSwiper(
         }
         swipe = null
     }
+
+    /**
+     * What it was dragged by went away mid-swipe, as the strips under home do once the drawer starts to show: it ends
+     * as if let go moving its way. Otherwise the drawer stays where the finger left it, barely open, unseen, taking taps.
+     */
+    fun cutOff() {
+        val cut = swipe ?: return
+        stop(cut.cutOffVelocity(distance))
+    }
 }
 
 @Composable
@@ -351,6 +372,9 @@ internal fun Modifier.homeSwipe(
     // inline) each time the drawer opens or closes.
     val drags = gestures.swipeUp != GestureAction.None || gestures.swipeDown != GestureAction.None || drawerShown
     val swiper = rememberHomeSwiper(runtime, state)
+    // The strips under home leave as the drawer starts to show, under a finger still swiping; their drag never hears it
+    // let go, so the swipe ends here.
+    DisposableEffect(swiper) { onDispose { swiper.cutOff() } }
     // One drag handler, only turned on or off: a new one mid-swipe (as the drawer starts to show) would drop the drag.
     return draggable(
         orientation = Orientation.Vertical,

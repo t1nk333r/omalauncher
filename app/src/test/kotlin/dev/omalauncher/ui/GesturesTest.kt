@@ -97,6 +97,18 @@ class GesturesTest {
         assertFalse(up.opensOnRelease(near, flingDown, threshold))
     }
 
+    @Test fun aSwipeCutOffEndsAsIfLetGoMovingItsWay() {
+        // The strip under home goes as the drawer starts to show: the drawer finishes opening, not stays barely open.
+        val up = homeSwipeFor(0f, upward, up = Drawer, down = Search)
+        assertTrue(up.cutOffVelocity(near) < -800f)
+        assertEquals(0f, up.cutOffVelocity(0f), 0f)
+        // Search and a panel from the top open too, but not once the swipe turned back.
+        val down = homeSwipeFor(0f, downward, up = Drawer, down = Search)
+        assertTrue(down.opensOnRelease(near, down.cutOffVelocity(near), threshold))
+        assertFalse(down.opensOnRelease(-5f, down.cutOffVelocity(-5f), threshold))
+        assertTrue(homeSwipeFor(0f, downward, up = Drawer, down = Panel).cutOffVelocity(near) > 800f)
+    }
+
     @Test fun distanceIsMeasuredTheSwipesWay() {
         assertEquals(12f, HomeSwipe(Search, 1f).along(downward), 0f)
         assertEquals(12f, HomeSwipe(Search, -1f).along(upward), 0f)
