@@ -20,7 +20,9 @@ import java.util.Locale
  * Android speech recognition for the prompt bar. The guest has no microphone,
  * so speech becomes text here and only text reaches Linux. Prefers the
  * on-device recognizer (offline, fast) and falls back to the regular one when
- * it has no model for the language. Main thread only, like SpeechRecognizer.
+ * it can't: no model for the language, or one the phone won't bind (One UI 9
+ * names Android System Intelligence, which isn't a recognition service, and
+ * every try fails with 10). Main thread only, like SpeechRecognizer.
  */
 class Speech(
     private val context: Context,
@@ -203,19 +205,24 @@ class Speech(
             when (code) {
                 // Silence or nothing understood: fine while the button is held.
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> if (held) listen() else finish()
-                SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> fail("microphone permission needed")
+                // Anything else the on-device recognizer can't do, the regular one may: for as long as this lasts.
+                else ->
                     if (onDevice) {
-                        Log.i(TAG, "no on-device model for this language, using the regular recognizer")
+                        Log.i(TAG, "on-device recognition failed ($code), using the regular recognizer")
                         onDevice = false
                         // The regular recognizer may know other languages than the on-device one.
                         language = null
                         listen()
                     } else {
-                        fail("speech isn't available in this language")
+                        fail(
+                            when (code) {
+                                SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "speech isn't available in this language"
+                                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "speech recognition needs a network connection"
+                                else -> "speech recognition failed ($code)"
+                            },
+                        )
                     }
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> fail("microphone permission needed")
-                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> fail("speech recognition needs a network connection")
-                else -> fail("speech recognition failed ($code)")
             }
         }
 
