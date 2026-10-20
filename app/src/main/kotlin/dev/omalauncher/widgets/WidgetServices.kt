@@ -71,6 +71,8 @@ import dev.omalauncher.ui.LauncherStyle
 import dev.omalauncher.ui.SettingsPage
 import dev.omalauncher.ui.allApps
 import dev.omalauncher.ui.barAsksAgent
+import dev.omalauncher.ui.category
+import dev.omalauncher.ui.similarGroups
 import dev.omalauncher.ui.installed
 import dev.omalauncher.ui.isNew
 import dev.omalauncher.ui.isWork
@@ -497,6 +499,7 @@ class WidgetServices(
                         "letter" to Str(railLetter(name).toString()),
                         "installed" to Num((hit.installed / 1000).toDouble()),
                         "isNew" to bool(LauncherStyle.drawerNewBadge && isNew(hit.installed, score, now)),
+                        "category" to (hit.category?.let(::Str) ?: Null),
                     ),
                 )
             }
@@ -811,6 +814,7 @@ class WidgetServices(
             "undock" -> runtime.dock.remove(hit.key)
             "group" -> handlers.group(setOf(hit.key))
             "select" -> handlers.pick(hit.key)
+            "similar" -> groupSimilar(listOf(hit))
             else -> hit.act(word, handlers)
         }
     }
@@ -835,7 +839,21 @@ class WidgetServices(
             }
             // Groups are the personal tab's: none for work apps.
             "group" -> hits.filter { !it.isWork }.map { it.key }.toSet().takeIf { it.isNotEmpty() }?.let(handlers.group)
+            "similar" -> groupSimilar(hits)
+            // Android asks to confirm each in turn; started last first, so the first picked is asked about first.
+            "uninstall" -> hits.filterIsInstance<AppHit.Android>().filter { !it.app.system }.asReversed().forEach { handlers.uninstall(it.app) }
         }
+    }
+
+    /**
+     * Phone build: appAction("similar", ...): the apps of the same kind as [hits] (games, social, ...) that aren't in a
+     * group join them, in one's group or a group named for the kind. Work apps and hidden ones stay where they are.
+     */
+    private fun groupSimilar(hits: List<AppHit>) {
+        val groups = runtime.drawerGroups
+        val apps = allApps(runtime).filter { !it.isWork && it.key !in runtime.hiddenApps }
+        val plan = similarGroups(hits.filter { !it.isWork }.map { it.key to it.category }, apps.map { it.key to it.category }, groups::groupOf)
+        for ((name, keys) in plan) groups.put(keys, name)
     }
 
     /** The key home's shortcuts know [hit] by. */

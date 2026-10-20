@@ -212,9 +212,10 @@ internal val ACTION_WORDS =
         // true and false also turn it on and off.
         "torch" to setOf("on", "off", "toggle").let { Words(it, "torch takes true, false, ${it.joinToString()}") },
         "notification" to setOf("open", "dismiss").let { Words(it, "notification takes ${it.joinToString()} and a notification's key") },
-        // Phone build: hide, unhide, customize, dock, undock, group and select too; pin, hide, unhide, dock and group also take a list of keys.
+        // Phone build: hide, unhide, customize, dock, undock, group, select and similar too; pin, hide, unhide, dock, group,
+        // similar and uninstall also take a list of keys.
         "appAction" to
-            setOf("pin", "info", "uninstall", "remove", "edit", "share", "hide", "unhide", "customize", "dock", "undock", "group", "select")
+            setOf("pin", "info", "uninstall", "remove", "edit", "share", "hide", "unhide", "customize", "dock", "undock", "group", "select", "similar")
                 .let { Words(it, "appAction takes ${it.joinToString()} and an app's key") },
         "drawerGroup" to setOf("rename", "ungroup").let { Words(it, "drawerGroup takes ${it.joinToString()} and a group's name") },
         "workApps" to setOf("pause", "resume", "toggle").let { Words(it, "workApps takes ${it.joinToString()}") },

@@ -32,6 +32,8 @@ class DrawerOwlTest {
         installed: Double = 0.0,
         work: Boolean = false,
         hidden: Boolean = false,
+        category: String? = null,
+        actions: List<String> = listOf("pin"),
     ): Value =
         Obj(
             mapOf(
@@ -45,7 +47,7 @@ class DrawerOwlTest {
                 "profile" to (if (work) Str("work") else Null),
                 "alias" to Null,
                 "paused" to bool(false),
-                "actions" to Lst(listOf(Str("pin"))),
+                "actions" to Lst(actions.map(::Str)),
                 "score" to Num(score),
                 "last" to Null,
                 "work" to bool(work),
@@ -54,6 +56,7 @@ class DrawerOwlTest {
                 "letter" to Str(name.first().uppercaseChar().takeIf { it.isLetter() }?.toString() ?: "#"),
                 "installed" to Num(installed),
                 "isNew" to bool(false),
+                "category" to (category?.let(::Str) ?: Null),
             ),
         )
 
@@ -288,5 +291,22 @@ class DrawerOwlTest {
         assertFalse(Drawer(apps)["picking"].truthy)
         assertNull((Drawer(apps)["pickedApps"] as Lst).items.firstOrNull())
         assertTrue(Drawer(apps, selection = listOf("l:foot"))["picking"].truthy)
+    }
+
+    @Test fun pickedAndroidAppsCanBeUninstalledTogether() {
+        val apps = listOf(app("foot", "linux"), app("Signal", actions = listOf("pin", "info", "uninstall")), app("Phone", actions = listOf("pin", "info")))
+        assertTrue(Drawer(apps, selection = listOf("l:foot", "a:Signal"))["canUninstall"].truthy)
+        // A Linux app and a system app (no uninstall in its menu): nothing to uninstall.
+        assertFalse(Drawer(apps, selection = listOf("l:foot", "a:Phone"))["canUninstall"].truthy)
+    }
+
+    @Test fun groupSimilarIsOfferedWhileTwoAppsOfAKindAreUngrouped() {
+        val apps = listOf(app("Signal", category = "social"), app("WhatsApp", category = "social"), app("Maps", category = "maps"), app("Secret", category = "maps", hidden = true))
+        val drawer = Drawer(apps)
+        assertTrue(drawer["canGroupSimilar"].truthy)
+        val android = (drawer["rows"] as Lst).items.map { (it as Obj).fields }.first { it["title"].toString() == "android" }
+        assertTrue(android["similar"]!!.truthy)
+        // Grouped already, or alone in its kind (a hidden one doesn't count): nothing left to offer.
+        assertFalse(Drawer(apps, groups = listOf("chat" to listOf("a:Signal", "a:WhatsApp")))["canGroupSimilar"].truthy)
     }
 }

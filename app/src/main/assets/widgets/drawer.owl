@@ -51,7 +51,7 @@ panel "app drawer" {
     ])
   // A title, then rows of cols apps. Groups keep their title while empty, and without Linux its section offers to install it.
   let rows = flatten(sections.filter(s => len(s.apps) > 0 || s.group != null || s.work == true || (s.linux == true && !linux)).map(s => flatten([
-      s.title == null ? [] : [{key: "h:" + s.id, title: s.linux == true && !linux ? "linux apps" : s.title, group: s.group, work: s.work, offer: s.linux == true && !linux}],
+      s.title == null ? [] : [{key: "h:" + s.id, title: s.linux == true && !linux ? "linux apps" : s.title, group: s.group, work: s.work, offer: s.linux == true && !linux, similar: s.id == "android"}],
       chunk(s.apps, cols).map((cells, r) => {key: s.id + ":" + r, cells: cells, rail: s.rail == true})
     ])))
   // Beside the list while sorted A to Z (style's drawer.letters): each letter jumps to the first row with an app
@@ -79,7 +79,13 @@ panel "app drawer" {
   let canGroup = any(pickedApps, a => !a.work)
   let canHide = any(pickedApps, a => !a.hidden)
   let canShow = any(pickedApps, a => a.hidden)
-  let words = {pin: "add to home", info: "app info", uninstall: "uninstall", remove: "remove", edit: "edit", share: "share", dock: "add to dock", undock: "remove from dock", customize: "customize", hide: "hide", unhide: "unhide", select: "select several"}
+  // Android apps can be uninstalled together; Android asks about each in turn.
+  let canUninstall = any(pickedApps, a => indexOf(a.actions, "uninstall") >= 0)
+  // The kinds of app their developers declared (games, social, ...), each with its apps not in a group yet: what
+  // "group similar" puts together. Work apps and hidden ones stay where they are.
+  let freeKinds = groupBy(d.apps.filter(a => a.category != null && !a.work && !a.hidden && indexOf(grouped, a.key) < 0), a => a.category)
+  let canGroupSimilar = any(values(freeKinds), apps => len(apps) >= 2)
+  let words = {pin: "add to home", info: "app info", uninstall: "uninstall", remove: "remove", edit: "edit", share: "share", dock: "add to dock", undock: "remove from dock", customize: "customize", hide: "hide", unhide: "unhide", select: "select several", similar: "group similar"}
 
   // With a keyboard: Up and Tab move the pick away from the bar, Down and Shift+Tab back; the ask row sits lowest.
   onKey: {
@@ -184,8 +190,9 @@ panel "app drawer" {
           }
         }
         Spacer { visible: len(menuShortcuts) > 0; height: 1; fill: width; background: border }
-        // Its own entries, then the dock while it shows, then customize, hide or unhide, and picking several.
-        for w in flatten([a.actions, d.dock.shown ? (a.docked ? ["undock"] : d.dock.full ? [] : ["dock"]) : [], ["customize", a.hidden ? "unhide" : "hide", "select"]]) key w {
+        // Its own entries, then the dock while it shows, then customize, grouping it with apps like it (its group, else
+        // one named for its kind), hide or unhide, and picking several.
+        for w in flatten([a.actions, d.dock.shown ? (a.docked ? ["undock"] : d.dock.full ? [] : ["dock"]) : [], ["customize"], a.category != null && !a.work && !a.hidden && len(get(freeKinds, a.category ?? "", [])) >= (indexOf(grouped, a.key) >= 0 ? 1 : 2) ? ["similar"] : [], [a.hidden ? "unhide" : "hide", "select"]]) key w {
           Text { text: get(words, w, w); fontSize: 15; fill: width; padding: [12, 12]; onTap: { menu = ""; appAction(w, a.key) } }
         }
       }
@@ -250,6 +257,8 @@ panel "app drawer" {
             Text { visible: row.group != null; text: "[rename]"; color: accent; padding: [6, 8]; onTap: drawerGroup("rename", row.group) }
             Text { visible: row.group != null; text: "[ungroup]"; color: accent; padding: [6, 8]; onTap: drawerGroup("ungroup", row.group) }
             Text { visible: row.work == true; text: "[" + (d.work.paused ? "turn on" : "pause") + "]"; color: accent; padding: [6, 8]; onTap: workApps("toggle") }
+            // Every kind with two or more apps not in a group yet becomes a group of its own.
+            Text { visible: row.similar == true && canGroupSimilar; text: "[group similar]"; color: accent; padding: [6, 8]; onTap: appAction("similar", rest.map(a => a.key)) }
             Text { visible: row.offer == true; text: "[" + (d.linux == "installing" ? "installing…" : "install linux") + "]"; color: accent; padding: [6, 8]; onTap: launcher("linux") }
           }
         } else {
@@ -297,16 +306,20 @@ panel "app drawer" {
         Text { text: len(picked ?? []) + " picked"; weight: 1; padding: [8, 0] }
         Text { text: "[cancel]"; color: muted; padding: [6, 8]; onTap: launcher("cancel") }
       }
+      // Each on as many lines as it takes, so all of them fit a narrow screen.
       Row {
         gap: 0
+        wrap: true
         Text { text: "[add to home]"; color: accent; padding: [6, 8]; onTap: appAction("pin", picked) }
         // Fills the dock's free slots in the order picked; the drawer closes to show it.
         Text { visible: d.dock.shown && !d.dock.full; text: "[add to dock]"; color: accent; padding: [6, 8]; onTap: appAction("dock", picked) }
       }
       Row {
         gap: 0
+        wrap: true
         Text { visible: canGroup; text: "[group]"; color: accent; padding: [6, 8]; onTap: { appAction("group", picked); launcher("cancel") } }
         Text { visible: canHide; text: "[hide]"; color: accent; padding: [6, 8]; onTap: { appAction("hide", picked); launcher("cancel") } }
+        Text { visible: canUninstall; text: "[uninstall]"; color: accent; padding: [6, 8]; onTap: { appAction("uninstall", picked); launcher("cancel") } }
         Text { visible: canShow; text: "[unhide]"; color: accent; padding: [6, 8]; onTap: { appAction("unhide", picked); launcher("cancel") } }
       }
     }
