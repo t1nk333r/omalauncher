@@ -75,7 +75,6 @@ import dev.omalauncher.widgets.render.LocalHomeCovered
 import dev.omalauncher.widgets.render.LocalInputFocus
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
-import dev.omalauncher.linux.LinuxState
 import dev.omalauncher.widgets.render.LocalMenuOpened
 
 @Composable
@@ -181,6 +180,10 @@ private fun DesktopScreen(
             state.showHidden = false
         }
     }
+    // Hidden apps still installed: one hidden and then removed from the phone isn't counted. Showing the last hidden app
+    // again turns showing hidden off, so the next one hidden goes out of sight.
+    val hiddenCount by remember(runtime) { derivedStateOf { allApps(runtime).count { it.key in runtime.hiddenApps } } }
+    LaunchedEffect(hiddenCount) { if (hiddenCount == 0) state.showHidden = false }
     val search by remember(runtime, state) { derivedStateOf { searchApps(runtime, state.query, state.showHidden) } }
     // Agents run in Linux; without one to ask, or with web picked in the bar's menu, Enter searches the web.
     val linuxState by runtime.bootstrap.state.collectAsState()
@@ -229,8 +232,11 @@ private fun DesktopScreen(
                     state.picked = null
                 },
                 select = { hit -> state.selection = setOf(hit.key) },
+                pick = { key -> state.selection = state.selection?.let { toggled(it, key) } ?: setOf(key) },
                 dock = runtime.dock,
                 customize = { hit -> state.customizing = hit },
+                group = { keys -> state.grouping = keys },
+                renameGroup = { name -> state.renamingGroup = name },
                 edit = { spec ->
                     state.closeNow()
                     state.withAgent(runtime, "Edit ${spec.name}") { editWidgetCommand(it, spec) }
@@ -250,7 +256,7 @@ private fun DesktopScreen(
 
     LaunchedEffect(handlers) { runtime.widgets.appHandlers = handlers }
 
-    // The launcher's own drawer, or while gestures pick an owl panel for swiping up, that panel (else drawer.owl, else the stock one).
+    // The drawer, drawer.owl (else the stock one), or while gestures pick an owl panel for swiping up, that panel.
     val drawer = runtime.upPanel()
     // Panels live while they show, so their sources keep up; a panel's close() slides it away.
     val shownPanels by remember(state, drawer) {
@@ -273,9 +279,7 @@ private fun DesktopScreen(
                 .graphicsLayer { alpha = if (state.drawerDrag) 0f else state.drawer.value.coerceAtMost(1f) }
                 .background(Palette.background.copy(alpha = LauncherStyle.drawerOpacity))
                 .clickable { state.close() }
-                .drawerSwipe(state)
-                // Sideways between the drawer's tabs; an owl panel in its place has its own.
-                .then(if (drawer == null) Modifier.swipeTabs(runtime, state) else Modifier),
+                .drawerSwipe(state),
         )
     }
     // The bar and the panel above it; the keyboard lifts both. Nothing here takes touches while the panel is closed,
@@ -297,31 +301,15 @@ private fun DesktopScreen(
                 val slide =
                     Modifier.graphicsLayer {
                         val progress = state.drawer.value
-                        alpha = progress.coerceAtMost(1f)
+                        // Gone while an app is carried out of it, so home shows to drop it on.
+                        alpha = if (state.drawerDrag) 0f else progress.coerceAtMost(1f)
                         translationY = (1f - progress) * size.height * 0.6f
                     }
                 // Long-pressing an app opens its menu: the keyboard goes then, once, and stays down.
                 val release = remember(state) { { state.promptRequest = PromptRequest.Release } }
+                // Phone build: the drawer is drawer.owl, or the panel gestures › swipe up picks (owl panel).
                 if (panelShown && drawer != null) {
-                    // An owl panel in the drawer's place (gestures › swipe up: owl panel).
                     CompositionLocalProvider(LocalMenuOpened provides release) { UpPanel(runtime, state, drawer, slide) }
-                } else if (panelShown) {
-                    AppPanel(
-                        runtime = runtime,
-                        state = state,
-                        search = search,
-                        highlighted = highlighted,
-                        handlers = handlers,
-                        onAsk = { state.promptRequest = PromptRequest.Send },
-                        onWeb = { state.promptRequest = PromptRequest.Web },
-                        onSettings = { state.show() },
-                        modifier =
-                            Modifier.graphicsLayer {
-                                val progress = state.drawer.value
-                                alpha = if (state.drawerDrag) 0f else progress.coerceAtMost(1f)
-                                translationY = (1f - progress) * size.height * 0.6f
-                            },
-                    )
                 }
             }
             // Hidden while a tile types: it would sit on the keyboard, over the tile. They slide with the tile pages,

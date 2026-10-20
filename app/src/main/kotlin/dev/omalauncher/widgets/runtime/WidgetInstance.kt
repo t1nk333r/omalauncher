@@ -333,8 +333,20 @@ class WidgetInstance(
      */
     var query by mutableStateOf<() -> String>({ "" })
 
+    /** Phone build: a panel's `dragging`, the key of the app carried out of it onto home, set by home while it shows. */
+    var dragging by mutableStateOf<() -> String?>({ null })
+
+    /** Phone build: a panel's `showHidden`, whether the drawer lists its hidden apps, set by home while it shows. */
+    var showHidden by mutableStateOf<() -> Boolean>({ false })
+
+    /** Phone build: a panel's `picked`, the keys of the apps picked in the drawer in the order picked, set by home while it shows. */
+    var selection by mutableStateOf<() -> Collection<String>?>({ null })
+
     override fun tile(name: String): Value {
         if (name == "query") return Str(query())
+        if (name == "dragging") return dragging()?.let(::Str) ?: Null
+        if (name == "showHidden") return bool(showHidden())
+        if (name == "picked") return selection()?.let { keys -> Lst(keys.map(::Str)) } ?: Null
         val v =
             when (name) {
                 "linux" -> return bool(linux())

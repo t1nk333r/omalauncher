@@ -60,6 +60,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -127,6 +128,7 @@ fun HomeScreen(
     BackHandler(enabled = state.homeMenuOpen) { state.homeMenuOpen = false }
     BackHandler(enabled = state.editing != null && !state.homeMenuOpen) { state.editing = null }
     BackHandler(enabled = arrange.folder != null && !state.homeMenuOpen) { arrange.folder = null }
+    val context = LocalContext.current
     LaunchedEffect(engine) {
         engine.launcherAction = { action ->
             when (action) {
@@ -137,6 +139,22 @@ fun HomeScreen(
                 "linux" -> state.show(SettingsPage.Linux)
                 "drawer" -> state.open()
                 "settings" -> state.show()
+                // Phone build, for the drawer panel: closing it; the bar's text to the agent or the web, as the bar
+                // sends it; and listing hidden apps, behind the fingerprint or screen lock with drawer.lock-hidden.
+                "close" -> state.close()
+                "cancel" -> state.selection = null
+                "ask" -> state.promptRequest = PromptRequest.Send
+                "web" -> state.promptRequest = PromptRequest.Web
+                "hidden" ->
+                    when {
+                        !state.showHidden && LauncherStyle.drawerLock ->
+                            unlock(context, "show hidden apps") { if (state.drawer.value > 0.01f) state.showHidden = true }
+                        else -> {
+                            state.showHidden = !state.showHidden
+                            // Hidden apps picked while listed would otherwise stay picked out of sight.
+                            if (!state.showHidden) state.selection = state.selection?.let { (it - runtime.hiddenApps.keys).ifEmpty { null } }
+                        }
+                    }
             }
         }
     }

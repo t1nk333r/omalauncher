@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import dev.omalauncher.Runtime
+import dev.omalauncher.widgets.render.LocalAppDrag
 import dev.omalauncher.widgets.render.LocalInputFocus
 import dev.omalauncher.widgets.render.WidgetScreen
 
@@ -43,8 +44,23 @@ internal fun UpPanel(
     if (inst.query !== bar) inst.query = bar
     // Opened from the top later, the same file sees "".
     DisposableEffect(inst, bar) { onDispose { if (inst.query === bar) inst.query = { "" } } }
+    // Phone build: the app being carried onto home (dragApp), whether hidden apps are listed and the apps picked, as the
+    // panel reads them (dragging, showHidden, picked).
+    val dragging = remember(state) { { state.dockDrag?.key } }
+    val hidden = remember(state) { { state.showHidden } }
+    val selection = remember(state) { { state.selection } }
+    if (inst.dragging !== dragging) inst.dragging = dragging
+    if (inst.showHidden !== hidden) inst.showHidden = hidden
+    if (inst.selection !== selection) inst.selection = selection
+    DisposableEffect(inst, dragging, hidden, selection) {
+        onDispose {
+            if (inst.dragging === dragging) inst.dragging = { null }
+            if (inst.showHidden === hidden) inst.showHidden = { false }
+            if (inst.selection === selection) inst.selection = { null }
+        }
+    }
     val pull = rememberDrawerPull(state)
-    CompositionLocalProvider(LocalInputFocus provides true) {
+    CompositionLocalProvider(LocalInputFocus provides true, LocalAppDrag provides rememberAppDrag(runtime, state)) {
         WidgetScreen(
             inst,
             modifier

@@ -761,8 +761,10 @@ class Compiler private constructor(
             if (p.name == "focus" && inScreen == false) fail("focus only works in a screen { }", p.pos)
             since("${n.type}.${p.name}", p.pos)
             if (p.name == "reverse" && body.props.none { it.name == "lazy" }) fail("reverse lists a lazy ${n.type} from its end: add lazy: true", p.pos)
+            if (p.name == "rail" && body.props.none { it.name == "lazy" }) fail("rail jumps along a lazy ${n.type}'s items: add lazy: true", p.pos)
             if (p.name == "background" && gradient(p.value)) since(GRADIENT_BACKGROUND, p.pos)
             if (p.name == "frost") since("frost", p.pos)
+            if (p.name == "dragApp") since("dragApp", p.pos)
             if (p.name == "font") font(p.value, scope)
             props[p.name] = prop(p, scope)
         }
@@ -1228,6 +1230,11 @@ class Compiler private constructor(
             if (ast.kind != OwlKind.Panel) fail("query is the prompt bar's text, which only a panel has", e.pos)
             since(QUERY, e.pos)
             return Ev(null) { env -> env.host.tile(QUERY) }
+        }
+        if (e.name == DRAGGING || e.name == SHOW_HIDDEN || e.name == PICKED) {
+            if (ast.kind != OwlKind.Panel) fail("${e.name} is the app drawer's, which only a panel has", e.pos)
+            since(e.name, e.pos)
+            return Ev(null) { env -> env.host.tile(e.name) }
         }
         if (e.name in ENUMS.values.flatten()) fail("'${e.name}' isn't a value here", e.pos)
         fail("unknown name '${e.name}'", e.pos)

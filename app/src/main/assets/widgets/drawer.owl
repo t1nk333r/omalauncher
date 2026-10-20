@@ -1,8 +1,11 @@
 panel "app drawer" {
-  // The app drawer: swiping up on home opens it, above the prompt bar. It's a panel like any other, so it's yours to
-  // change: ask your agent to edit it, or pick another panel in settings › gestures. .stock-drawer.owl next to it is
-  // this file as the launcher ships it, kept up to date: compare the two to see what changed in a newer launcher.
-  meta { description: "The launcher's app drawer, written in owl: your apps by kind, search as you type in the prompt bar, and each app's long-press menu"; version: "1.0"; license: "MIT"; category: "system"; owl: 11 }
+  // The app drawer: swiping up on home opens it, above the prompt bar, and search shows it too. It's a panel like any
+  // other, so it's yours to change: ask your agent to edit it. .stock-drawer.owl next to it is this file as the launcher
+  // ships it, kept up to date: compare the two to see what changed in a newer launcher.
+  //
+  // Phone build: style.toml's drawer.* settings (sort, sections, most used, letters, labels, columns, icon size) shape
+  // it; groups, hidden apps and picking several apps are the launcher's, and android.drawer and `picked` tell it them.
+  meta { description: "The launcher's app drawer, written in owl: your apps by kind and your groups, the most used, a letter rail, search as you type in the prompt bar, each app's long-press menu, picking several, and dragging an app onto home"; version: "1.0"; license: "MIT"; category: "system"; owl: 11 }
   // The launcher's gear, as its settings buttons draw it; currentColor takes the accent.
   asset gear = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iY3VycmVudENvbG9yIiBkPSJNMTkuMTQsMTIuOTRjMC4wNCwtMC4zIDAuMDYsLTAuNjEgMC4wNiwtMC45NGMwLC0wLjMyIC0wLjAyLC0wLjY0IC0wLjA3LC0wLjk0bDIuMDMsLTEuNThjMC4xOCwtMC4xNCAwLjIzLC0wLjQxIDAuMTIsLTAuNjFsLTEuOTIsLTMuMzJjLTAuMTIsLTAuMjIgLTAuMzcsLTAuMjkgLTAuNTksLTAuMjJsLTIuMzksMC45NmMtMC41LC0wLjM4IC0xLjAzLC0wLjcgLTEuNjIsLTAuOTRMMTQuNCwyLjgxYy0wLjA0LC0wLjI0IC0wLjI0LC0wLjQxIC0wLjQ4LC0wLjQxaC0zLjg0Yy0wLjI0LDAgLTAuNDMsMC4xNyAtMC40NywwLjQxTDkuMjUsNS4zNUM4LjY2LDUuNTkgOC4xMiw1LjkyIDcuNjMsNi4yOUw1LjI0LDUuMzNjLTAuMjIsLTAuMDggLTAuNDcsMCAtMC41OSwwLjIyTDIuNzQsOC44N0MyLjYyLDkuMDggMi42Niw5LjM0IDIuODYsOS40OGwyLjAzLDEuNThDNC44NCwxMS4zNiA0LjgsMTEuNjkgNC44LDEyczAuMDIsMC42NCAwLjA3LDAuOTRsLTIuMDMsMS41OGMtMC4xOCwwLjE0IC0wLjIzLDAuNDEgLTAuMTIsMC42MWwxLjkyLDMuMzJjMC4xMiwwLjIyIDAuMzcsMC4yOSAwLjU5LDAuMjJsMi4zOSwtMC45NmMwLjUsMC4zOCAxLjAzLDAuNyAxLjYyLDAuOTRsMC4zNiwyLjU0YzAuMDUsMC4yNCAwLjI0LDAuNDEgMC40OCwwLjQxaDMuODRjMC4yNCwwIDAuNDQsLTAuMTcgMC40NywtMC40MWwwLjM2LC0yLjU0YzAuNTksLTAuMjQgMS4xMywtMC41NiAxLjYyLC0wLjk0bDIuMzksMC45NmMwLjIyLDAuMDggMC40NywwIDAuNTksLTAuMjJsMS45MiwtMy4zMmMwLjEyLC0wLjIyIDAuMDcsLTAuNDcgLTAuMTIsLTAuNjFMMTkuMTQsMTIuOTR6TTEyLDE1LjZjLTEuOTgsMCAtMy42LC0xLjYyIC0zLjYsLTMuNnMxLjYyLC0zLjYgMy42LC0zLjZzMy42LDEuNjIgMy42LDMuNlMxMy45OCwxNS42IDEyLDE1LjZ6Ii8+PC9zdmc+"
   source d = android.drawer
@@ -12,57 +15,93 @@ panel "app drawer" {
   state menu = ""
   state menuShortcuts = null
   state tab = "personal"
-  // The result picked with the arrow or Tab keys, -1 for the ask row; null follows the ranking.
+  // The result picked with the arrow or Tab keys: -1 for the ask row, -2 for the web's; null follows the ranking.
   state pick = null
 
-  // As the launcher's drawer fits them: a column for every 76 dp.
-  let cols = max(1, floor(((screenWidth ?? 400) - 24) / 76))
+  let st = d.style
+  let icon = st.icon ?? 52
+  // As many as fit, each a little wider than its icon, unless style sets how many.
+  let cols = st.columns ?? max(1, floor(((screenWidth ?? 400) - 24) / (icon + 24)))
   let typed = trim(query)
   let searching = typed != ""
-  let mine = d.apps.filter(a => (tab == "work") == (a.profile == "work"))
-  let sections = tab == "work" ? [
-      {title: "shortcuts", apps: mine.filter(a => a.kind == "shortcut")},
-      {title: d.work.paused ? "work apps paused" : "work apps", apps: mine.filter(a => a.kind == "android"), work: true}
-    ] : [
-      {title: "apps", apps: mine.filter(a => a.kind == "owl")},
-      {title: "linux", apps: mine.filter(a => a.kind == "linux"), linux: true},
-      {title: "shortcuts", apps: mine.filter(a => a.kind == "shortcut")},
-      {title: "android", apps: mine.filter(a => a.kind == "android")}
-    ]
-  // A title, then rows of cols apps. Without Linux, its section is an offer to install it.
-  let rows = flatten(sections.filter(s => len(s.apps) > 0 || s.work || (s.linux && !linux)).map(s => flatten([
-      [{key: "h:" + s.title, title: s.linux && !linux ? "linux apps" : s.title, work: s.work, offer: s.linux && !linux}],
-      chunk(s.apps, cols).map((cells, r) => {key: s.title + ":" + r, cells: cells})
+  let picking = picked != null
+  let workTab = d.work != null && tab == "work"
+  // Hidden apps are listed, dimmed, only while showHidden; the most-used row never has them.
+  let shown = d.apps.filter(a => !a.hidden || showHidden)
+  // In style's drawer.sort order: A to Z, by use (most first) or by install (newest first); ties A to Z.
+  let ordered = shown.sortBy(a => lower(a.name)).sortBy(a => st.sort == "used" ? -a.score : st.sort == "new" ? -a.installed : 0)
+  // An app in one of your groups is listed there, on the personal tab, not under its usual heading.
+  let grouped = flatten(d.groups.map(g => g.keys))
+  let rest = ordered.filter(a => !a.work && indexOf(grouped, a.key) < 0)
+  let top = st.suggestions ? d.apps.filter(a => !a.work && !a.hidden && a.score > 0).sortBy(a => -a.score).take(cols) : []
+  let sections = workTab ? [
+      {id: "w-shortcuts", title: "shortcuts", apps: ordered.filter(a => a.work && a.kind == "shortcut")},
+      {id: "w-apps", title: d.work.paused ? "work apps paused" : "work apps", apps: ordered.filter(a => a.work && a.kind == "android"), work: true}
+    ] : flatten([
+      [{id: "most", title: "most used", apps: top}],
+      d.groups.map(g => {id: "g:" + g.name, title: g.name, group: g.name, apps: ordered.filter(a => !a.work && indexOf(g.keys, a.key) >= 0)}),
+      st.sections ? [
+        {id: "apps", title: "apps", apps: rest.filter(a => a.kind == "owl")},
+        {id: "linux", title: "linux", apps: rest.filter(a => a.kind == "linux"), linux: true},
+        // Usually few and just added: between the Linux and the Android apps, not past all the Android ones.
+        {id: "shortcuts", title: "shortcuts", apps: rest.filter(a => a.kind == "shortcut")},
+        // With headings each section runs A to Z on its own: the letter rail goes through Android's, the long one.
+        {id: "android", title: "android", apps: rest.filter(a => a.kind == "android"), rail: true}
+      ] : [{id: "all", title: null, apps: rest, rail: true}]
+    ])
+  // A title, then rows of cols apps. Groups keep their title while empty, and without Linux its section offers to install it.
+  let rows = flatten(sections.filter(s => len(s.apps) > 0 || s.group != null || s.work == true || (s.linux == true && !linux)).map(s => flatten([
+      s.title == null ? [] : [{key: "h:" + s.id, title: s.linux == true && !linux ? "linux apps" : s.title, group: s.group, work: s.work, offer: s.linux == true && !linux}],
+      chunk(s.apps, cols).map((cells, r) => {key: s.id + ":" + r, cells: cells, rail: s.rail == true})
     ])))
+  // Beside the list while sorted A to Z (style's drawer.letters): each letter jumps to the first row with an app
+  // starting with it, '#' for the rest, last.
+  let railCells = flatten(rows.filter(r => r.rail == true).map(r => r.cells.map(a => {letter: a.letter, key: r.key})))
+  let firsts = groupBy(railCells, c => c.letter)
+  let letters = flatten([sort(keys(firsts).filter(l => l != "#")), get(firsts, "#") != null ? ["#"] : []])
+  let rail = st.letters && !searching ? letters.map(l => {label: l, key: first(get(firsts, l)).key}) : []
+
   // Every profile's apps match while typing, best first; the list runs up from the bar, so the best sits right above it.
-  let hits = searching ? rank(d.apps, typed) : []
+  let hits = searching ? rank(shown, typed) : []
   let hitRows = chunk(hits, cols).map((cells, r) => {key: "q:" + r, start: r * cols, cells: cells})
-  // Enter opens the best match when it names an app well, as the bar does; anything else, a prompt of more lines among it, goes to the agent.
+  // Enter opens the best match when it names an app well, as the bar does; else the agent, or the web without one.
   let opens = len(hits) > 0 && strongMatch(hits[0], typed)
-  // What Enter acts on: a result by its place in hits, or -1 for the ask row.
-  let chosen = pick ?? (opens ? 0 : -1)
+  let fallback = opens ? 0 : d.asks ? -1 : -2
+  // What Enter acts on: a result by its place in hits, -1 for the ask row or -2 for the web's.
+  let chosen = pick == null ? fallback : pick < 0 ? pick : len(hits) > 0 ? min(pick, len(hits) - 1) : fallback
+  // Up the panel from the bar: the ask row, the web's, then the apps.
+  let order = flatten([[-1, -2], range(len(hits))])
   let agent = ag.default
+  let hiddenCount = count(d.apps, a => a.hidden)
+  // Picked apps as the drawer lists them, for what the picking bar offers.
+  let pickedApps = picking ? d.apps.filter(a => indexOf(picked, a.key) >= 0) : []
+  // Groups are the personal tab's: none for work apps.
+  let canGroup = any(pickedApps, a => !a.work)
+  let canHide = any(pickedApps, a => !a.hidden)
+  let canShow = any(pickedApps, a => a.hidden)
+  let words = {pin: "add to home", info: "app info", uninstall: "uninstall", remove: "remove", edit: "edit", share: "share", dock: "add to dock", undock: "remove from dock", customize: "customize", hide: "hide", unhide: "unhide", select: "select several"}
+
   // With a keyboard: Up and Tab move the pick away from the bar, Down and Shift+Tab back; the ask row sits lowest.
   onKey: {
-    if searching {
-      pick = clamp(chosen + (value == "up" || value == "tab" ? 1 : -1), -1, len(hits) - 1)
+    if searching && !picking {
+      pick = order[clamp(max(0, indexOf(order, chosen)) + (value == "up" || value == "tab" ? 1 : -1), 0, len(order) - 1)]
     }
   }
-  let labels = {pin: "add to home", info: "app info", uninstall: "uninstall", remove: "remove", edit: "edit", share: "share"}
-
   // Typing starts the pick over, at the best match.
   on typed { pick = null }
+  // Carried out onto home, its menu gives way to the drag.
+  on dragging { menu = "" }
 
-  enter: searching ? (chosen >= 0 ? "▸ open" : "⏎ ask") : ""
-  // An empty bar's Enter does nothing, as on home.
+  enter: searching && !picking ? (chosen >= 0 ? "▸ open" : chosen == -2 ? "↗ search" : "⏎ ask") : ""
+  // An empty bar's Enter does nothing, as on home; nor does one while apps are picked, so the picks stay.
   onSubmit: {
-    if searching {
+    if searching && !picking {
       if chosen >= 0 {
         open(hits[chosen].key)
-      } else if !linux {
-        launcher("linux")
+      } else if chosen == -2 {
+        launcher("web")
       } else {
-        ask(value)
+        launcher("ask")
       }
     }
   }
@@ -70,41 +109,63 @@ panel "app drawer" {
   // An app's icon as the drawer draws it: its own, its silhouette on a badge with monochrome icons, or its initials.
   component AppIcon(a) {
     Box {
-      size: 52
+      size: icon
       align: center
-      radius: 26 * corners
+      radius: icon / 2 * corners
       background: a.hasIcon && !d.monochrome ? transparent : surface
       if a.hasIcon {
-        Image { src: a.icon; size: d.monochrome ? 36 : 52; tint: d.monochrome ? accent : null; label: a.label }
+        Image { src: a.icon; size: d.monochrome ? icon * 36 / 52 : icon; tint: d.monochrome ? accent : null; label: a.label }
       } else {
-        Text { text: a.initials; fontSize: 18; color: accent }
+        Text { text: a.initials; fontSize: 18 * icon / 52; color: accent }
       }
     }
   }
 
-  component Cell(a, picked) {
+  // One app: framed when Enter would open it or it's picked. While picking, a tap or long-press picks or unpicks it;
+  // otherwise a tap opens it, a long-press opens its menu, and a long-press then a drag carries it onto home or the dock.
+  component Cell(a, framed, named) {
     Column {
       weight: 1
       align: center
       gap: 6
       padding: [4, 10]
       radius: 16 * corners
-      border: picked ? 2 : 0
+      border: framed || indexOf(picked ?? [], a.key) >= 0 ? 2 : 0
       borderColor: accent
-      // Paused work apps show dimmed; opening one turns work apps back on.
-      opacity: a.paused ? 0.4 : 1
-      onTap: open(a.key)
-      onLongPress: {
-        haptic()
-        menuShortcuts = null
-        menu = a.key
-        menuShortcuts = shortcuts(a.key)
+      // Paused work apps and hidden ones show dimmed; opening a paused one turns work apps back on.
+      opacity: a.paused || a.hidden ? 0.4 : 1
+      dragApp: picking ? "" : a.key
+      onTap: {
+        if picking {
+          appAction("select", a.key)
+        } else {
+          open(a.key)
+        }
       }
-      AppIcon { a: a }
+      onLongPress: {
+        if picking {
+          appAction("select", a.key)
+        } else {
+          menuShortcuts = null
+          menu = a.key
+          menuShortcuts = shortcuts(a.key)
+        }
+      }
+      Box {
+        AppIcon { a: a }
+        // Installed lately and not opened since.
+        Box { visible: a.isNew; size: icon; align: topStart; Box { size: 10; radius: 5; background: accent } }
+        Box {
+          visible: indexOf(picked ?? [], a.key) >= 0
+          size: icon
+          align: topEnd
+          Box { size: 20; radius: 10; background: accent; align: center; Text { text: "✓"; fontSize: 12; color: background } }
+        }
+      }
       // Always two lines tall, so a row keeps its height whichever apps fill it.
-      Text { text: a.name; fontSize: 12; align: center; maxLines: 2; minLines: 2; fill: width }
+      Text { visible: named; text: a.name; fontSize: 12; align: center; maxLines: 2; minLines: 2; fill: width }
       Popup {
-        visible: menu == a.key && menuShortcuts != null
+        visible: menu == a.key && menuShortcuts != null && dragging == null
         position: above
         onDismiss: menu = ""
         width: 200
@@ -123,8 +184,9 @@ panel "app drawer" {
           }
         }
         Spacer { visible: len(menuShortcuts) > 0; height: 1; fill: width; background: border }
-        for w in a.actions {
-          Text { text: get(labels, w, w); fontSize: 15; fill: width; padding: [12, 12]; onTap: { menu = ""; appAction(w, a.key) } }
+        // Its own entries, then the dock while it shows, then customize, hide or unhide, and picking several.
+        for w in flatten([a.actions, d.dock.shown ? (a.docked ? ["undock"] : d.dock.full ? [] : ["dock"]) : [], ["customize", a.hidden ? "unhide" : "hide", "select"]]) key w {
+          Text { text: get(words, w, w); fontSize: 15; fill: width; padding: [12, 12]; onTap: { menu = ""; appAction(w, a.key) } }
         }
       }
     }
@@ -142,6 +204,16 @@ panel "app drawer" {
         Text { text: t; color: tab == t ? accent : muted; background: tab == t ? surface : transparent; radius: 18 * corners; padding: [14, 10]; onTap: tab = t }
       }
       Spacer { weight: 1 }
+      // Lists the hidden apps too, dimmed, so they can be shown again; only while there are some. Behind the
+      // fingerprint or screen lock with style's drawer.lock-hidden.
+      Text {
+        visible: hiddenCount > 0
+        text: (showHidden ? "[hide hidden (" : "[show hidden (") + hiddenCount + ")]"
+        color: showHidden ? accent : muted
+        maxLines: 1
+        padding: [8, 10]
+        onTap: launcher("hidden")
+      }
       Box {
         size: 44
         radius: 22 * corners
@@ -159,23 +231,32 @@ panel "app drawer" {
       weight: 1
       fill: width
       gap: 0
+      rail: rail
+      // Sideways to the other tab, as stock drawers' tabs turn: a finger moving left brings the work apps.
+      onSwipe: {
+        if d.work != null {
+          tab = value == "left" ? "work" : "personal"
+        }
+      }
       for row in rows key row.key {
         if row.title != null {
-          // A section's title, with the work switch or the offer to install Linux at its end.
+          // A section's title, with a group's rename and ungroup, the work switch or the offer to install Linux at its end.
           Row {
             fill: width
             gap: 0
             align: center
             padding: [8, 12, 0, 4]
-            Text { text: row.title; color: muted; weight: 1 }
-            Text { text: d.work.paused ? "[turn on]" : "[pause]"; visible: row.work == true; color: accent; onTap: workApps("toggle") }
-            Text { text: d.linux == "installing" ? "[installing…]" : "[install linux]"; visible: row.offer == true; color: accent; onTap: launcher("linux") }
+            Text { text: row.title; color: muted; weight: 1; maxLines: 1 }
+            Text { visible: row.group != null; text: "[rename]"; color: accent; padding: [6, 8]; onTap: drawerGroup("rename", row.group) }
+            Text { visible: row.group != null; text: "[ungroup]"; color: accent; padding: [6, 8]; onTap: drawerGroup("ungroup", row.group) }
+            Text { visible: row.work == true; text: "[" + (d.work.paused ? "turn on" : "pause") + "]"; color: accent; padding: [6, 8]; onTap: workApps("toggle") }
+            Text { visible: row.offer == true; text: "[" + (d.linux == "installing" ? "installing…" : "install linux") + "]"; color: accent; padding: [6, 8]; onTap: launcher("linux") }
           }
         } else {
           Row {
             fill: width
             gap: 0
-            for a in row.cells { Cell { a: a; picked: false } }
+            for a in row.cells { Cell { a: a; framed: false; named: st.labels } }
             // A short last row keeps its cells the width of the others'.
             for s in range(0, cols - len(row.cells)) { Spacer { weight: 1 } }
           }
@@ -193,29 +274,65 @@ panel "app drawer" {
         Row {
           fill: width
           gap: 0
-          for a, i in row.cells { Cell { a: a; picked: row.start + i == chosen } }
+          // Search results always say what matched.
+          for a, i in row.cells { Cell { a: a; framed: !picking && row.start + i == chosen; named: true } }
           for s in range(0, cols - len(row.cells)) { Spacer { weight: 1 } }
         }
       }
     }
-    // The one line above the bar that sends what's typed to the agent; outlined when that's what Enter does.
+    // While picking: how many, and what to do with them all. Adding to home skips the ones already there.
+    Column {
+      visible: picking
+      fill: width
+      gap: 0
+      padding: [4, 4]
+      border: 2
+      borderColor: accent
+      radius: 16 * corners
+      background: background
+      Row {
+        fill: width
+        align: center
+        gap: 0
+        Text { text: len(picked ?? []) + " picked"; weight: 1; padding: [8, 0] }
+        Text { text: "[cancel]"; color: muted; padding: [6, 8]; onTap: launcher("cancel") }
+      }
+      Row {
+        gap: 0
+        Text { text: "[add to home]"; color: accent; padding: [6, 8]; onTap: appAction("pin", picked) }
+        // Fills the dock's free slots in the order picked; the drawer closes to show it.
+        Text { visible: d.dock.shown && !d.dock.full; text: "[add to dock]"; color: accent; padding: [6, 8]; onTap: appAction("dock", picked) }
+      }
+      Row {
+        gap: 0
+        Text { visible: canGroup; text: "[group]"; color: accent; padding: [6, 8]; onTap: { appAction("group", picked); launcher("cancel") } }
+        Text { visible: canHide; text: "[hide]"; color: accent; padding: [6, 8]; onTap: { appAction("hide", picked); launcher("cancel") } }
+        Text { visible: canShow; text: "[unhide]"; color: accent; padding: [6, 8]; onTap: { appAction("unhide", picked); launcher("cancel") } }
+      }
+    }
+    // The lines above the bar that do something with what's typed: search the web, or ask the agent (lowest). Each is
+    // outlined while it's what Enter does.
     Row {
-      visible: searching
+      visible: searching && !picking
+      fill: width
+      gap: 4
+      padding: [12, 10]
+      border: chosen == -2 ? 2 : 0
+      borderColor: accent
+      radius: 16 * corners
+      onTap: launcher("web")
+      Text { text: "↗"; color: chosen == -2 ? accent : muted }
+      Text { text: "search " + d.web + ": " + typed; color: chosen == -2 ? foreground : muted; maxLines: 1; weight: 1 }
+    }
+    Row {
+      visible: searching && !picking
       fill: width
       gap: 4
       padding: [12, 10]
       border: chosen == -1 ? 2 : 0
       borderColor: accent
       radius: 16 * corners
-      onTap: {
-        if !linux {
-          launcher("linux")
-        } else if agent == null {
-          launcher("agents")
-        } else {
-          ask(typed)
-        }
-      }
+      onTap: launcher("ask")
       Text { text: "⏎"; color: chosen == -1 ? accent : muted }
       Text {
         text: !linux ? "ask an agent · install linux" : agent == null ? "ask an agent · install one" : "ask " + agent.bin + ": " + typed

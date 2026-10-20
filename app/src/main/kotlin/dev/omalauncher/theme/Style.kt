@@ -257,7 +257,7 @@ class Style(
             Setting.Text(
                 "gestures.swipe-up",
                 "drawer.owl",
-                "The owl panel swiping up shows in the drawer's place while settings › gestures sets swiping up to \"owl panel\" (otherwise the launcher's own drawer opens): a panel's file name in ~/.config/omalauncher/widgets, by default drawer.owl. One that's gone or doesn't compile falls back to drawer.owl, then to .stock-drawer.owl, the drawer as it ships.",
+                "The owl panel swiping up shows in the drawer's place while settings › gestures sets swiping up to \"owl panel\" (otherwise the drawer, drawer.owl, opens): a panel's file name in ~/.config/omalauncher/widgets, by default drawer.owl. One that's gone or doesn't compile falls back to drawer.owl, then to .stock-drawer.owl, the drawer as it ships.",
             )
         val SWIPE_DOWN =
             Setting.Text(

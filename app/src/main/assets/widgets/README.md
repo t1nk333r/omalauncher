@@ -79,7 +79,7 @@ that read it redraw. Properties are separated by newlines or `;`.
 | `source a = android.apps` | the phone's launchable apps, updated as they're installed, removed and opened: a list of `{key, name, package, component, profile, system, icon, score, last}`. `key` is unique even with the same app in a work profile or a clone, and `androidApp(a.key)` opens that copy; `profile` is `work` or `clone` for those, else null; `icon` goes in `Image { src: a.icon }`. `score` and `last` (Unix seconds, null if never opened) are what the search ranks by: opens fade by half every two weeks, and `androidApp(...)` counts like opening from the drawer (owl 8) |
 | `source ag = android.agents` | the coding agents installed in Linux: `{default, installed}`, each agent `{bin, name, description, command, key, icon}`, updated as they change. `default` is the one the prompt bar asks and `ask(text)` sends to, null with none installed; `open(a.key)` starts one without a prompt, and `icon` is its logo (owl 10) |
 | `source r = android.recent` | the apps in the recent strip above the prompt bar, last opened first: a list of `{key, kind, name, icon, score, last}`, Android and Linux apps, owl apps and shortcuts alike (`kind` is `android`, `linux`, `owl` or `shortcut`). `open(r.key)` opens one, `icon` goes in `Image { src: r.icon }`, and `score` and `last` are as in `android.apps`. Like the strip, it reorders once home is out of sight, not under the finger that tapped (owl 10) |
-| `source d = android.drawer` | the app drawer: `{apps, linux, monochrome, work, updates}`, updated as it changes. `apps` lists every app in the drawer's order, owl apps, Linux apps, shortcuts and Android apps, then the work profile's shortcuts and apps, each `{key, kind, name, label, icon, hasIcon, initials, profile, alias, paused, actions, score, last}`: `kind`, `icon`, `score` and `last` as in `android.recent`, `label` what screen readers should say for it, for an Image's `label` ("WhatsApp work"), `profile` as in `android.apps`, `alias` what search matches besides the name (`WhatsApp work`), `paused` for an app in a paused work profile (the drawer dims those), and `actions` the words of its long-press menu for `appAction(word, a.key)`. `hasIcon` is false while `icon` would draw nothing (no icon, or not loaded yet), when the drawer shows `initials` on a badge instead; `monochrome` on `d` says icons are silhouettes, which the drawer puts on a badge too. `d.linux` is `installed`, `installing` or `missing`; `d.work` is `{paused}` while there's a work profile, else null; `d.updates` is how many system updates wait, the dot on the drawer's settings button. `open(a.key)` opens one (owl 11) |
+| `source d = android.drawer` | the app drawer: `{apps, linux, monochrome, work, updates}`, updated as it changes. `apps` lists every app in the drawer's order, owl apps, Linux apps, shortcuts and Android apps, then the work profile's shortcuts and apps, each `{key, kind, name, label, icon, hasIcon, initials, profile, alias, paused, actions, score, last}`: `kind`, `icon`, `score` and `last` as in `android.recent`, `label` what screen readers should say for it, for an Image's `label` ("WhatsApp work"), `profile` as in `android.apps`, `alias` what search matches besides the name (`WhatsApp work`), `paused` for an app in a paused work profile (the drawer dims those), and `actions` the words of its long-press menu for `appAction(word, a.key)`. `hasIcon` is false while `icon` would draw nothing (no icon, or not loaded yet), when the drawer shows `initials` on a badge instead; `monochrome` on `d` says icons are silhouettes, which the drawer puts on a badge too. `d.linux` is `installed`, `installing` or `missing`; `d.work` is `{paused}` while there's a work profile, else null; `d.updates` is how many system updates wait, the dot on the drawer's settings button. `open(a.key)` opens one (owl 11). On this phone build each app also has `work` (in the work profile), `hidden` (hidden from the drawer: list it only while `showHidden`), `docked` (in the dock), `letter` (where the letter rail files it: its first letter, `#` for anything else), `installed` (Unix seconds, 0 when unknown) and `isNew` (installed lately and not opened, while style's `drawer.new-badge` is on), and its `name` is yours when you renamed it (customize), the app's own then in `alias`. `d` also has `style` (style.toml's `drawer` settings: `{sort, sections, suggestions, letters, labels, columns, icon}`, `columns` null for as many as fit), `groups` (your drawer groups in order, `{name, keys}`), `dock` (`{shown, full}`), `asks` (whether the bar's Enter goes to the agent rather than the web) and `web` (the web search's name) |
 | `source m = android.modes` | the phone's modes: `{dnd, saver, ringer, torch}`, updated as they change. `dnd` is Do Not Disturb in any form, `saver` battery saver, `ringer` is `normal`, `vibrate` or `silent`, and `torch` is null on a phone without a flash. Switch the torch with `torch(...)` (owl 7) |
 | `state x = 0` | a value that handlers can change. Add `persist` to keep it across restarts: `state endsAt = 0 persist` |
 | `let x = expr` | a derived value, recomputed only when what it reads changes. It can use sources, state and earlier lets |
@@ -291,7 +291,7 @@ when lists reorder), and `let x = ...` inside any node.
 
 | node | properties |
 |---|---|
-| `Column` | `gap` (dp, default 4), `align: start/center/end`, `justify: start/center/end/spaceBetween/spaceAround/spaceEvenly`, `scroll: true`, `lazy: true` (scrolls, and a `for` right inside builds its rows only as they come into view, so a list of hundreds opens as fast as a short one; give it a height to fill, such as `weight: 1`, since inside a scrolling Column it builds everything, owl 11), `reverse: true` with `lazy` (lists from the end: the first item at the bottom, as search results sit right above a bar; when its items change it scrolls back to the first, owl 11) |
+| `Column` | `gap` (dp, default 4), `align: start/center/end`, `justify: start/center/end/spaceBetween/spaceAround/spaceEvenly`, `scroll: true`, `lazy: true` (scrolls, and a `for` right inside builds its rows only as they come into view, so a list of hundreds opens as fast as a short one; give it a height to fill, such as `weight: 1`, since inside a scrolling Column it builds everything, owl 11), `reverse: true` with `lazy` (lists from the end: the first item at the bottom, as search results sit right above a bar; when its items change it scrolls back to the first, owl 11). `rail` (phone build, with `lazy`): letters beside the list to touch or slide along, each jumping to the item of the `for` with its key: a list of `{label, key}`, as drawer.owl builds it from `letter` |
 | `Row` | `gap` (8), `align: top/center/bottom`, `justify`, `wrap: true` |
 | `Flow` | a Row that wraps to new lines |
 | `Box` | stacks children on top of each other; `align: center/top/bottom/start/end/topStart/topEnd/bottomStart/bottomEnd` |
@@ -319,7 +319,12 @@ Every node also takes:
   (without `radius`, bordered elements follow the launcher's corner style: 0 for edge, 4 for soft, 8 for round;
   anything else matches it with `radius: 8 * corners`)
 - `opacity`, `rotation` (degrees), `scale`, `offset: [x, y]` (dp), `visible`
-- handlers: `onTap` (with `x`, `y`) and `onDrag` (with `dx`, `dy`, `x`, `y`); `Slider` and `Input` also take
+- `dragApp` (phone build, in a panel in the drawer's place): long-press then drag carries the app with this key
+  (from `android.drawer`) onto home or the dock, as the drawer does; the panel steps aside meanwhile and closes once
+  it's dropped. `""` or null carries nothing. A long-press without a drag still runs `onLongPress`
+- handlers: `onTap` (with `x`, `y`) and `onDrag` (with `dx`, `dy`, `x`, `y`); `onSwipe` (phone build) runs once
+  as a sideways swipe lifts, with `value` `left` or `right` as the finger went, and leaves up and down to a list
+  inside; `Slider` and `Input` also take
   `onChange`, and `Input` `onSubmit`, both with `value`; `Popup` takes `onDismiss`. In pages, apps and a widget's `screen { }`,
   `onLongPress` (with `x`, `y`, owl 10); on a tile, long-press belongs to the home screen, which uses it
   to move and resize tiles
@@ -472,7 +477,8 @@ after it in its block (and blocks inside them), and needs a name not used for a 
 | `x = run("cmd")` | the same, and puts the command's output into the state `x` when it finishes |
 | `androidApp("org.pkg")` | opens an Android app by package name, or by an `android.apps` key to open that copy in a work profile or clone |
 | `open(r.key)` | opens an app from `android.recent` or an agent from `android.agents` by its `key` (an `android.apps` key works too), as tapping it in the drawer would, so it counts as opened (owl 10) |
-| `appAction("pin", a.key)` | the drawer's long-press menu for an app from `android.drawer`: `pin` (add to home, on the page showing), `info` (Android's app info), `uninstall` (Android asks first), `remove` (a shortcut, or an owl app, whose file goes to `.removed/`), `edit` (the default agent on an owl app's file) and `share` (an owl app's link or QR code). An entry the app's `actions` don't list does nothing. The store's reviewer sees which entries a widget uses (owl 11) |
+| `appAction("pin", a.key)` | the drawer's long-press menu for an app from `android.drawer`: `pin` (add to home, on the page showing), `info` (Android's app info), `uninstall` (Android asks first), `remove` (a shortcut, or an owl app, whose file goes to `.removed/`), `edit` (the default agent on an owl app's file) and `share` (an owl app's link or QR code). An entry the app's `actions` don't list does nothing. The store's reviewer sees which entries a widget uses (owl 11). This phone build adds `hide` and `unhide`, `customize` (its name, icon and group), `dock` and `undock`, `group` (pick or make a drawer group for it) and `select` (pick it among several, or unpick it: see `picked` in Panels); `pin`, `hide`, `unhide`, `dock` and `group` also take a list of keys, as `appAction("pin", picked)` does them all at once, apps on home already left where they are |
+| `drawerGroup("rename", name)` | phone build: a drawer group from `d.groups`: `rename` asks for its new name, `ungroup` lets its apps go back to their usual headings |
 | `s = shortcuts(a.key)` | an app's shortcuts, as its long-press menu offers them (New tab, a recent chat), into the state `s` once they've loaded: a list of `{key, name, icon}`, empty for an app with none. `open(s.key)` opens one and `appAction("pin", s.key)` puts it on home (owl 11) |
 | `workApps("toggle")` | pauses the work profile's apps or turns them back on, as the drawer's switch does: `pause`, `resume` or `toggle`. Android may ask for the work PIN, and only lets the default launcher (owl 11) |
 | `ask(text)` | opens a terminal with the default agent answering `text`, as sending it from the prompt bar does; `ask(text, "codex")` asks that installed agent. Without one installed it opens the agents settings. The store's reviewer sees what a widget asks (owl 10) |
@@ -484,7 +490,7 @@ after it in its block (and blocks inside them), and needs a name not used for a 
 | `haptic()` | a short tap of haptic feedback, if the user has touch feedback on (owl 7) |
 | `sound("https://…/a.mp3")` | plays a sound once, in place of the one playing; `sound("stop")` stops it. Takes a URL, an asset or a file, like `Image`; see Sounds (owl 8) |
 | `torch(true)` | turns the torch on or off; also `torch("toggle")`. Does nothing on a phone without a flash, or while the camera app holds it (owl 7) |
-| `launcher("style")` | opens a launcher screen: `style` (theme, background, home screen, terminal; `themes` too), `agents`, `store`, `drawer`, `linux` (the sheet that installs Linux) or `settings` (owl 11 launchers; older ones ignore it) |
+| `launcher("style")` | opens a launcher screen: `style` (theme, background, home screen, terminal; `themes` too), `agents`, `store`, `drawer`, `linux` (the sheet that installs Linux) or `settings` (owl 11 launchers; older ones ignore it). This phone build adds, for the drawer: `close` (slides the drawer away), `ask` and `web` (send the bar's text to the agent or the web, as the bar's Enter does), `hidden` (list hidden apps or stop, behind the fingerprint or screen lock with style's `drawer.lock-hidden`) and `cancel` (stop picking apps) |
 | `refresh()` | re-runs this widget's sources now |
 | `screen()` / `close()` | opens the widget's `screen { }` full screen, or closes it (owl 5) |
 | `media("toggle")` | controls what's playing: `toggle`, `play`, `pause`, `next`, `previous`, or `open` (brings up the player app) |
@@ -773,12 +779,12 @@ of itself has its own `screen { }`.
 
 ## Panels
 
-A panel is a file of its own that a swipe on home can open. This launcher keeps its own app drawer; a panel shows
-only for a swipe that settings › gestures sets to "owl panel": swiping up then shows it in the drawer's place, above
-the prompt bar, and swiping down brings it from the top. `drawer.owl` is a whole drawer written as a panel, the one
-swiping up shows by default: edit it, or read it to see how a drawer is put together. Which panel each swipe shows
-is picked in settings › gestures, or in style.toml as the panel's file name (see `defaults.toml`); a name counts
-only while its swipe is set to "owl panel", which only settings › gestures sets:
+A panel is a file of its own that a swipe on home can open. On this phone build the app drawer is one: `drawer.owl`,
+which swiping up shows above the prompt bar, as search and every other way to the drawer do; edit it, or read it to
+see how a drawer is put together. Settings › gestures can set a swipe to "owl panel" instead: swiping up then shows
+the panel picked in the drawer's place, and swiping down brings it from the top. Which panel is picked in settings ›
+gestures, or in style.toml as the panel's file name (see `defaults.toml`); a name counts only while its swipe is set
+to "owl panel", which only settings › gestures sets:
 
 ```toml
 [gestures]
@@ -786,11 +792,17 @@ swipe-up = "my-drawer.owl"     # drawer.owl by default
 swipe-down = "controls.owl"    # "none" nothing
 ```
 
-Swiping up shows the panel picked, else `drawer.owl`, else `.stock-drawer.owl`: the drawer as this launcher ships it,
-which it keeps that way. So a panel drawer that's removed or stops compiling never locks anyone out of their apps (a
-panel picked for swiping down that's broken opens nothing). Home's banner says which, and settings list it with
-"(has errors)". Compare `drawer.owl` with `.stock-drawer.owl` to see what changed in the stock drawer since. With
-nothing on swipe up, tapping the bar opens the launcher's own drawer.
+The drawer is `drawer.owl`, else `.stock-drawer.owl`: the drawer as this launcher ships it, which it keeps that way.
+So a drawer that's removed or stops compiling never locks anyone out of their apps (with "owl panel" for swiping up,
+the panel picked comes first; a panel picked for swiping down that's broken opens nothing). Home's banner says which,
+and settings list it with "(has errors)". Compare `drawer.owl` with `.stock-drawer.owl` to see what changed in the
+stock drawer since.
+
+The phone build's drawer reads three more names, as it reads `query`: `picked`, the keys of the apps picked to act
+on together, in the order picked, null while none are (`appAction("select", a.key)` picks or unpicks one,
+`launcher("cancel")` stops, and closing the drawer does too); `showHidden`, whether hidden apps are listed
+(`launcher("hidden")`); and `dragging`, the key of the app being carried onto home with `dragApp`, null while none is,
+so its long-press menu can give way.
 
 ```owl
 panel "my drawer" {

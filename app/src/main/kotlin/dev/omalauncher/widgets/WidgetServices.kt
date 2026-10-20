@@ -70,6 +70,14 @@ import dev.omalauncher.ui.profileKind
 import dev.omalauncher.ui.LauncherStyle
 import dev.omalauncher.ui.SettingsPage
 import dev.omalauncher.ui.allApps
+import dev.omalauncher.ui.barAsksAgent
+import dev.omalauncher.ui.installed
+import dev.omalauncher.ui.isNew
+import dev.omalauncher.ui.isWork
+import dev.omalauncher.ui.name
+import dev.omalauncher.ui.railLetter
+import dev.omalauncher.theme.Style
+import dev.omalauncher.webSearchName
 import dev.omalauncher.ui.appIconOf
 import dev.omalauncher.ui.open
 import dev.omalauncher.ui.recentApps
@@ -457,29 +465,71 @@ class WidgetServices(
             runtime.widgets.apps().map { AppHit.Owl(it) } + runtime.linuxApps.apps.map { AppHit.Linux(it) } +
                 apps.shortcuts.filter { !it.work }.map { AppHit.Shortcut(it) } + apps.apps.filter { !it.work }.map { AppHit.Android(it) } +
                 apps.shortcuts.filter { it.work }.map { AppHit.Shortcut(it) } + apps.apps.filter { it.work }.map { AppHit.Android(it) }
+        val now = System.currentTimeMillis()
+        val hidden = runtime.hiddenApps
+        val dock = runtime.dock
         val list =
             hits.take(Builtins.MAX_LIST).map { hit ->
+                // Yours (customize) when you named it, with the app's own name still finding it.
+                val name = hit.name(runtime)
+                val renamed = runtime.customs.name(hit.key) != null
+                val score = runtime.usage.score(hit.key, now)
                 Obj(
                     mapOf(
                         "key" to Str(hit.key),
                         "kind" to Str(hit.kind),
-                        "name" to Str(hit.label),
-                        "label" to Str(hit.spoken),
+                        "name" to Str(name),
+                        "label" to Str(if (renamed) name else hit.spoken),
                         "icon" to Str("icon:" + hit.key),
                         "profile" to (hit.profileKind?.let(::Str) ?: Null),
-                        "alias" to (hit.alias?.let(::Str) ?: Null),
+                        "alias" to ((if (renamed) hit.alias ?: hit.label else hit.alias)?.let(::Str) ?: Null),
                         "paused" to bool(hit.paused(runtime)),
                         // Whether `icon` draws anything: its silhouette, with monochrome icons. Without one, the drawer shows the initials.
                         "hasIcon" to bool(appIconOf(runtime, hit.key, LauncherStyle.monochromeIcons) != null),
-                        "initials" to Str(initials(hit.label)),
+                        "initials" to Str(initials(name)),
                         "actions" to Lst(hit.actionWords().map(::Str)),
-                        "score" to Num(Math.round(runtime.usage.score(hit.key) * 10.0) / 10.0),
+                        "score" to Num(Math.round(score * 10.0) / 10.0),
                         "last" to (runtime.usage.last(hit.key)?.let { Num((it / 1000).toDouble()) } ?: Null),
+                        // Phone build: what the phone's drawer lists and its menu offers beyond upstream's.
+                        "work" to bool(hit.isWork),
+                        "hidden" to bool(hit.key in hidden),
+                        "docked" to bool(hit.key in dock),
+                        "letter" to Str(railLetter(name).toString()),
+                        "installed" to Num((hit.installed / 1000).toDouble()),
+                        "isNew" to bool(LauncherStyle.drawerNewBadge && isNew(hit.installed, score, now)),
                     ),
                 )
             }
         val work = if (apps.workProfiles.isEmpty()) Null else Obj(mapOf("paused" to bool(apps.workProfiles.any { apps.paused(it) })))
-        return Obj(mapOf("apps" to Lst(list), "linux" to Str(linuxWord(runtime.bootstrap.state.value)), "monochrome" to bool(LauncherStyle.monochromeIcons), "work" to work, "updates" to Num((runtime.updates.pending?.count ?: 0).toDouble())))
+        // Phone build: the drawer's settings (style's drawer.*), your groups, the dock and where the bar's Enter goes.
+        val style =
+            Obj(
+                mapOf(
+                    "sort" to Str(LauncherStyle.drawerSort),
+                    "sections" to bool(LauncherStyle.drawerSections),
+                    "suggestions" to bool(LauncherStyle.drawerSuggestions),
+                    "letters" to bool(LauncherStyle.drawerLetters),
+                    "labels" to bool(LauncherStyle.drawerLabels),
+                    "columns" to (LauncherStyle.drawerColumns?.let { Num(it.toDouble()) } ?: Null),
+                    "icon" to Num(LauncherStyle.drawerIcon.value.toDouble()),
+                ),
+            )
+        val groups = Lst(runtime.drawerGroups.groups.map { g -> Obj(mapOf("name" to Str(g.name), "keys" to Lst(g.keys.map(::Str)))) })
+        val linux = runtime.bootstrap.state.value
+        return Obj(
+            mapOf(
+                "apps" to Lst(list),
+                "linux" to Str(linuxWord(linux)),
+                "monochrome" to bool(LauncherStyle.monochromeIcons),
+                "work" to work,
+                "updates" to Num((runtime.updates.pending?.count ?: 0).toDouble()),
+                "style" to style,
+                "groups" to groups,
+                "dock" to Obj(mapOf("shown" to bool(LauncherStyle.dockShown), "full" to bool(dock.full))),
+                "asks" to bool(barAsksAgent(runtime, linux)),
+                "web" to Str(webSearchName(LauncherStyle.style[Style.WEB_SEARCH])),
+            ),
+        )
     }
 
     /** Android hides the battery from the guest (/sys/class/power_supply), so expose it here. */
@@ -553,7 +603,8 @@ class WidgetServices(
             "haptic" -> view?.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             "open" -> openApp(arg)
             "ask" -> ask(arg, args.getOrNull(1)?.takeIf { it != Null }?.toString())
-            "appAction" -> args.getOrNull(1)?.takeIf { it != Null }?.let { appAction(arg, it.toString()) }
+            "appAction" -> args.getOrNull(1)?.takeIf { it != Null }?.let { appAction(arg, it) }
+            "drawerGroup" -> args.getOrNull(1)?.takeIf { it != Null }?.let { drawerGroup(arg, it.toString()) }
             "workApps" -> workApps(arg)
         }
         // Anything the action changed should show up without waiting for the next interval.
@@ -735,18 +786,80 @@ class WidgetServices(
         appHandlers?.launch?.invoke(hit) ?: hit.open(runtime)
     }
 
-    /** appAction(word, key): the drawer's long-press menu entry [word] for the app [key], as `android.drawer` lists them. */
+    /**
+     * appAction(word, key): the drawer's long-press menu entry [word] for the app [key], as `android.drawer` lists them.
+     * Phone build: also hide, unhide, customize, dock, undock and group; pin, hide, unhide, dock and group take a list
+     * of keys too, as picking several apps in the drawer does them all at once.
+     */
     private fun appAction(
         word: String,
-        key: String,
+        arg: Value,
     ) {
         val handlers = appHandlers ?: return
+        if (arg is Lst) return appActionAll(word, arg.items.map { it.toString() }, handlers)
+        val key = arg.toString()
         // A shortcut from shortcuts(...): pinning is all its + in the drawer's menu does.
         offered[key]?.let { (menu, s) ->
             if (word == "pin") menu.pin(s)
             return
         }
-        hitOf(key)?.act(word, handlers)
+        val hit = hitOf(key) ?: return
+        when (word) {
+            "hide", "unhide" -> handlers.hide(listOf(hit.key), word == "hide")
+            "customize" -> handlers.customize(hit)
+            "dock" -> runtime.dock.add(listOf(hit.key))
+            "undock" -> runtime.dock.remove(hit.key)
+            "group" -> handlers.group(setOf(hit.key))
+            "select" -> handlers.pick(hit.key)
+            else -> hit.act(word, handlers)
+        }
+    }
+
+    /** Phone build: appAction with a list of keys, as the drawer's picked apps have them; apps since gone are left out. */
+    private fun appActionAll(
+        word: String,
+        keys: List<String>,
+        handlers: AppHandlers,
+    ) {
+        val apps = allApps(runtime).associateBy { it.key }
+        val hits = keys.mapNotNull { apps[it] }
+        if (hits.isEmpty()) return
+        when (word) {
+            // The ones on home already stay where they are.
+            "pin" -> handlers.pin(hits.filterNot { runtime.widgets.shortcuts.pinned(homeKeyOf(it)) })
+            "hide", "unhide" -> handlers.hide(hits.map { it.key }, word == "hide")
+            // Fills the dock's free slots in the order picked; the drawer closes to show it.
+            "dock" -> {
+                runtime.dock.add(hits.map { it.key })
+                launcherAction?.invoke("close")
+            }
+            // Groups are the personal tab's: none for work apps.
+            "group" -> hits.filter { !it.isWork }.map { it.key }.toSet().takeIf { it.isNotEmpty() }?.let(handlers.group)
+        }
+    }
+
+    /** The key home's shortcuts know [hit] by. */
+    private fun homeKeyOf(hit: AppHit): String {
+        val home = runtime.widgets.shortcuts
+        return when (hit) {
+            is AppHit.Linux -> home.keyOf(hit.app)
+            is AppHit.Android -> home.keyOf(hit.app)
+            is AppHit.Shortcut -> home.keyOf(hit.shortcut)
+            is AppHit.Owl -> home.keyOf(hit.spec)
+        }
+    }
+
+    /** Phone build: drawerGroup("rename", name) asks for the group's new name; drawerGroup("ungroup", name) lets its apps go back. */
+    private fun drawerGroup(
+        word: String,
+        name: String,
+    ) {
+        val handlers = appHandlers ?: return
+        if (runtime.drawerGroups.groups.none { it.name == name }) return
+        when (word) {
+            "rename" -> handlers.renameGroup(name)
+            "ungroup" -> runtime.drawerGroups.delete(name)
+        }
     }
 
     /** Linux as `android.drawer` says it: "installed", "installing" (the drawer's offer says so) or "missing". */

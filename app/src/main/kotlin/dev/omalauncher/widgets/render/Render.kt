@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -46,6 +47,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.structuralEqualityPolicy
@@ -116,6 +118,8 @@ import dev.omalauncher.widgets.runtime.WidgetInstance
 import kotlinx.coroutines.flow.first
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.abs
+import kotlinx.coroutines.launch
 
 /** Whether the home screen is hidden (drawer, full-screen panel); animated widgets stop ticking while it is. */
 val LocalHomeCovered = staticCompositionLocalOf<() -> Boolean> { { false } }
@@ -421,11 +425,18 @@ private fun LazyNodes(
     gap: androidx.compose.ui.unit.Dp,
     /** `reverse`: listed from the end, its first item at the bottom, as search results sit above a bar. */
     reverse: Boolean,
+    /** Phone build: `rail`, the letters beside the list, each jumping to the item with its key. */
+    rail: Value? = null,
 ) {
     val arrangement = justify ?: Arrangement.spacedBy(gap, if (reverse) Alignment.Bottom else Alignment.Top)
     val slices = nodes.mapIndexed { at, n -> if (n is WNode.For) forSlice(n, at, env, inst) else Slice.One(n) }
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
+    val stops = remember(rail) { railStops(rail) }
+    // One letter alone has nowhere to jump to.
+    val railShown = stops.size > 1
+    val railScope = rememberCoroutineScope()
+    val railRoom = if (railShown) Modifier.padding(end = RailWidth) else Modifier
     // Listed from the end, it goes back there when its items change: new search results start at the bar, where the best one is.
     if (reverse) {
         // The slices' own key lists: the same lists while nothing changed, so comparing them is cheap.
@@ -441,7 +452,7 @@ private fun LazyNodes(
                 Column(verticalArrangement = arrangement, horizontalAlignment = alignment) { Nodes(nodes, env, inst, this) }
             !constraints.hasBoundedHeight -> Grid(Modifier, columns!!, gap) { Nodes(nodes, env, inst, null) }
             columns == null ->
-                LazyColumn(state = listState, verticalArrangement = arrangement, horizontalAlignment = alignment, reverseLayout = reverse) {
+                LazyColumn(railRoom, state = listState, verticalArrangement = arrangement, horizontalAlignment = alignment, reverseLayout = reverse) {
                     slices.forEachIndexed { at, slice ->
                         when (slice) {
                             is Slice.One -> item(key = "$at") { Node(slice.node, env, inst, null) }
@@ -450,7 +461,7 @@ private fun LazyNodes(
                     }
                 }
             else ->
-                LazyVerticalGrid(GridCells.Fixed(columns), state = gridState, verticalArrangement = arrangement, horizontalArrangement = Arrangement.spacedBy(gap), reverseLayout = reverse) {
+                LazyVerticalGrid(GridCells.Fixed(columns), railRoom, state = gridState, verticalArrangement = arrangement, horizontalArrangement = Arrangement.spacedBy(gap), reverseLayout = reverse) {
                     slices.forEachIndexed { at, slice ->
                         when (slice) {
                             is Slice.One -> item(key = "$at") { Node(slice.node, env, inst, null) }
@@ -459,7 +470,34 @@ private fun LazyNodes(
                     }
                 }
         }
+        // Beside the list, as tall as it is; only the rail itself takes touches.
+        if (railShown && constraints.hasBoundedHeight) {
+            Box(Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
+                LetterRail(stops.map { it.label }, Modifier.fillMaxHeight().width(RailWidth)) { i ->
+                    lazyIndex(slices, stops[i].key)?.let { at -> railScope.launch { if (columns == null) listState.scrollToItem(at) else gridState.scrollToItem(at) } }
+                }
+            }
+        }
     }
+}
+
+/** Phone build: the index in a lazy list of the `for` item keyed [key], its slices' items counted in order; null when none is. */
+private fun lazyIndex(
+    slices: List<Slice>,
+    key: String,
+): Int? {
+    var base = 0
+    slices.forEachIndexed { at, slice ->
+        when (slice) {
+            is Slice.One -> base += 1
+            is Slice.Many -> {
+                val i = slice.keys.indexOf("$at:$key")
+                if (i >= 0) return base + i
+                base += slice.items.size
+            }
+        }
+    }
+    return null
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -486,7 +524,7 @@ private fun Element(
                     else -> Alignment.Start
                 }
             if (p.observe("lazy")?.truthy == true) {
-                LazyNodes(el.children, env, inst, mod, null, arrangement.takeIf { p.has("justify") }, alignment, gap, p.observe("reverse")?.truthy == true)
+                LazyNodes(el.children, env, inst, mod, null, arrangement.takeIf { p.has("justify") }, alignment, gap, p.observe("reverse")?.truthy == true, p.observe("rail"))
             } else {
                 val hug = columnHugs(inst.program.level, sized, parent is RowScope, parent is ColumnScope && LocalHug.current)
                 HoldingPopups(el, mod, env, inst) { m, children ->
@@ -523,7 +561,7 @@ private fun Element(
             val columns = (p.observe("columns")?.num() ?: 2.0).toInt().coerceIn(1, 12)
             val gap = (p.observe("gap")?.num() ?: 6.0).dp
             if (p.observe("lazy")?.truthy == true) {
-                LazyNodes(el.children, env, inst, mod, columns, null, Alignment.Start, gap, p.observe("reverse")?.truthy == true)
+                LazyNodes(el.children, env, inst, mod, columns, null, Alignment.Start, gap, p.observe("reverse")?.truthy == true, p.observe("rail"))
             } else {
                 Grid(mod, columns, gap) { Nodes(el.children, env, inst, null) }
             }
@@ -800,6 +838,7 @@ private fun common(
                 if (w > 0f) drawRoundRect(borderColor(), Offset(w / 2, w / 2), Size(size.width - w, size.height - w), r, style = Stroke(w))
             }
     }
+    if (p.has("dragApp")) m = m.then(appDrag(p))
     m = m.then(handlers(p))
     padding(p.observe("padding"))?.let { m = m.padding(it) }
     return m
@@ -839,7 +878,39 @@ private fun handlers(p: Props): Modifier {
     el.handlers["onDrag"]?.let { a ->
         m = m.pointerInput(el, p.env) { detectDragGestures { change, drag -> change.consume(); fire(a, drag.x, drag.y, change.position.x, change.position.y) } }
     }
+    // Phone build: sideways only, so a list inside still scrolls; once, as the finger lifts, if it went far enough.
+    el.handlers["onSwipe"]?.let { a ->
+        m =
+            m.pointerInput(el, p.env) {
+                val far = SwipeDistance.toPx()
+                var dragged = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { dragged = 0f },
+                    onDragEnd = { if (abs(dragged) >= far) a.run(p.env, listOf(Str(if (dragged < 0) "left" else "right"))) },
+                ) { change, amount ->
+                    change.consume()
+                    dragged += amount
+                }
+            }
+    }
     return m
+}
+
+/** How far a sideways swipe goes before onSwipe hears of it. */
+private val SwipeDistance = 56.dp
+
+/**
+ * Phone build: what carries an app out of a panel onto home or the dock (`dragApp`), set by home while a panel shows
+ * in the drawer's place; elsewhere nothing, and `dragApp` does nothing.
+ */
+val LocalAppDrag = staticCompositionLocalOf<((String) -> Modifier)?> { null }
+
+/** A node's `dragApp`: long-press and drag carries the app with that key; an empty key or null carries nothing. */
+@Composable
+private fun appDrag(p: Props): Modifier {
+    val drag = LocalAppDrag.current ?: return Modifier
+    val key = p.observe("dragApp")?.takeIf { it != Null }?.toString()?.takeIf { it.isNotEmpty() } ?: return Modifier
+    return drag(key)
 }
 
 /**

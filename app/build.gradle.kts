@@ -22,8 +22,8 @@ android {
         minSdk = 29
         targetSdk = 37
         // Phone build: upstream's versionCode × 100 + this build, so it stays above both Play's 18 and the earlier phone builds (14xx to 17xx).
-        versionCode = 1802
-        versionName = "0.10.0-phone.2"
+        versionCode = 1803
+        versionName = "0.10.0-phone.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
     }

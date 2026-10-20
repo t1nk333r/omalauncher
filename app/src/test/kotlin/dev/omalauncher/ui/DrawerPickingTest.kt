@@ -29,19 +29,4 @@ class DrawerPickingTest {
     @Test fun unpickingTheLastAppStopsPicking() {
         assertNull(toggled(setOf(foot.key), foot.key))
     }
-
-    @Test fun pickedAppsComeInTheOrderTheyWerePicked() {
-        val selection = toggled(toggled(setOf(nvim.key), foot.key)!!, btop.key)!!
-        assertEquals(listOf(nvim, foot, btop), picked(apps, selection))
-        // One picked and then removed from the phone is left out.
-        assertEquals(listOf(foot), picked(apps, setOf("l:gone", foot.key)))
-    }
-
-    @Test fun pickedAppsOfferHideUnhideOrBoth() {
-        val hidden = setOf(btop.key)
-        // (can hide, can show again)
-        assertEquals(true to false, hideChoices(setOf(foot.key, nvim.key), hidden))
-        assertEquals(false to true, hideChoices(setOf(btop.key), hidden))
-        assertEquals(true to true, hideChoices(setOf(foot.key, btop.key), hidden))
-    }
 }

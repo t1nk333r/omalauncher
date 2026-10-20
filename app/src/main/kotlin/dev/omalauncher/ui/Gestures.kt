@@ -166,16 +166,15 @@ internal fun Runtime.gestureLabel(
 ) = if (action == GestureAction.Panel) "panel: " + panelLabel(if (up) gestures.upPanel else gestures.downPanel) else action.label
 
 /**
- * Picked panels that don't compile, for home's error banner: without a tile, nothing else would say so, and the drawer
- * quietly shows another until they're fixed. Only while a gesture opens one.
+ * Picked panels and drawer.owl when they don't compile, for home's error banner: without a tile, nothing else would say so,
+ * and the drawer quietly shows another until they're fixed. Picked panels only while a gesture opens one.
  */
 internal fun Runtime.gestureProblems(): List<Pair<String, List<String>>> {
     val meanwhile = LinkedHashMap<String, String>()
-    if (gestures.swipeUp == GestureAction.Panel) {
-        val drawer = widgets.drawerPanel()?.let { if (it == WidgetEngine.STOCK_DRAWER) "the stock drawer" else panelLabel(it) } ?: "nothing"
-        meanwhile[gestures.upPanel] = "swiping up shows $drawer"
-        meanwhile[WidgetEngine.DRAWER] = "swiping up shows $drawer"
-    }
+    // Phone build: drawer.owl is the drawer whatever swiping up does.
+    val drawer = upPanel()?.let { if (it == WidgetEngine.STOCK_DRAWER) "the stock drawer" else panelLabel(it) } ?: "nothing"
+    if (gestures.swipeUp == GestureAction.Panel) meanwhile[gestures.upPanel] = "swiping up shows $drawer"
+    meanwhile[WidgetEngine.DRAWER] = "the drawer shows $drawer"
     if (gestures.swipeDown == GestureAction.Panel) meanwhile[gestures.downPanel] = "swiping down opens nothing"
     return meanwhile.mapNotNull { (choice, what) ->
         val spec = widgets.panels().firstOrNull { it.file.name == choice && it.error != null } ?: return@mapNotNull null
@@ -183,8 +182,11 @@ internal fun Runtime.gestureProblems(): List<Pair<String, List<String>>> {
     }
 }
 
-/** The owl panel the drawer shows instead of the launcher's own, while swiping up opens one; else null. */
-internal fun Runtime.upPanel() = if (gestures.swipeUp == GestureAction.Panel) widgets.drawerPanel() else null
+/**
+ * The panel in the drawer's place: the one picked for swiping up while that opens an owl panel, else the app drawer
+ * (drawer.owl). Search and every other way to the drawer show it too. Null until one runs.
+ */
+internal fun Runtime.upPanel() = if (gestures.swipeUp == GestureAction.Panel) widgets.drawerPanel() else widgets.appDrawer()
 
 /**
  * Dragging up opens the drawer under the finger and dragging down closes it, as on stock launchers: the panel

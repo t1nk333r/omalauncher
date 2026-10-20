@@ -21,11 +21,11 @@ internal class DrawOp(
 /** Nodes: their own properties, and what they may contain. */
 internal val KINDS: Map<String, Kind> =
     mapOf(
-        "Column" to Kind(setOf("gap", "align", "justify", "scroll", "lazy", "reverse"), Children.UI),
+        "Column" to Kind(setOf("gap", "align", "justify", "scroll", "lazy", "reverse", "rail"), Children.UI),
         "Row" to Kind(setOf("gap", "align", "justify", "wrap"), Children.UI),
         "Flow" to Kind(setOf("gap", "align", "justify"), Children.UI),
         "Box" to Kind(setOf("align"), Children.UI),
-        "Grid" to Kind(setOf("columns", "gap", "lazy", "reverse"), Children.UI),
+        "Grid" to Kind(setOf("columns", "gap", "lazy", "reverse", "rail"), Children.UI),
         "Text" to Kind(setOf("text", "style", "color", "fontSize", "bold", "italic", "font", "align", "maxLines", "minLines", "spans", "fontWeight", "letterSpacing"), Children.NONE),
         "Image" to Kind(setOf("src", "fit", "tint", "label"), Children.NONE),
         "Button" to Kind(setOf("text", "color"), Children.NONE),
@@ -48,6 +48,8 @@ internal val COMMON =
     setOf(
         "width", "height", "size", "fill", "weight", "padding", "background", "border", "borderColor",
         "radius", "opacity", "rotation", "scale", "offset", "clip", "visible", "frost",
+        // Phone build: in a panel, long-press and drag carries the app with this key onto home or the dock.
+        "dragApp",
     )
 
 internal val ANIMATABLE = setOf("opacity", "rotation", "scale", "value", "color", "background")
@@ -118,7 +120,11 @@ internal val SINCE =
         // apps and what their long-press menu does; long lists built as they scroll into view; the bar's search ranking;
         // an app that hides the status bar.
         listOf(PANEL_FILE, QUERY, "onKey", "android.drawer", "appAction", "workApps", "shortcuts", APP_STATUS_BAR).associateWith { 11 } +
-        listOf("Column.lazy", "Grid.lazy", "Column.reverse", "Grid.reverse", "Image.label", "Text.minLines", "rank", "strongMatch", "chunk").associateWith { 11 }
+        listOf("Column.lazy", "Grid.lazy", "Column.reverse", "Grid.reverse", "Image.label", "Text.minLines", "rank", "strongMatch", "chunk").associateWith { 11 } +
+        // Phone build, with owl 11's panels: what the phone's app drawer needs that upstream's doesn't have. A letter
+        // rail beside a lazy list; a sideways swipe; apps carried out of a panel onto home; the drawer's hidden apps,
+        // and the app being carried, as a panel reads them; groups of apps.
+        listOf("Column.rail", "Grid.rail", "onSwipe", "dragApp", DRAGGING, SHOW_HIDDEN, PICKED, "drawerGroup").associateWith { 11 }
 
 internal const val FACE_FILE = "face \"…\" { }"
 
@@ -126,6 +132,19 @@ internal const val PANEL_FILE = "panel \"…\" { }"
 
 /** A panel's read-only name for the prompt bar's text. */
 internal const val QUERY = "query"
+
+/** Phone build: a panel's read-only name for the key of the app being carried onto home (dragApp), null while none is. */
+internal const val DRAGGING = "dragging"
+
+/** Phone build: a panel's read-only name for whether the drawer lists its hidden apps, which launcher("hidden") turns on and off. */
+internal const val SHOW_HIDDEN = "showHidden"
+
+/**
+ * Phone build: a panel's read-only name for the apps picked in the drawer to act on together, their keys in the order
+ * picked; null while none are. appAction("select", key) picks or unpicks one, launcher("cancel") stops picking, and
+ * closing the drawer does too.
+ */
+internal const val PICKED = "picked"
 
 internal const val GRADIENT_BACKGROUND = "a gradient background"
 
@@ -163,6 +182,8 @@ internal val HANDLER_PARAMS =
         "onChange" to listOf("value"),
         "onSubmit" to listOf("value"),
         "onDismiss" to emptyList(),
+        // Phone build: a sideways swipe, "left" or "right" as the finger went, once it's gone far enough.
+        "onSwipe" to listOf("value"),
         // A panel's, at its top: a key pressed in the prompt bar while it's open.
         "onKey" to listOf("value"),
     )
@@ -191,7 +212,11 @@ internal val ACTION_WORDS =
         // true and false also turn it on and off.
         "torch" to setOf("on", "off", "toggle").let { Words(it, "torch takes true, false, ${it.joinToString()}") },
         "notification" to setOf("open", "dismiss").let { Words(it, "notification takes ${it.joinToString()} and a notification's key") },
-        "appAction" to setOf("pin", "info", "uninstall", "remove", "edit", "share").let { Words(it, "appAction takes ${it.joinToString()} and an app's key") },
+        // Phone build: hide, unhide, customize, dock, undock, group and select too; pin, hide, unhide, dock and group also take a list of keys.
+        "appAction" to
+            setOf("pin", "info", "uninstall", "remove", "edit", "share", "hide", "unhide", "customize", "dock", "undock", "group", "select")
+                .let { Words(it, "appAction takes ${it.joinToString()} and an app's key") },
+        "drawerGroup" to setOf("rename", "ungroup").let { Words(it, "drawerGroup takes ${it.joinToString()} and a group's name") },
         "workApps" to setOf("pause", "resume", "toggle").let { Words(it, "workApps takes ${it.joinToString()}") },
     )
 

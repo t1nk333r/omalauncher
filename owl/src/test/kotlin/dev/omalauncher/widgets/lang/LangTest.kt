@@ -775,6 +775,34 @@ class LangTest {
         }
     }
 
+    @Test fun thePhoneDrawerHasARailSwipesDragsAndPicks() {
+        // A letter rail beside a lazy list, a sideways swipe, an app carried out onto home.
+        Compiler.compile(
+            "panel {\n meta { owl: 11 }\n state tab = 0\n Column { lazy: true; rail: [{label: \"A\", key: \"a\"}]; onSwipe: tab = value == \"left\" ? 1 : 0\n" +
+                " for x in [\"a\"] key x { Text { text: x; dragApp: \"a:x\" } } } }",
+        )
+        assertTrue(compileError("panel {\n meta { owl: 11 }\n Column { rail: [] } }").contains("add lazy: true"))
+        assertTrue(compileError("panel {\n meta { owl: 10 }\n Text { text: 1; onSwipe: close() } }").contains("needs owl 11"))
+        // What the drawer reads: the apps picked, whether hidden ones show, the one being carried; only a panel has them.
+        val p = Compiler.compile("panel {\n meta { owl: 11 }\n Text { text: (picked ?? []) + \" \" + showHidden + \" \" + (dragging ?? \"-\") } }")
+        val host =
+            object : Host by TestHost(p) {
+                override fun tile(name: String): Value =
+                    when (name) {
+                        "picked" -> Lst(listOf(Str("a:x")))
+                        "showHidden" -> TRUE
+                        else -> Null
+                    }
+            }
+        assertEquals("[a:x] true -", ((p.screen ?: p.root).single() as WNode.Element).props["text"]!!(Env.root(host)).text())
+        for (name in listOf("picked", "showHidden", "dragging")) {
+            assertTrue(compileError("widget {\n meta { owl: 11 }\n Text { text: $name } }").contains("only a panel has"))
+        }
+        // The drawer's menu words, and its groups'.
+        Compiler.compile("panel {\n meta { owl: 11 }\n Text { text: 1; onTap: { appAction(\"hide\", \"a:x\"); drawerGroup(\"rename\", \"chat\") } } }")
+        assertTrue(compileError("panel {\n meta { owl: 11 }\n Text { text: 1; onTap: drawerGroup(\"sing\", \"chat\") } }").contains("drawerGroup takes"))
+    }
+
     @Test fun panelsAreViewsAGestureOpens() {
         val p = Compiler.compile("panel \"apps\" {\n meta { owl: 11 }\n state sent = \"\"\n onSubmit: sent = value\n Text { text: query; onTap: close() } }")
         assertEquals(OwlKind.Panel, p.kind)

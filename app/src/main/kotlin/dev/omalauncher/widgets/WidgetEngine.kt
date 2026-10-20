@@ -264,6 +264,9 @@ class WidgetEngine(
      */
     fun drawerPanel(): String? = listOf(LauncherStyle.style[Style.SWIPE_UP], DRAWER, STOCK_DRAWER).firstOrNull { panelInstance(it) != null }
 
+    /** Phone build: the app drawer, drawer.owl, else the stock one, for every gesture that opens the drawer; null until one runs. */
+    fun appDrawer(): String? = listOf(DRAWER, STOCK_DRAWER).firstOrNull { panelInstance(it) != null }
+
     /** The running panel [name] with its spec, for home to show; null if it's gone, doesn't compile or can't run here. */
     fun panelInstance(name: String): Pair<WidgetSpec, WidgetInstance>? {
         val spec = specs.firstOrNull { it.file.name == name && it.kind == OwlKind.Panel } ?: return null
@@ -280,8 +283,8 @@ class WidgetEngine(
     /** The panels gestures open: kept live while home shows, so one is ready the moment a swipe starts. */
     private fun gesturePanels() =
         setOfNotNull(
-            // Phone build: only while gestures pick an owl panel; the launcher's own drawer needs none.
-            drawerPanel().takeIf { runtime.gestures.swipeUp == GestureAction.Panel },
+            // Phone build: the drawer's place shows the panel picked for swiping up, else the app drawer.
+            if (runtime.gestures.swipeUp == GestureAction.Panel) drawerPanel() else appDrawer(),
             LauncherStyle.style[Style.SWIPE_DOWN].takeIf { runtime.gestures.swipeDown == GestureAction.Panel },
         )
 
@@ -1010,8 +1013,8 @@ class WidgetEngine(
                 "~/$GUEST_DIR, written in a small declarative language documented in README.md there; so are apps for the " +
                 "app drawer (`app \"name\" { }`) and panels that swiping up or down on home opens (`panel \"name\" { }`, picked with " +
                 "gestures.swipe-up and gestures.swipe-down in ~/${StyleStore.GUEST_DIR}/style.toml, while the phone's settings › gestures " +
-                "picks owl panel for that swipe). With owl panel for swiping up, the drawer is the panel drawer.owl there: to change it, " +
-                "edit it; .stock-drawer.owl is that drawer as this launcher ships it. Otherwise the launcher's own drawer shows. " +
+                "picks owl panel for that swipe). The app drawer is the panel drawer.owl there: to change it, edit it; " +
+                ".stock-drawer.owl is that drawer as this launcher ships it. With owl panel for swiping up, the panel picked shows in its place. " +
                 "Saved files show up on the phone within seconds. After saving, run `owl-check <file>`: it prints the errors " +
                 "and the path of a PNG of the tile or view, drawn with live data; look at it to check the layout. " +
                 "examples/ holds more widgets to learn from or move up to use. Scripts, cron jobs and hooks can set a running " +

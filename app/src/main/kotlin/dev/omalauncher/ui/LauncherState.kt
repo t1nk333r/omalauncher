@@ -85,9 +85,6 @@ class LauncherState {
     /** Home page currently showing (1-based); the drawer pins apps there. */
     var currentPage by mutableStateOf(1)
 
-    /** The drawer's tab; it stays picked the next time the drawer opens. */
-    var tab by mutableStateOf(DrawerTab.Personal)
-
     /** Keys of the apps picked in the drawer to add to home or hide together; null when not picking. Closing forgets it. */
     var selection by mutableStateOf<Set<String>?>(null)
 

@@ -185,7 +185,12 @@ internal fun PromptBar(
         if (state.selection != null) return
         val panel = drawer()
         if (panel != null) {
-            if (panel.submit(text)) state.query = "" else send(text)
+            // A panel asking the bar to send or search (launcher("ask"), launcher("web")) keeps the text for it.
+            if (panel.submit(text)) {
+                if (state.promptRequest == null) state.query = ""
+            } else {
+                send(text)
+            }
             return
         }
         val hit = search.hits.getOrNull(highlighted)
