@@ -54,6 +54,10 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Velocity
 import dev.omalauncher.LauncherData
 import dev.omalauncher.Runtime
+import dev.omalauncher.theme.Style
+import dev.omalauncher.theme.StyleStore
+import dev.omalauncher.widgets.WidgetEngine
+import dev.omalauncher.widgets.editWidgetCommand
 
 /** What a gesture on home does. */
 enum class GestureAction(
@@ -64,6 +68,8 @@ enum class GestureAction(
     Drawer("drawer", "app drawer"),
     Search("search", "search / agent prompt"),
     Notifications("notifications", "notifications"),
+    /** An owl panel (`panel "…" { }`): up in the drawer's place (drawer.owl by default), down from the top. */
+    Panel("panel", "owl panel"),
     None("none", "nothing"),
     ;
 
@@ -73,16 +79,16 @@ enum class GestureAction(
 }
 
 /** What swiping up on home can do, the default first. */
-internal val SwipeUpChoices = listOf(GestureAction.Drawer, GestureAction.Search, GestureAction.None)
+internal val SwipeUpChoices = listOf(GestureAction.Drawer, GestureAction.Search, GestureAction.Panel, GestureAction.None)
 
 /** What swiping down on home can do, the default first. */
-internal val SwipeDownChoices = listOf(GestureAction.Search, GestureAction.Notifications, GestureAction.Drawer, GestureAction.None)
+internal val SwipeDownChoices = listOf(GestureAction.Search, GestureAction.Notifications, GestureAction.Drawer, GestureAction.Panel, GestureAction.None)
 
-/** Whether swiping [up] or [down] opens the app panel: the drawer, or search. */
+/** Whether swiping [up] or [down] opens the app panel: the drawer, search, or an owl panel in the drawer's place. */
 internal fun reachesPanel(
     up: GestureAction,
     down: GestureAction,
-) = listOf(up, down).any { it == GestureAction.Drawer || it == GestureAction.Search }
+) = up == GestureAction.Panel || listOf(up, down).any { it == GestureAction.Drawer || it == GestureAction.Search }
 
 /** The action saved as [id] if [choices] offers it, else the first, the gesture's default. */
 internal fun pick(
@@ -90,9 +96,13 @@ internal fun pick(
     choices: List<GestureAction>,
 ) = GestureAction.of(id)?.takeIf { it in choices } ?: choices.first()
 
-/** The actions picked for home's gestures. */
+/**
+ * The actions picked for home's gestures, saved with the launcher's settings, and the owl panels for
+ * [GestureAction.Panel]: those are in style.toml (gestures.swipe-up and -down), so agents can set them too.
+ */
 class Gestures(
     context: Context,
+    private val style: StyleStore,
 ) {
     private val prefs = LauncherData.prefs(context)
 
@@ -115,6 +125,16 @@ class Gestures(
             prefs.edit().putString(SWIPE_DOWN, action.id).apply()
         }
 
+    /** The panel swiping up shows in the drawer's place while [swipeUp] is [GestureAction.Panel]: drawer.owl by default. */
+    var upPanel: String
+        get() = LauncherStyle.style[Style.SWIPE_UP]
+        set(name) = style.update { it.with(Style.SWIPE_UP, name) }
+
+    /** The panel swiping down brings from the top while [swipeDown] is [GestureAction.Panel]; "none" by default. */
+    var downPanel: String
+        get() = LauncherStyle.style[Style.SWIPE_DOWN]
+        set(name) = style.update { it.with(Style.SWIPE_DOWN, name) }
+
     /** Whether a swipe opens the app panel (the drawer or search); the pill does what swiping down does. */
     val reachPanel get() = reachesPanel(swipeUp, swipeDown)
 
@@ -123,11 +143,47 @@ class Gestures(
         choices: List<GestureAction>,
     ) = pick(prefs.getString(key, null), choices)
 
-    private companion object {
-        const val SWIPE_UP = "gesture_swipe_up"
-        const val SWIPE_DOWN = "gesture_swipe_down"
+    companion object {
+        /** [upPanel] or [downPanel] for no panel. */
+        const val NONE = "none"
+        private const val SWIPE_UP = "gesture_swipe_up"
+        private const val SWIPE_DOWN = "gesture_swipe_down"
     }
 }
+
+/** The panel [choice] names, if it's one that runs; null for nothing, and a panel that's gone or broken. */
+internal fun Runtime.panelOf(choice: String) = choice.takeIf { it != Gestures.NONE }?.takeIf { widgets.panelInstance(it) != null }
+
+/** What the panel [choice] is called: nothing, or the panel's name (its file's, while it has none). */
+internal fun Runtime.panelLabel(choice: String) =
+    if (choice == Gestures.NONE) "nothing" else widgets.panels().firstOrNull { it.file.name == choice }?.name ?: choice.removeSuffix(".owl")
+
+/** What [action] is called in settings, with its panel's name for [GestureAction.Panel]. */
+internal fun Runtime.gestureLabel(
+    action: GestureAction,
+    up: Boolean,
+) = if (action == GestureAction.Panel) "panel: " + panelLabel(if (up) gestures.upPanel else gestures.downPanel) else action.label
+
+/**
+ * Picked panels that don't compile, for home's error banner: without a tile, nothing else would say so, and the drawer
+ * quietly shows another until they're fixed. Only while a gesture opens one.
+ */
+internal fun Runtime.gestureProblems(): List<Pair<String, List<String>>> {
+    val meanwhile = LinkedHashMap<String, String>()
+    if (gestures.swipeUp == GestureAction.Panel) {
+        val drawer = widgets.drawerPanel()?.let { if (it == WidgetEngine.STOCK_DRAWER) "the stock drawer" else panelLabel(it) } ?: "nothing"
+        meanwhile[gestures.upPanel] = "swiping up shows $drawer"
+        meanwhile[WidgetEngine.DRAWER] = "swiping up shows $drawer"
+    }
+    if (gestures.swipeDown == GestureAction.Panel) meanwhile[gestures.downPanel] = "swiping down opens nothing"
+    return meanwhile.mapNotNull { (choice, what) ->
+        val spec = widgets.panels().firstOrNull { it.file.name == choice && it.error != null } ?: return@mapNotNull null
+        spec.file.name to listOf("$what until it's fixed: " + spec.error!!.lineSequence().first())
+    }
+}
+
+/** The owl panel the drawer shows instead of the launcher's own, while swiping up opens one; else null. */
+internal fun Runtime.upPanel() = if (gestures.swipeUp == GestureAction.Panel) widgets.drawerPanel() else null
 
 /**
  * Dragging up opens the drawer under the finger and dragging down closes it, as on stock launchers: the panel
@@ -157,7 +213,10 @@ internal data class HomeSwipe(
      * Whether the drawer follows the finger: only up, the way it opens. Swiped down to, it opens when let go, as search
      * does, rather than rising against the finger.
      */
-    val dragsDrawer get() = action == GestureAction.Drawer && way < 0f
+    val dragsDrawer get() = (action == GestureAction.Drawer || action == GestureAction.Panel) && way < 0f
+
+    /** Whether it brings an owl panel down from the top, under the finger: [GestureAction.Panel] swiped down. */
+    val pullsPanel get() = action == GestureAction.Panel && way > 0f
 
     /** How far a step, or a velocity, of [dy] (down positive) goes this swipe's way. */
     fun along(dy: Float) = dy * way
@@ -175,7 +234,7 @@ internal data class HomeSwipe(
         (distance >= threshold || (distance > 0f && along(velocity) > 800f))
 
     /** Whether it opens the drawer to browse, so the keyboard stays down: the drawer was closed when it started. */
-    fun browses(drawer: Float) = action == GestureAction.Drawer && drawer == 0f
+    fun browses(drawer: Float) = (action == GestureAction.Drawer || action == GestureAction.Panel) && drawer == 0f
 }
 
 /**
@@ -192,9 +251,10 @@ internal fun homeSwipeFor(
     val picked = if (dy > 0f) down else up
     return when {
         drawer > 0f -> HomeSwipe(GestureAction.Drawer, -1f)
+        // The panel from the top is open: swipes are its own (see pullSwipe).
         picked != GestureAction.None -> HomeSwipe(picked, way)
         // With nothing set for swiping down, the drawer still follows a swipe that starts down and turns up.
-        dy > 0f && up == GestureAction.Drawer -> HomeSwipe(GestureAction.Drawer, -1f)
+        dy > 0f && (up == GestureAction.Drawer || up == GestureAction.Panel) -> HomeSwipe(up, -1f)
         else -> HomeSwipe(GestureAction.None, way)
     }
 }
@@ -230,13 +290,24 @@ internal class HomeSwiper(
     fun drag(dy: Float) {
         if (swipe == null && dy != 0f) {
             val picked = homeSwipeFor(state.drawer.value, dy, runtime.gestures.swipeUp, runtime.gestures.swipeDown)
-            swipe = picked
+            // An owl panel from the top is picked as the swipe starts: it comes down from out of sight with the finger.
+            swipe =
+                if (picked.pullsPanel) {
+                    runtime.panelOf(runtime.gestures.downPanel)?.let { name ->
+                        state.pulled = name
+                        state.startPull()
+                        picked
+                    } ?: HomeSwipe(GestureAction.None, picked.way)
+                } else {
+                    picked
+                }
             if (picked.action == GestureAction.Notifications) expandNotifications(context)
             if (picked.browses(state.drawer.value)) state.focusSearch = false
         }
         swipe?.let {
             distance += it.along(dy)
             if (it.dragsDrawer) state.dragBy(-dy / screenHeight)
+            if (it.pullsPanel) state.pullBy(dy / screenHeight)
         }
     }
 
@@ -245,6 +316,7 @@ internal class HomeSwiper(
         swipe?.let {
             when {
                 it.dragsDrawer -> state.settle(velocity)
+                it.pullsPanel -> state.settlePull(velocity)
                 it.opensOnRelease(distance, velocity, openDistance) -> state.open(search = it.action == GestureAction.Search)
             }
         }
@@ -339,6 +411,52 @@ internal fun Modifier.homeSwipeAfterScroll(
     return nestedScroll(connection)
 }
 
+/**
+ * Dragging the open swipe-down panel moves it under the finger; it settles open or closed like the drawer. A list in
+ * it scrolls first: pushing up past its end moves the panel on, as pulling down past the drawer's top closes it.
+ */
+@Composable
+internal fun Modifier.pullSwipe(state: LauncherState): Modifier {
+    val screenHeight = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val pushToClose =
+        remember(state, screenHeight) {
+            object : NestedScrollConnection {
+                override fun onPreScroll(
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    // Partly pushed up and dragged back down: it comes back before the list scrolls.
+                    if (source != NestedScrollSource.UserInput || available.y <= 0f || state.pull.value >= 1f) return Offset.Zero
+                    state.pullBy(available.y / screenHeight)
+                    return Offset(0f, available.y)
+                }
+
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (source != NestedScrollSource.UserInput || available.y >= 0f) return Offset.Zero
+                    if (state.pull.value >= 1f) state.startPull()
+                    state.pullBy(available.y / screenHeight)
+                    return Offset(0f, available.y)
+                }
+
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    if (state.pull.value >= 1f) return Velocity.Zero
+                    state.settlePull(available.y)
+                    return available
+                }
+            }
+        }
+    return nestedScroll(pushToClose).draggable(
+        orientation = Orientation.Vertical,
+        state = rememberDraggableState { dy -> state.pullBy(dy / screenHeight) },
+        onDragStarted = { state.startPull() },
+        onDragStopped = { velocity -> state.settlePull(velocity) },
+    )
+}
+
 /** Height of the pill above the dock. */
 val PillHeight = 40.dp
 
@@ -348,6 +466,7 @@ internal fun pillLabel(action: GestureAction) =
         GestureAction.Search -> "search"
         GestureAction.Notifications -> "notifications"
         GestureAction.Drawer -> "apps"
+        GestureAction.Panel -> "more"
         GestureAction.None -> null
     }
 
@@ -362,7 +481,8 @@ internal fun HomePill(
     modifier: Modifier = Modifier,
 ) {
     val action = runtime.gestures.swipeDown
-    val label = pillLabel(action) ?: return
+    // Named after its panel: "more" only while that has no name to go by.
+    val label = (if (action == GestureAction.Panel) runtime.panelOf(runtime.gestures.downPanel)?.let { runtime.panelLabel(it) } else null) ?: pillLabel(action) ?: return
     val context = LocalContext.current
     // Only the pill takes touches: beside it, long-presses and swipes are home's as anywhere else.
     Box(Modifier.fillMaxWidth().height(PillHeight), contentAlignment = Alignment.Center) {
@@ -376,6 +496,7 @@ internal fun HomePill(
                         GestureAction.Search -> state.open(search = true)
                         GestureAction.Drawer -> state.open(search = false)
                         GestureAction.Notifications -> expandNotifications(context)
+                        GestureAction.Panel -> runtime.panelOf(runtime.gestures.downPanel)?.let(state::openPull)
                         GestureAction.None -> Unit
                     }
                 }.semantics { contentDescription = label }
@@ -440,17 +561,79 @@ internal fun expandNotifications(context: Context) {
 
 private const val TAG = "gestures"
 
-/** Gesture settings: what swiping up and down on home do, each picked from a dropdown. */
+/**
+ * Gesture settings: what swiping up and down on home do, each picked from a dropdown; an owl panel picked for one
+ * names which, under it, with edit to start the agent on its file.
+ */
 @Composable
 fun GesturesScreen(
     runtime: Runtime,
     onDismiss: () -> Unit,
+    /** Opens the agent on a panel, as settings › pages does on a face. */
+    onAgent: (title: String, command: (bin: String) -> String) -> Unit,
 ) {
     val gestures = runtime.gestures
+    // A panel that doesn't compile is still listed, marked, so a pick that stopped working shows why.
+    val panels = runtime.widgets.panels().map { it.file.name to if (it.program == null) "${it.name} (has errors)" else it.name }
     OverlayPanel("gestures", onDismiss, contentWidth = ReadingWidth) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             GestureRow("swipe up", gestures.swipeUp, SwipeUpChoices) { gestures.swipeUp = it }
+            if (gestures.swipeUp == GestureAction.Panel) {
+                PanelRow("panel", panels, gestures.upPanel) { gestures.upPanel = it }
+                EditPanel(runtime, gestures.upPanel, onAgent)
+            }
             GestureRow("swipe down", gestures.swipeDown, SwipeDownChoices) { gestures.swipeDown = it }
+            if (gestures.swipeDown == GestureAction.Panel) {
+                PanelRow("panel", listOf(Gestures.NONE to "nothing") + panels, gestures.downPanel) { gestures.downPanel = it }
+                EditPanel(runtime, gestures.downPanel, onAgent)
+            }
+        }
+        BasicText(
+            "owl panels are owl files, drawer.owl among them: edit them like widgets, or create one with your agent from home's menu",
+            Modifier.padding(top = 12.dp, start = 14.dp, end = 14.dp),
+            style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
+        )
+    }
+}
+
+/** Under a gesture opening a panel: edit starts the agent on its file, as one edits a face or a widget. */
+@Composable
+private fun EditPanel(
+    runtime: Runtime,
+    choice: String,
+    onAgent: (title: String, command: (bin: String) -> String) -> Unit,
+) {
+    val spec = runtime.widgets.panels().firstOrNull { it.file.name == choice } ?: return
+    Row(Modifier.padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        BracketAction("edit", Palette.accent) { onAgent("Edit ${spec.name}") { editWidgetCommand(it, spec) } }
+        BasicText(spec.file.name, style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+    }
+}
+
+/** Which panel a gesture opens; tapping it lists the others under it. [choices] are (saved file name, label). */
+@Composable
+private fun PanelRow(
+    label: String,
+    choices: List<Pair<String, String>>,
+    current: String,
+    onPick: (String) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    // A file name not among the panels (removed since): shown as it's saved, so the user sees it and picks another.
+    val picked = choices.firstOrNull { it.first == current } ?: (current to "$current (missing)")
+    Row(
+        Modifier.card(onClick = { open = !open }),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicText(label, Modifier.weight(1f).padding(start = 12.dp), style = Mono.copy(color = Palette.muted, fontSize = TextSize.Item))
+        Box {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BasicText(picked.second, style = Mono.copy(color = Palette.accent, fontSize = TextSize.Item))
+                Symbol(if (open) Glyph.ChevronUp else Glyph.ChevronDown, Palette.muted, Modifier.padding(start = 4.dp))
+            }
+            if (open) {
+                ChoicePopup(choices, picked, BelowAnchorEnd, onDismiss = { open = false }, onPick = { onPick(it.first) }, label = { it.second })
+            }
         }
     }
 }

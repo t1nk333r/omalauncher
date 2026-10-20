@@ -84,7 +84,7 @@ class Runtime(
     val style = StyleStore(context)
     val terminalFont = TerminalFont(proot, style)
     val launcherFont = LauncherFont(proot, style).also { it.restore() }
-    val gestures = Gestures(context)
+    val gestures = Gestures(context, style)
     val hiddenApps = HiddenApps(context)
     val dock = Dock(context)
     val drawerGroups = DrawerGroups(context)

@@ -133,6 +133,9 @@ class AppWidgets(
             minSize = o.optInt("minW", 1) to o.optInt("minH", 1),
         )
 
+    /** After each save: layout.toml follows (see HomeStore). */
+    var onSave: () -> Unit = {}
+
     private fun save() {
         val array = JSONArray()
         for (w in items) {
@@ -148,6 +151,7 @@ class AppWidgets(
             )
         }
         prefs.edit().putString(ITEMS, Versioned.write(VERSION, array)).apply()
+        onSave()
     }
 
     companion object {

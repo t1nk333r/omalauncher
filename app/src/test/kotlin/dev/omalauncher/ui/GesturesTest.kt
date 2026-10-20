@@ -3,6 +3,7 @@ package dev.omalauncher.ui
 import dev.omalauncher.ui.GestureAction.Drawer
 import dev.omalauncher.ui.GestureAction.None
 import dev.omalauncher.ui.GestureAction.Notifications
+import dev.omalauncher.ui.GestureAction.Panel
 import dev.omalauncher.ui.GestureAction.Search
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -108,6 +109,27 @@ class GesturesTest {
         assertEquals("apps", pillLabel(Drawer))
         // Swiping down does nothing: no pill.
         assertNull(pillLabel(None))
+    }
+
+    /** Phone build: an owl panel is an extra choice either way; the launcher's own drawer stays the default. */
+    @Test fun anOwlPanelIsAChoiceEitherWay() {
+        for (choices in listOf(SwipeUpChoices, SwipeDownChoices)) assertTrue(Panel in choices)
+        assertEquals(Panel, pick("panel", SwipeUpChoices))
+        assertEquals(Panel, pick("panel", SwipeDownChoices))
+        // Swiped up to, it rises in the drawer's place under the finger, with the keyboard down.
+        val up = homeSwipeFor(0f, upward, up = Panel, down = Search)
+        assertTrue(up.dragsDrawer)
+        assertFalse(up.pullsPanel)
+        assertTrue(up.browses(0f))
+        // Swiped down to, it comes down from the top under the finger: nothing opens when it's let go.
+        val down = homeSwipeFor(0f, downward, up = Drawer, down = Panel)
+        assertTrue(down.pullsPanel)
+        assertFalse(down.dragsDrawer)
+        assertFalse(down.opensOnRelease(far, flingDown, threshold))
+        // With nothing set for swiping down, a swipe that turns up still raises it.
+        assertEquals(HomeSwipe(Panel, -1f), homeSwipeFor(0f, downward, up = Panel, down = None))
+        assertEquals("more", pillLabel(Panel))
+        assertTrue(reachesPanel(up = Panel, down = None))
     }
 
     /** With the bar off home, it comes back unless a swipe (or the pill, which swipes down) opens the panel. */

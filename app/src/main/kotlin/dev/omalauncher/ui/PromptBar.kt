@@ -87,7 +87,7 @@ import dev.omalauncher.webSearchUrl
  * How the prompt bar was summoned from outside it; Send asks the agent with what's typed (the panel's ask row),
  * Web searches the web with it (the row above), Listen dictates into it (the landscape rail's mic).
  */
-enum class PromptRequest { Type, Send, Web, Listen }
+enum class PromptRequest { Type, Send, Web, Listen, Release }
 
 /** Height of the collapsed bar; the home grid leaves this much room for it. */
 val PromptBarHeight = 48.dp
@@ -171,9 +171,23 @@ internal fun PromptBar(
         state.closeNow()
     }
 
-    /** Enter: the highlighted app, the web or the agent; nothing while apps are being picked in the drawer, so the picks stay. */
+    /** An owl panel in the drawer's place (gestures › swipe up), while it shows: Enter and the arrow keys are its first. */
+    fun drawer() = if (panelShown) runtime.upPanel()?.let { runtime.widgets.panelInstance(it)?.second } else null
+
+    /** The owl panel gets [key] with its `onKey`, and moves its own highlight; false without one, and the key goes on. */
+    fun drawerKey(key: String) = drawer()?.key(key) == true
+
+    /**
+     * Enter: what an owl panel in the drawer's place does with it (open the app it picked), else the highlighted app, the
+     * web or the agent; nothing while apps are being picked in the drawer, so the picks stay.
+     */
     fun submit() {
         if (state.selection != null) return
+        val panel = drawer()
+        if (panel != null) {
+            if (panel.submit(text)) state.query = "" else send(text)
+            return
+        }
         val hit = search.hits.getOrNull(highlighted)
         when {
             hit != null -> onLaunch(hit)
@@ -230,6 +244,11 @@ internal fun PromptBar(
             PromptRequest.Send -> send(text)
             PromptRequest.Web -> searchWeb(text)
             PromptRequest.Listen -> talk(hold = false)
+            // A menu opened over the panel: the keyboard stays down from here on, rather than coming back as it closes.
+            PromptRequest.Release -> {
+                focusManager.clearFocus()
+                keyboard?.hide()
+            }
             null -> {}
         }
         state.promptRequest = null
@@ -319,12 +338,16 @@ internal fun PromptBar(
                                 // Tapped (or Super+A): the panel opens. Mid-swipe it's already showing.
                                 if (it.isFocused && !panelShown) state.open()
                             }
-                            // A hardware Enter submits; Shift+Enter starts a new line. Tab and the arrows move the highlight.
+                            // A hardware Enter submits; Shift+Enter starts a new line. Tab and the arrows go to the drawer, to move its highlight.
                             .onPreviewKeyEvent { e ->
                                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                 val oneLine = '\n' !in text
                                 when {
                                     e.key == Key.Enter && !e.isShiftPressed -> submit()
+                                    // An owl panel in the drawer's place moves its own highlight.
+                                    drawer() != null && e.key == Key.Tab -> return@onPreviewKeyEvent drawerKey(if (e.isShiftPressed) "shift-tab" else "tab")
+                                    drawer() != null && e.key == Key.DirectionUp && oneLine -> return@onPreviewKeyEvent drawerKey("up")
+                                    drawer() != null && e.key == Key.DirectionDown && oneLine -> return@onPreviewKeyEvent drawerKey("down")
                                     e.key == Key.Tab -> pick(if (e.isShiftPressed) -1 else 1)
                                     e.key == Key.DirectionUp && oneLine -> pick(1)
                                     e.key == Key.DirectionDown && oneLine -> pick(-1)
@@ -348,13 +371,16 @@ internal fun PromptBar(
                         }
                     },
                 )
-                if (text.isNotBlank() && !listening && state.selection == null) {
+                // An owl panel in the drawer's place says what its Enter does, with its `enter`.
+                val panelEnter = drawer()?.enterHint()
+                if (text.isNotBlank() && !listening && state.selection == null && panelEnter != "") {
                     // Says what Enter does, so opening an app instead of asking is never a surprise.
                     Box(
                         Modifier.clickable(onClick = ::submit).padding(horizontal = 10.dp, vertical = 12.dp),
                     ) {
                         val does =
                             when {
+                                panelEnter != null -> panelEnter
                                 highlighted >= 0 -> "▸ open"
                                 highlighted == BarSearch.WEB -> "↗ search"
                                 else -> "⏎ ask"
@@ -374,6 +400,7 @@ internal fun PromptBar(
                     },
                 )
             }
+            // Beside the bar's frame, not in it: the menu lines up with the frame, not with the agent's name inside.
             // Input level along the bottom edge while listening.
             if (listening) {
                 val accent = Palette.accent
@@ -511,6 +538,8 @@ private fun DefaultAgentMenu(
     val store = runtime.agents
     val agent = store.default
     var open by remember { mutableStateOf(false) }
+    // As far above the bar as the drawer's menus are above an app.
+    val gap = with(LocalDensity.current) { 8.dp.roundToPx() }
     Box {
         Row(
             Modifier
@@ -526,7 +555,7 @@ private fun DefaultAgentMenu(
             ChoicePopup(
                 store.installed + listOf(null),
                 if (asks) store.installed.firstOrNull { it.bin == agent?.bin } else null,
-                AboveAnchor,
+                remember(gap) { AboveAnchor(gap) },
                 onDismiss = { open = false },
                 onPick = { picked ->
                     if (picked != null) store.choose(picked)
@@ -550,8 +579,10 @@ private fun DefaultAgentMenu(
     }
 }
 
-/** Opens a popup just above its anchor, kept on screen: the bar sits at the bottom. */
-private object AboveAnchor : PopupPositionProvider {
+/** Opens a popup [gap] pixels above its anchor, lined up with its start and kept on screen: the bar sits at the bottom. */
+private class AboveAnchor(
+    private val gap: Int,
+) : PopupPositionProvider {
     override fun calculatePosition(
         anchorBounds: IntRect,
         windowSize: IntSize,
@@ -559,6 +590,6 @@ private object AboveAnchor : PopupPositionProvider {
         popupContentSize: IntSize,
     ) = IntOffset(
         anchorBounds.left.coerceAtMost(windowSize.width - popupContentSize.width).coerceAtLeast(0),
-        (anchorBounds.top - popupContentSize.height).coerceAtLeast(0),
+        (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(0),
     )
 }

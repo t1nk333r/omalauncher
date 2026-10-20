@@ -4,8 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -58,12 +59,12 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import dev.omalauncher.theme.StyleStore
+import dev.omalauncher.widgets.HomeStore
 import dev.omalauncher.widgets.checkSecretsCommand
 import dev.omalauncher.widgets.editWidgetCommand
 import dev.omalauncher.widgets.publishWidgetCommand
@@ -75,6 +76,7 @@ import dev.omalauncher.widgets.render.LocalInputFocus
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
 import dev.omalauncher.linux.LinuxState
+import dev.omalauncher.widgets.render.LocalMenuOpened
 
 @Composable
 fun LauncherRoot(
@@ -117,6 +119,7 @@ private fun DesktopScreen(
             state.sharing != null -> state.sharing = null
             state.appWidgetsOpen -> state.appWidgetsOpen = false
             runtime.widgets.openScreen != null -> runtime.widgets.openScreen = null
+            state.pulled != null -> state.closePull()
             // Picking apps in the drawer: Back stops picking before it closes the drawer.
             state.selection != null -> state.selection = null
             else -> state.close()
@@ -245,6 +248,21 @@ private fun DesktopScreen(
             )
         }
 
+    LaunchedEffect(handlers) { runtime.widgets.appHandlers = handlers }
+
+    // The launcher's own drawer, or while gestures pick an owl panel for swiping up, that panel (else drawer.owl, else the stock one).
+    val drawer = runtime.upPanel()
+    // Panels live while they show, so their sources keep up; a panel's close() slides it away.
+    val shownPanels by remember(state, drawer) {
+        derivedStateOf { setOfNotNull(drawer?.takeIf { state.drawer.value > 0f }, state.pulled?.takeIf { state.pull.value > 0f }) }
+    }
+    LaunchedEffect(shownPanels) { runtime.widgets.shownPanels = shownPanels }
+    LaunchedEffect(state) {
+        runtime.widgets.panelCloses.collect { name ->
+            if (name == state.pulled) state.closePull() else if (name == runtime.upPanel()) state.close()
+        }
+    }
+
     if (panelShown) {
         // Near-opaque by default like stock drawers (style's drawer.opacity): home widgets bleeding through made icons
         // hard to read.
@@ -256,7 +274,8 @@ private fun DesktopScreen(
                 .background(Palette.background.copy(alpha = LauncherStyle.drawerOpacity))
                 .clickable { state.close() }
                 .drawerSwipe(state)
-                .swipeTabs(runtime, state),
+                // Sideways between the drawer's tabs; an owl panel in its place has its own.
+                .then(if (drawer == null) Modifier.swipeTabs(runtime, state) else Modifier),
         )
     }
     // The bar and the panel above it; the keyboard lifts both. Nothing here takes touches while the panel is closed,
@@ -275,7 +294,18 @@ private fun DesktopScreen(
                 .then(if (side != null) Modifier.wrapContentWidth().widthIn(max = ReadingWidth) else Modifier),
         ) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                if (panelShown) {
+                val slide =
+                    Modifier.graphicsLayer {
+                        val progress = state.drawer.value
+                        alpha = progress.coerceAtMost(1f)
+                        translationY = (1f - progress) * size.height * 0.6f
+                    }
+                // Long-pressing an app opens its menu: the keyboard goes then, once, and stays down.
+                val release = remember(state) { { state.promptRequest = PromptRequest.Release } }
+                if (panelShown && drawer != null) {
+                    // An owl panel in the drawer's place (gestures › swipe up: owl panel).
+                    CompositionLocalProvider(LocalMenuOpened provides release) { UpPanel(runtime, state, drawer, slide) }
+                } else if (panelShown) {
                     AppPanel(
                         runtime = runtime,
                         state = state,
@@ -370,9 +400,12 @@ private fun DesktopScreen(
     // A dock app being dragged out, over everything on home.
     state.dockDrag?.let { DockDragIcon(runtime, state, it) }
 
+    // An owl panel swiping down brings over home and the bar, as it comes down from the top.
+    PulledPanel(runtime, state)
+
     // Full-screen panels draw over the bar.
     ThemesOverlay(runtime, state)
-    StyleErrors(runtime.style)
+    FileErrors(listOf(StyleStore.FILE to runtime.style.errors, HomeStore.FILE to runtime.widgets.home.errors) + runtime.gestureProblems())
 }
 
 /**
@@ -397,27 +430,30 @@ private fun Modifier.collapsed() =
     }
 
 /**
- * What style.toml got wrong, at the top over everything, like Hyprland's bar for config errors: errors.txt is out
- * of sight without a terminal. A tap hides the problems shown; new ones show again.
+ * What style.toml or layout.toml got wrong, at the top over everything, like Hyprland's bar for config errors:
+ * errors.txt is out of sight without a terminal. A tap hides the problems shown; new ones show again.
  */
 @Composable
-private fun StyleErrors(style: StyleStore) {
+private fun FileErrors(files: List<Pair<String, List<String>>>) {
     var hidden by remember { mutableStateOf(emptySet<String>()) }
-    val shown = style.errors.filterNot { it in hidden }
+    val shown = files.map { (name, errors) -> name to errors.filterNot { "$name: $it" in hidden } }.filter { it.second.isNotEmpty() }
     if (shown.isEmpty()) return
     Box(Modifier.fillMaxSize().safePadding().padding(PanelGap), contentAlignment = Alignment.TopCenter) {
-        Column(
-            Modifier
-                .widthIn(max = ReadingWidth)
-                .fillMaxWidth()
-                .frame(2.dp, Palette.red, Palette.background)
-                .clickable { hidden = hidden + shown }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-        ) {
-            BasicText("style.toml: ${if (shown.size == 1) "1 problem" else "${shown.size} problems"}", style = Mono.copy(color = Palette.red))
-            for (line in shown.take(MAX_ERRORS)) BasicText(line, style = Mono.copy(fontSize = TextSize.Small))
-            val more = if (shown.size > MAX_ERRORS) "${shown.size - MAX_ERRORS} more in errors.txt · " else ""
-            BasicText("${more}tap to hide", style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+        Column(Modifier.widthIn(max = ReadingWidth).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(PanelGap)) {
+            for ((name, errors) in shown) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .frame(2.dp, Palette.red, Palette.background)
+                        .clickable { hidden = hidden + errors.map { "$name: $it" } }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    BasicText("$name: ${if (errors.size == 1) "1 problem" else "${errors.size} problems"}", style = Mono.copy(color = Palette.red))
+                    for (line in errors.take(MAX_ERRORS)) BasicText(line, style = Mono.copy(fontSize = TextSize.Small))
+                    val more = if (errors.size > MAX_ERRORS) "${errors.size - MAX_ERRORS} more in errors.txt · " else ""
+                    BasicText("${more}tap to hide", style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+                }
+            }
         }
     }
 }

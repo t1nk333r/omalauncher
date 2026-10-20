@@ -252,6 +252,19 @@ class Style(
                     "Unset: esc / - home up end pgup copy, tab ctrl alt left down right pgdn paste.",
             ) { ExtraKeysLayout.parse(it) }
         val TERMINAL_KEYBOARD_TEXT = Setting.Flag("terminal.keyboard-text", false, "Offer the terminals to the keyboard as a plain text field, so Gboard shows its microphone (voice typing) and clipboard; false is a password-style field without suggestions or autocorrect, like Termux.")
+
+        val SWIPE_UP =
+            Setting.Text(
+                "gestures.swipe-up",
+                "drawer.owl",
+                "The owl panel swiping up shows in the drawer's place while settings › gestures sets swiping up to \"owl panel\" (otherwise the launcher's own drawer opens): a panel's file name in ~/.config/omalauncher/widgets, by default drawer.owl. One that's gone or doesn't compile falls back to drawer.owl, then to .stock-drawer.owl, the drawer as it ships.",
+            )
+        val SWIPE_DOWN =
+            Setting.Text(
+                "gestures.swipe-down",
+                "none",
+                "The owl panel swiping down brings from the top while settings › gestures sets swiping down to \"owl panel\": \"none\" nothing, or a panel's file name in ~/.config/omalauncher/widgets (\"my-panel.owl\"); one that's gone or doesn't compile opens nothing.",
+            )
     }
 
     /** A system bar's band on home; [name] is its section in the file. */
@@ -294,7 +307,7 @@ object StyleFile {
                 listOf(GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, MONOCHROME_ICONS, ICON_PACK, CORNER_SCALE) +
                 listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +
-                listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, TERMINAL_KEYBOARD_TEXT, EXTRA_KEYS)
+                listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, TERMINAL_KEYBOARD_TEXT, EXTRA_KEYS, SWIPE_UP, SWIPE_DOWN)
         }
 
     private val byKey = ALL.associateBy { it.key }

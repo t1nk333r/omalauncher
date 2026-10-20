@@ -1648,3 +1648,92 @@ internal fun SettingsButton(
         }
     }
 }
+
+// Owl panels (upstream 0.10.0): what android.drawer, appAction and a panel in the drawer's place use.
+
+/** What `android.drawer` and `android.recent` call its kind. */
+internal val AppHit.kind: String
+    get() =
+        when (this) {
+            is AppHit.Android -> "android"
+            is AppHit.Linux -> "linux"
+            is AppHit.Owl -> "owl"
+            is AppHit.Shortcut -> "shortcut"
+        }
+
+/** `work` or `clone` for an app or shortcut in a profile beside the launcher's own, else null. */
+internal val AppHit.profileKind: String?
+    get() =
+        when (this) {
+            is AppHit.Android -> app.profile?.let { if (app.clone) "clone" else "work" }
+            is AppHit.Shortcut -> shortcut.profile?.let { if (shortcut.clone) "clone" else "work" }
+            else -> null
+        }
+
+/**
+ * The long-press menu's entries, as the words `appAction(word, key)` takes: pin to home, for owl apps editing,
+ * sharing and removing, for Android apps their info and uninstall, and for shortcuts removing them.
+ */
+internal fun AppHit.actionWords(): List<String> =
+    when (this) {
+        is AppHit.Linux -> listOf("pin")
+        is AppHit.Owl -> listOf("pin", "edit", "share", "remove")
+        is AppHit.Android -> listOfNotNull("pin", "info", if (app.system) null else "uninstall")
+        is AppHit.Shortcut -> listOf("pin", "remove")
+    }
+
+/** Runs the menu entry [word], from the menu or a widget's `appAction(...)`; one the app's menu doesn't offer does nothing. */
+internal fun AppHit.act(
+    word: String,
+    handlers: AppHandlers,
+) {
+    if (word !in actionWords()) return
+    when (word) {
+        "pin" -> handlers.pin(listOf(this))
+        "info" -> (this as? AppHit.Android)?.let { handlers.info(it.app) }
+        "uninstall" -> (this as? AppHit.Android)?.let { handlers.uninstall(it.app) }
+        "remove" ->
+            when (this) {
+                is AppHit.Shortcut -> handlers.remove(shortcut)
+                is AppHit.Owl -> handlers.removeOwl(spec)
+                else -> {}
+            }
+        "edit" -> (this as? AppHit.Owl)?.let { handlers.edit(it.spec) }
+        "share" -> (this as? AppHit.Owl)?.let { handlers.share(it.spec) }
+    }
+}
+
+/** Pulling down past the top of a list in the drawer drags it closed, like stock drawers; for its list, and a panel's in its place. */
+@Composable
+internal fun rememberDrawerPull(state: LauncherState): NestedScrollConnection {
+    val screenHeight = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    return remember(state, screenHeight) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                // Half-closed and scrolling back up: reopen before scrolling the list.
+                if (source != NestedScrollSource.UserInput || available.y >= 0f || state.drawer.value >= 1f) return Offset.Zero
+                state.dragBy(-available.y / screenHeight)
+                return Offset(0f, available.y)
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                if (source != NestedScrollSource.UserInput || available.y <= 0f) return Offset.Zero
+                state.dragBy(-available.y / screenHeight)
+                return Offset(0f, available.y)
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (state.drawer.value >= 1f) return Velocity.Zero
+                state.settle(available.y)
+                return available
+            }
+        }
+    }
+}

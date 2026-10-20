@@ -1,5 +1,7 @@
 package dev.omalauncher.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -9,11 +11,9 @@ import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import dev.omalauncher.Runtime
 
@@ -171,7 +171,13 @@ class LauncherState {
      * Closes without animating. Used when leaving the launcher: animations pause
      * while it's in the background and could leave an invisible drawer catching touches.
      */
-    fun closeNow() = scope.launch { drawer.snapTo(0f) }
+    fun closeNow() =
+        scope.launch {
+            drawer.snapTo(0f)
+            // The swipe-down panel too: opening an app from it, or leaving the launcher, leaves it.
+            pull.snapTo(0f)
+            pulled = null
+        }
 
     fun toggle() = if (drawer.targetValue > 0.5f) close() else open()
 
@@ -181,6 +187,51 @@ class LauncherState {
     fun dragBy(fraction: Float) = scope.launch {
         if (fraction != 0f) lastDragUp = fraction > 0
         drawer.snapTo((drawer.value + fraction).coerceIn(0f, 1f)) }
+
+    /** The swipe-down panel: 0 = up out of sight, 1 = down. Follows the finger while dragging, like [drawer]. */
+    val pull = Animatable(0f)
+
+    /** File name of the panel [pull] shows, fixed when a swipe down starts it; null while none is pulled. */
+    var pulled by mutableStateOf<String?>(null)
+
+    /**
+     * Whether the drag under way started with the panel open. A slow drag settles by how far it went from there, not
+     * by its last step, which a finger lifting can turn the other way.
+     */
+    private var pullFromOpen = false
+
+    /** A drag on the panel starts: from home, to open it, or on the panel, to close it. */
+    fun startPull() {
+        pullFromOpen = pull.targetValue > 0.5f
+    }
+
+    fun pullBy(fraction: Float) = scope.launch { pull.snapTo((pull.value + fraction).coerceIn(0f, 1f)) }
+
+    /** Settles the panel after a drag; [velocity] is in px/s, positive = downwards. A short pull down opens it, a short push up closes it. */
+    fun settlePull(velocity: Float) {
+        val open =
+            when {
+                velocity > 800f -> true
+                velocity < -800f -> false
+                pullFromOpen -> pull.value > 0.8f
+                else -> pull.value > 0.2f
+            }
+        if (open) composeScope?.launch { pull.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow)) } else closePull()
+    }
+
+    /** Brings the panel [name] all the way down, as the pill does for a swipe down that opens one. */
+    fun openPull(name: String) {
+        pulled = name
+        startPull()
+        composeScope?.launch { pull.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow)) }
+    }
+
+    /** Slides the panel away and lets it go; a drag that catches it on the way keeps it. */
+    fun closePull() =
+        scope.launch {
+            if (composeScope != null) pull.animateTo(0f, spring(stiffness = Spring.StiffnessMedium)) else pull.snapTo(0f)
+            pulled = null
+        }
 
     /** Settles after a drag; [velocity] is in px/s, negative = upwards. */
     fun settle(velocity: Float) {
