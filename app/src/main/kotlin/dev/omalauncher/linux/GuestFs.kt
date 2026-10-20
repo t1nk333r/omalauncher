@@ -28,6 +28,8 @@ data class GuestEntry(
 class GuestFs(
     /** The Android file for an absolute guest path, following proot's binds (see [Proot.hostFile]). */
     private val hostOf: (String) -> File,
+    /** Phone build: what's bound right inside a guest directory, by name (see [Proot.mountsIn]). */
+    private val mountsIn: (String) -> List<String> = { emptyList() },
 ) {
     /** Collapses ".", ".." and duplicate slashes; always absolute. */
     fun normalize(path: String): String {
@@ -94,7 +96,8 @@ class GuestFs(
         showHidden: Boolean,
     ): List<GuestEntry> {
         val base = resolve(dir)
-        val names = hostOf(base).list().orEmpty()
+        // Phone build: with what's bound into it, whose mount point may not be in the rootfs (/sdcard, turned on late).
+        val names = (hostOf(base).list().orEmpty().toList() + mountsIn(base)).distinct()
         return names
             .filter { showHidden || !it.startsWith('.') }
             .map { name ->

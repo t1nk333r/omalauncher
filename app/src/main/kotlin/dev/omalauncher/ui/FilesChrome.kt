@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import dev.omalauncher.linux.GuestEntry
+import dev.omalauncher.linux.SharedStorage
 
 /** The path as tappable segments: / › root › .config. */
 @Composable
@@ -64,7 +65,10 @@ internal fun Breadcrumbs(
     }
 }
 
-/** Quick jumps, like stock Files' drawer: home, config, the whole system; the one you're in is in the accent color. */
+/**
+ * Quick jumps, like stock Files' drawer: home, config, the whole system; the one you're in is in the accent color.
+ * Phone build: and the phone's storage while Linux sees it at /sdcard.
+ */
 @Composable
 internal fun Places(
     path: String,
@@ -73,7 +77,7 @@ internal fun Places(
 ) {
     val places =
         remember(path) {
-            listOf("home" to "/root", "config" to "/root/.config", "downloads" to "/root/Downloads", "system" to "/")
+            listOf("home" to "/root", "config" to "/root/.config", "downloads" to "/root/Downloads", "phone" to SharedStorage.GUEST, "system" to "/")
                 .filter { exists(it.second) }
         }
     LazyRow(Modifier.bleed(PanelPadding), contentPadding = PaddingValues(horizontal = PanelPadding - 8.dp)) {

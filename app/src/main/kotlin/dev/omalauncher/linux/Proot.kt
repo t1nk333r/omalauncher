@@ -1,6 +1,7 @@
 package dev.omalauncher.linux
 
 import android.content.Context
+import android.util.Log
 import dev.omalauncher.LauncherData
 import dev.omalauncher.upgrade.writeAtomically
 import java.io.File
@@ -188,8 +189,19 @@ class Proot(
      * linux or before the next guest command, not only when Linux starts.
      */
     fun showSharedStorage() {
-        if (rootfs.isDirectory && SharedStorage.allowed()) File(rootfs, SharedStorage.GUEST.removePrefix("/")).mkdirs()
+        if (!rootfs.isDirectory || !SharedStorage.allowed()) return
+        val point = File(rootfs, SharedStorage.GUEST.removePrefix("/"))
+        if (!point.isDirectory && !point.mkdirs()) Log.w(TAG, "cannot make ${point.path}, /sdcard's mount point")
     }
+
+    /**
+     * Phone build: the names of [binds] right inside the guest directory [dir] whose host directory is there, so Files
+     * lists them whether or not their mount point is in the rootfs; see [GuestFs.list].
+     */
+    fun mountsIn(dir: String): List<String> =
+        binds
+            .filter { (guest, host) -> guest.substringBeforeLast('/').ifEmpty { "/" } == dir && host.isDirectory }
+            .map { it.first.substringAfterLast('/') }
 
     /** A guest `sh -c [script]`, stderr merged into stdout. Needs [prepare] to have run. */
     fun process(script: String): ProcessBuilder =
@@ -204,6 +216,7 @@ class Proot(
         }
 
     companion object {
+        private const val TAG = "proot"
         const val GUEST_HOME = "/root"
 
         /** XDG_RUNTIME_DIR in the guest, bound to [runtimeDir]. */

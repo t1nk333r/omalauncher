@@ -56,7 +56,7 @@ fun FilesScreen(
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
-    val fs = remember { GuestFs(runtime.proot::hostFile) }
+    val fs = remember { GuestFs(runtime.proot::hostFile, runtime.proot::mountsIn) }
     val scope = rememberCoroutineScope()
 
     var path by remember(startPath) { mutableStateOf(fs.normalize(startPath)) }
