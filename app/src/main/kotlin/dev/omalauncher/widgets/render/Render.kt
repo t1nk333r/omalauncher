@@ -532,7 +532,8 @@ private fun lazyIndex(
  * Phone build: `Pages`, one page for each of its nodes (a `for` right inside, one for each item), swiped sideways one
  * at a time like home's pages. `page` turns to the page at that index, as a tab bar beside it does; `onPage` hears of a
  * swipe to another once it settles, with its index, so `page` can follow. Pages next to the one showing are built as a
- * swipe brings them in.
+ * swipe brings them in. With `loop`, a swipe past the last page comes round to the first, and back past the first to
+ * the last: the pager holds [LOOP_LAPS] laps of the pages and starts in the middle one.
  */
 @Composable
 private fun PagesNode(
@@ -545,16 +546,27 @@ private fun PagesNode(
     val slices = el.children.mapIndexed { at, n -> if (n is WNode.For) forSlice(n, at, env, inst) else Slice.One(n) }
     val count = slices.sumOf { if (it is Slice.Many) it.items.size else 1 }
     val wanted = (p.observe("page")?.num() ?: 0.0).toInt().coerceIn(0, (count - 1).coerceAtLeast(0))
-    val state = rememberPagerState(initialPage = wanted) { count }
+    val loop = count > 1 && p.observe("loop")?.truthy == true
+    val laps = if (loop) LOOP_LAPS else 1
+    // Looping, the pager's page v is page v % count, and a new number of pages starts it again in the middle lap.
+    val state = key(if (loop) count else 0) { rememberPagerState(initialPage = laps / 2 * count + wanted) { laps * count } }
     val asked = rememberUpdatedState(wanted)
-    LaunchedEffect(wanted, count) {
-        if (count > 0 && state.currentPage != wanted) state.animateScrollToPage(wanted)
+    val perLap = rememberUpdatedState(count)
+    LaunchedEffect(state, wanted, count, loop) {
+        // Within the lap showing, so a tab beside it turns the way it lies.
+        val now = state.currentPage
+        val target = if (loop) now - now % count + wanted else wanted
+        if (count > 0 && now != target) state.animateScrollToPage(target)
     }
     val onPage = el.handlers["onPage"]
     LaunchedEffect(state, onPage) {
-        snapshotFlow { state.settledPage }.collect { i -> if (i != asked.value && i < state.pageCount) onPage?.run(p.env, listOf(Num(i.toDouble()))) }
+        snapshotFlow { state.settledPage }.collect { v ->
+            val i = v % perLap.value.coerceAtLeast(1)
+            if (i != asked.value && v < state.pageCount) onPage?.run(p.env, listOf(Num(i.toDouble())))
+        }
     }
-    HorizontalPager(state, mod, key = { i -> pageKey(slices, i) }) { i ->
+    HorizontalPager(state, mod, key = { v -> if (loop) "${v / count}:${pageKey(slices, v % count)}" else pageKey(slices, v) }) { v ->
+        val i = if (loop) v % count else v
         Box(Modifier.fillMaxSize()) {
             var base = 0
             for (slice in slices) {
@@ -571,6 +583,9 @@ private fun PagesNode(
         }
     }
 }
+
+/** Laps of a looping `Pages`' pages in its pager: half of them a swipe away either way before it stops. */
+private const val LOOP_LAPS = 1000
 
 /** The key of page [i] among [slices]: its `for` item's, as a lazy list's, or the node's place. */
 private fun pageKey(

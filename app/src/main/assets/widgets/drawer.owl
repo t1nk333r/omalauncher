@@ -6,7 +6,7 @@ panel "app drawer" {
   // Phone build: style.toml's drawer.* settings (layout, categories, sort, sections, most used, letters, labels, columns,
   // icon size) shape it; groups, hidden apps and picking several apps are the launcher's, and android.drawer and
   // `picked` tell it them.
-  meta { description: "The launcher's app drawer, written in owl: your apps by kind and your groups, in one list or a page per category as Smart Launcher's, the most used, a letter rail, search as you type in the prompt bar, each app's long-press menu, picking several, and dragging an app onto home"; version: "1.1"; license: "MIT"; category: "system"; owl: 11 }
+  meta { description: "The launcher's app drawer, written in owl: your apps by kind and your groups, in one list or a page per category as Smart Launcher's, the most used, a letter rail, search as you type in the prompt bar, each app's long-press menu, picking several, and dragging an app onto home"; version: "1.2"; license: "MIT"; category: "system"; owl: 11 }
   // The launcher's gear, as its settings buttons draw it; currentColor takes the accent.
   asset gear = base64"PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iY3VycmVudENvbG9yIiBkPSJNMTkuMTQsMTIuOTRjMC4wNCwtMC4zIDAuMDYsLTAuNjEgMC4wNiwtMC45NGMwLC0wLjMyIC0wLjAyLC0wLjY0IC0wLjA3LC0wLjk0bDIuMDMsLTEuNThjMC4xOCwtMC4xNCAwLjIzLC0wLjQxIDAuMTIsLTAuNjFsLTEuOTIsLTMuMzJjLTAuMTIsLTAuMjIgLTAuMzcsLTAuMjkgLTAuNTksLTAuMjJsLTIuMzksMC45NmMtMC41LC0wLjM4IC0xLjAzLC0wLjcgLTEuNjIsLTAuOTRMMTQuNCwyLjgxYy0wLjA0LC0wLjI0IC0wLjI0LC0wLjQxIC0wLjQ4LC0wLjQxaC0zLjg0Yy0wLjI0LDAgLTAuNDMsMC4xNyAtMC40NywwLjQxTDkuMjUsNS4zNUM4LjY2LDUuNTkgOC4xMiw1LjkyIDcuNjMsNi4yOUw1LjI0LDUuMzNjLTAuMjIsLTAuMDggLTAuNDcsMCAtMC41OSwwLjIyTDIuNzQsOC44N0MyLjYyLDkuMDggMi42Niw5LjM0IDIuODYsOS40OGwyLjAzLDEuNThDNC44NCwxMS4zNiA0LjgsMTEuNjkgNC44LDEyczAuMDIsMC42NCAwLjA3LDAuOTRsLTIuMDMsMS41OGMtMC4xOCwwLjE0IC0wLjIzLDAuNDEgLTAuMTIsMC42MWwxLjkyLDMuMzJjMC4xMiwwLjIyIDAuMzcsMC4yOSAwLjU5LDAuMjJsMi4zOSwtMC45NmMwLjUsMC4zOCAxLjAzLDAuNyAxLjYyLDAuOTRsMC4zNiwyLjU0YzAuMDUsMC4yNCAwLjI0LDAuNDEgMC40OCwwLjQxaDMuODRjMC4yNCwwIDAuNDQsLTAuMTcgMC40NywtMC40MWwwLjM2LC0yLjU0YzAuNTksLTAuMjQgMS4xMywtMC41NiAxLjYyLC0wLjk0bDIuMzksMC45NmMwLjIyLDAuMDggMC40NywwIDAuNTksLTAuMjJsMS45MiwtMy4zMmMwLjEyLC0wLjIyIDAuMDcsLTAuNDcgLTAuMTIsLTAuNjFMMTkuMTQsMTIuOTR6TTEyLDE1LjZjLTEuOTgsMCAtMy42LC0xLjYyIC0zLjYsLTMuNnMxLjYyLC0zLjYgMy42LC0zLjZzMy42LDEuNjIgMy42LDMuNlMxMy45OCwxNS42IDEyLDE1LjZ6Ii8+PC9zdmc+"
   // Each page's icon in the bar under the pages: Smart Launcher's own while it's on the phone (d.categoryIcons), else
@@ -374,11 +374,13 @@ panel "app drawer" {
         }
       }
     }
-    // Pages: one category at a time, swiped sideways; in each its apps in rows, as the list has them.
+    // Pages: one category at a time, swiped sideways, past the last round to the first; in each its apps in rows, as
+    // the list has them.
     Pages {
       visible: paged && !searching
       weight: 1
       fill: width
+      loop: true
       page: pageAt
       onPage: at = pageIds[value]
       for pg in pages key pg.id {

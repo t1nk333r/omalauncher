@@ -43,7 +43,7 @@ internal val KINDS: Map<String, Kind> =
         // owl 10: a menu over everything else, next to the node that holds it.
         "Popup" to Kind(setOf("position", "gap", "align"), Children.UI),
         // Phone build: pages swiped sideways one at a time, as the drawer's categories are.
-        "Pages" to Kind(setOf("page"), Children.UI),
+        "Pages" to Kind(setOf("page", "loop"), Children.UI),
     )
 
 internal val COMMON =
@@ -125,8 +125,9 @@ internal val SINCE =
         listOf("Column.lazy", "Grid.lazy", "Column.reverse", "Grid.reverse", "Image.label", "Text.minLines", "rank", "strongMatch", "chunk").associateWith { 11 } +
         // Phone build, with owl 11's panels: what the phone's app drawer needs that upstream's doesn't have. A letter
         // rail beside a lazy list; a sideways swipe; apps carried out of a panel onto home; the drawer's hidden apps,
-        // and the app being carried, as a panel reads them; groups of apps; pages swiped sideways, and a Row that scrolls.
-        listOf("Column.rail", "Grid.rail", "onSwipe", "dragApp", DRAGGING, SHOW_HIDDEN, PICKED, "drawerGroup", "Pages", "onPage", "Row.scroll").associateWith { 11 } +
+        // and the app being carried, as a panel reads them; groups of apps; pages swiped sideways, round and round with
+        // loop, and a Row that scrolls.
+        listOf("Column.rail", "Grid.rail", "onSwipe", "dragApp", DRAGGING, SHOW_HIDDEN, PICKED, "drawerGroup", "Pages", "onPage", "Pages.loop", "Row.scroll").associateWith { 11 } +
         // owl 12: how much of an app's top a camera cutout covers, once it hides the status bar.
         mapOf("screenTop" to 12) +
         // owl 12: the extra keys over the soft keyboard as a file; keys for the focused Linux window; touches as they go down.
