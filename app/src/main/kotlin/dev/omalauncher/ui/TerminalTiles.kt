@@ -73,6 +73,9 @@ class TerminalTiles(
     /** The ⌨ button, in window coordinates, while the tile is active. A press there is the button's. */
     var keyboardButton: Rect? = null
 
+    /** How tall the extra keys measured, in pixels: keybar.owl decides it. 0 until they've shown. */
+    var extraKeysHeight by mutableFloatStateOf(0f)
+
     /** How far the home screen is lifted so the active tile clears the soft keyboard, in pixels. */
     var lift = 0f
         private set

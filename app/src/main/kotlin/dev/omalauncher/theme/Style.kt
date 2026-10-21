@@ -274,7 +274,7 @@ class Style(
                 "The keys above the soft keyboard, in Termux's extra-keys format, best in single quotes: " +
                     "'[[ESC, TAB, CTRL, ALT, {key: LEFT, popup: {macro: \"ALT b\", display: \"word\"}}, DOWN, UP, RIGHT]]'. " +
                     "Swipe a key up to send its popup. Up to ${ExtraKeysLayout.MAX_ROWS} rows of ${ExtraKeysLayout.MAX_KEYS}; '[]' hides the bar. " +
-                    "Unset: esc / - home up end pgup copy, tab ctrl alt left down right pgdn paste.",
+                    "Phone build: while it's set, these stand in for keybar.owl's keys; unset, keybar.owl has the bar.",
             ) { ExtraKeysLayout.parse(it) }
         val TERMINAL_KEYBOARD_TEXT = Setting.Flag("terminal.keyboard-text", false, "Offer the terminals to the keyboard as a plain text field, so Gboard shows its microphone (voice typing) and clipboard; false is a password-style field without suggestions or autocorrect, like Termux.")
 

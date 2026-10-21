@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.omalauncher.wayland.Keys
+import dev.omalauncher.widgets.lang.KeyNames
 
 /** How a modifier on the extra-keys row is held: for the next key only, or until tapped again. */
 enum class Latch { Off, Once, Locked }
@@ -38,6 +39,9 @@ class KeyboardBridge(
     val alt = StickyModifier(Keys.KEY_LEFTALT)
     val shift = StickyModifier(Keys.KEY_LEFTSHIFT)
     private val sticky = listOf(ctrl, alt, shift)
+
+    /** The modifiers the extra keys latch, by the names `latch(...)` and `android.modifiers` use. */
+    val latches = mapOf("ctrl" to ctrl, "alt" to alt, "shift" to shift)
 
     fun modifier(mod: Mod) =
         when (mod) {
@@ -123,6 +127,33 @@ class KeyboardBridge(
     /** Sends [strokes] one after another, like typing them: a latch for the next key ends after the first. */
     fun send(strokes: List<Stroke>) {
         for (s in strokes) if (s.text != null) type(s.text) else tap(s.code, s.held)
+    }
+
+    /** `pressKey("ctrl+c")`: the key [combo] names, with its modifiers and any latched ones held around it. */
+    fun press(combo: KeyNames.Combo) {
+        // A latched one is held already.
+        val held = combo.held.filter { code -> sticky.none { it.code == code && it.latch != Latch.Off } }
+        withLatched {
+            held.forEach { key(it, true) }
+            key(combo.code, true)
+            key(combo.code, false)
+            held.asReversed().forEach { key(it, false) }
+        }
+    }
+
+    /** `latch("ctrl", how)`: on for the next key ("once"), until set off ("locked"), or "off"; null toggles once and off. */
+    fun latch(
+        name: String,
+        how: String?,
+    ) {
+        val m = latches[name] ?: return
+        m.latch =
+            when (how) {
+                "once" -> Latch.Once
+                "locked" -> Latch.Locked
+                "off" -> Latch.Off
+                else -> if (m.latch == Latch.Off) Latch.Once else Latch.Off
+            }
     }
 
     /** Drops every latch, so a modifier left on doesn't surprise the next keystroke. */

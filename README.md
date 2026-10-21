@@ -68,8 +68,11 @@ Hardware keyboard shortcuts: Super+Enter (terminal), Super+Space or
 Super+A (the bar), Super+1..9 (home pages) on the home screen; Super+Enter
 and Super+W (close) in Linux windows.
 
-The keys above the soft keyboard in terminals are `terminal.extra-keys` in
-`~/.config/omalauncher/style/style.toml`, in Termux's extra-keys format:
+The keys above the soft keyboard in terminals are the widgets folder's
+`keybar.owl`, which you or an agent can change (its `docs/keybar.md`).
+This phone build also reads `terminal.extra-keys` in
+`~/.config/omalauncher/style/style.toml`, in Termux's extra-keys format; while
+it's set, its keys stand in for keybar.owl's:
 
 ```toml
 [terminal]

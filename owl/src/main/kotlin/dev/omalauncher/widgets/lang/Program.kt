@@ -22,7 +22,8 @@ interface Host {
     /**
      * The tile's size: cols and rows in grid cells, tileWidth and tileHeight in dp; null until it's laid out.
      * Also screenWidth and screenHeight (its screen's size), screenInset (how much of its bottom the
-     * navigation bar covers, for an app with `edge` and a face, or the keyboard while a face's field has it), linux: whether Linux is installed and running,
+     * navigation bar covers, for an app with `edge` and a face, or the keyboard while a face's field has it), screenTop (how
+     * much of an app's top a camera cutout covers, with `statusBar: false`), linux: whether Linux is installed and running,
      * and corners: the launcher's corner style as a radius scale, 0 (edge), 0.5 (soft) or 1 (round).
      */
     fun tile(name: String): Value = Null
@@ -46,13 +47,15 @@ interface Host {
 
     /**
      * `post(url, body, headers)` in a handler: an HTTP POST, with a map or list [body] sent as JSON. With a
-     * [slot] (`x = post(...)`), the answer goes there as `{code, ok, out}` when it arrives.
+     * [slot] (`x = post(...)`), the answer goes there as `{code, ok, out}` when it arrives. [method] is
+     * POST, or `method:`'s PUT or DELETE.
      */
     fun post(
         url: String,
         body: Value,
         headers: Map<String, String>,
         slot: Int?,
+        method: String,
     ) {}
 
     val budget: Budget
@@ -249,6 +252,8 @@ sealed interface Global {
         val init: Ev,
         /** Saved across restarts. */
         val persist: Boolean = false,
+        /** `secret`: saved across restarts encrypted, apart from [persist]'s values; it only goes into requests. */
+        val secret: Boolean = false,
     ) : Global
 
     class Let(
@@ -340,6 +345,8 @@ class Program(
     val triggers: List<Trigger>,
     /** Shell commands this widget can run, known without running it; for reviewing shared widgets. */
     val commands: List<String>,
+    /** Each `secret` state's servers, sorted: its sealed value is kept only while these stay the same. */
+    val secretHosts: Map<String, List<String>> = emptyMap(),
     /** Declared dependencies: package manager -> package names, e.g. pacman -> [jq, curl]. */
     val requires: Map<String, List<String>>,
     /**

@@ -13,13 +13,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -43,14 +46,17 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.omalauncher.Runtime
 import dev.omalauncher.theme.Style
 import dev.omalauncher.wayland.Keys
+import dev.omalauncher.widgets.render.WidgetKeys
+import dev.omalauncher.widgets.runtime.WidgetInstance
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** One row's height, keycap and the gap around it; the bar is two rows by default, like Termux's. */
+/** One row's height, keycap and the gap around it; the stock extra keys are two rows, like Termux's default. */
 internal val KeyRowHeight = 40.dp
 internal val KeyGap = 3.dp
 internal val FrameWidth = 2.dp
@@ -61,11 +67,17 @@ private val Gap = 6.dp
 /** How far up a key is swiped to send its popup instead. */
 private val SwipeDistance = 16.dp
 
-/** The rows style.toml's terminal.extra-keys asks for; see [ExtraKeysLayout]. */
-val extraKeysRows: List<List<ExtraKey>> get() = ExtraKeysLayout.of(LauncherStyle.style[Style.EXTRA_KEYS])
+/**
+ * Phone build: the rows style.toml's terminal.extra-keys asks for, which stand in for keybar.owl while it's set; null
+ * while it isn't. See [ExtraKeysLayout].
+ */
+val extraKeysRows: List<List<ExtraKey>>? get() = LauncherStyle.style[Style.EXTRA_KEYS]?.let { ExtraKeysLayout.of(it) }
 
-/** The bar's full height, gap included; the home screen lifts a typing tile by this much more. */
-val ExtraKeysHeight: Dp get() = KeyRowHeight * extraKeysRows.size + (FrameWidth + KeyGap) * 2 + Gap
+/**
+ * The stock extra keys' full height, gap included: what home lifts a typing tile by until it has measured the keys.
+ * Phone build: or terminal.extra-keys' rows'.
+ */
+val ExtraKeysHeight: Dp get() = KeyRowHeight * (extraKeysRows?.size ?: 2) + (FrameWidth + KeyGap) * 2 + Gap
 
 /**
  * Whether the extra-keys row belongs on screen: only over a docked soft
@@ -79,20 +91,48 @@ fun extraKeysWanted(): Boolean {
     val density = LocalDensity.current
     // Derived, so the keyboard's slide-in animation doesn't recompose every frame.
     val docked by remember(ime, density) { derivedStateOf { ime.getBottom(density) > 0 } }
-    return docked && extraKeysRows.isNotEmpty()
+    return docked && extraKeysRows?.isEmpty() != true
 }
 
 /**
- * The keys a phone keyboard lacks, docked above it for terminals: a framed
- * panel of keycaps, like the tiles above it. Keys never take focus, so the
- * soft keyboard stays up; ctrl, alt and shift latch for the next key on a
- * tap and lock on a long press. A key with a popup sends it when swiped up
- * and let go.
+ * The keys a phone keyboard lacks, docked above it for terminals: keybar.owl (`keybar "…" { }`), else the stock ones.
+ * Their nodes never take focus, so the soft keyboard stays up; `pressKey(...)` and `latch(...)` reach [Runtime.keyboard].
+ * Phone build: style.toml's terminal.extra-keys instead, while it's set ([LayoutKeys]).
  */
 @Composable
 fun ExtraKeys(
-    bridge: KeyboardBridge,
+    runtime: Runtime,
     modifier: Modifier = Modifier,
+) {
+    val rows = extraKeysRows
+    if (rows != null) return LayoutKeys(rows, runtime.keyboard, modifier)
+    val widgets = runtime.widgets
+    // Before the file runs too, so it's live as soon as it does.
+    DisposableEffect(widgets) {
+        widgets.keysShown(true)
+        onDispose { widgets.keysShown(false) }
+    }
+    val inst = widgets.keysInstance() ?: return
+    WidgetKeys(inst, modifier.fillMaxWidth())
+}
+
+/** The extra keys at the bottom of a screen, where the keyboard would push them up, for owl-check's picture of them. */
+@Composable
+internal fun KeysPreview(inst: WidgetInstance) {
+    Box(Modifier.fillMaxSize().background(Palette.background).safeDrawingPadding(), contentAlignment = Alignment.BottomCenter) {
+        WidgetKeys(inst, Modifier.fillMaxWidth())
+    }
+}
+
+/**
+ * Phone build: terminal.extra-keys' [rows], a framed panel of keycaps like the tiles above it. Ctrl, alt and shift
+ * latch for the next key on a tap and lock on a long press; a key with a popup sends it when swiped up and let go.
+ */
+@Composable
+private fun LayoutKeys(
+    rows: List<List<ExtraKey>>,
+    bridge: KeyboardBridge,
+    modifier: Modifier,
 ) {
     Column(
         modifier
@@ -101,7 +141,7 @@ fun ExtraKeys(
             .frame(FrameWidth, Palette.border, Palette.background, radius = 12.dp)
             .padding(KeyGap),
     ) {
-        for (row in extraKeysRows) {
+        for (row in rows) {
             Row(Modifier.fillMaxWidth().height(KeyRowHeight)) {
                 for (key in row) {
                     val cap = Modifier.weight(1f).fillMaxHeight().padding(KeyGap)
@@ -472,5 +512,6 @@ internal suspend fun PointerInputScope.presses(press: suspend AwaitPointerEventS
         }
     }
 
+/** How long a key is held before it repeats, and how often it repeats then: the editor's keys and owl's `repeats`. */
 internal const val RepeatDelay = 400L
 internal const val RepeatInterval = 50L

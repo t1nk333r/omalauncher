@@ -32,6 +32,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import dev.omalauncher.ui.RepeatDelay
+import dev.omalauncher.ui.RepeatInterval
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -118,11 +123,13 @@ import dev.omalauncher.widgets.lang.WNode
 import dev.omalauncher.widgets.lang.num
 import dev.omalauncher.widgets.lang.text
 import dev.omalauncher.widgets.runtime.WidgetInstance
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.abs
-import kotlinx.coroutines.launch
 
 /** Whether the home screen is hidden (drawer, full-screen panel); animated widgets stop ticking while it is. */
 val LocalHomeCovered = staticCompositionLocalOf<() -> Boolean> { { false } }
@@ -228,6 +235,24 @@ fun WidgetScreen(
         // Set before the nodes compose, so the first frame already has the size instead of null.
         inst.setScreen(maxWidth.value.toDouble(), maxHeight.value.toDouble())
         Column(Modifier.fillMaxSize()) {
+            CompositionLocalProvider(LocalLongPress provides true) {
+                Nodes(nodes, inst.root, inst, this)
+            }
+        }
+    }
+}
+
+/** Extra keys (`keybar "…" { }`): their nodes over the soft keyboard, as wide as there's room for and as tall as they are. */
+@Composable
+fun WidgetKeys(
+    inst: WidgetInstance,
+    modifier: Modifier = Modifier,
+) {
+    val nodes = inst.program.screen ?: return
+    if (inst.program.animated) FrameClock(inst) { false }
+    BoxWithConstraints(modifier) {
+        inst.setScreen(maxWidth.value.toDouble(), maxHeight.value.toDouble())
+        Column(Modifier.fillMaxWidth()) {
             CompositionLocalProvider(LocalLongPress provides true) {
                 Nodes(nodes, inst.root, inst, this)
             }
@@ -955,6 +980,38 @@ private fun handlers(p: Props): Modifier {
                 ) { change, amount ->
                     change.consume()
                     dragged += amount
+                }
+            }
+    }
+    // As the finger goes down, not up: a key acts at once, and with `repeats` again while held, as a keyboard's
+    // keys do (owl 12). Touches aren't consumed, so onTap and onLongPress on the same node still see them.
+    val press = el.handlers["onPress"]
+    val release = el.handlers["onRelease"]
+    if (press != null || release != null) {
+        m =
+            m.pointerInput(el, p.env) {
+                coroutineScope {
+                    val scope = this
+                    awaitEachGesture {
+                        val at = awaitFirstDown(requireUnconsumed = false).position
+                        val repeating =
+                            press?.let { a ->
+                                fun run(n: Int) = a.run(p.env, listOf(Num((at.x / density).toDouble()), Num((at.y / density).toDouble()), Num(n.toDouble())))
+                                run(0)
+                                if (p.now("repeats")?.truthy != true) return@let null
+                                scope.launch {
+                                    delay(RepeatDelay)
+                                    var n = 1
+                                    while (true) {
+                                        run(n++)
+                                        delay(RepeatInterval)
+                                    }
+                                }
+                            }
+                        waitForUpOrCancellation()
+                        repeating?.cancel()
+                        release?.run(p.env, emptyList())
+                    }
                 }
             }
     }
