@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.omalauncher.ui.FilesScreen
@@ -14,6 +15,9 @@ import dev.omalauncher.ui.applySystemBars
 class FilesActivity : InstantActivity() {
     private val runtime get() = (application as App).runtime
     private var startPath by mutableStateOf(DEFAULT_PATH)
+
+    /** Phone build: counts returns to the front, where Files reads its folder again: the phone's storage may be shared since. */
+    private var resumed by mutableIntStateOf(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,8 +30,14 @@ class FilesActivity : InstantActivity() {
         applySystemBars(this, Palette.isLight)
         setInstantContent {
             LaunchedEffect(Palette.isLight) { applySystemBars(this@FilesActivity, Palette.isLight) }
-            FilesScreen(runtime, startPath, onExit = ::backInstantly)
+            FilesScreen(runtime, startPath, onExit = ::backInstantly, resumed = resumed)
         }
+    }
+
+    /** Phone build: back in front; see [resumed]. */
+    override fun onResume() {
+        super.onResume()
+        resumed++
     }
 
     /** Opened again with a path (e.g. `omarchy-files ~/Downloads`): jump there. */

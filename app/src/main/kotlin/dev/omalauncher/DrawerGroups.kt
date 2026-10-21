@@ -56,15 +56,19 @@ class DrawerGroups(
     }
 }
 
-/** [groups] with [key] in the group [name] (made after the others if new) and out of any other. */
+/**
+ * [groups] with [key] in the group [name] (made after the others if new) and out of any other. A name in another case
+ * is the same group, as the drawer's pages and pickers have it.
+ */
 internal fun withApp(
     groups: List<DrawerGroup>,
     key: String,
     name: String,
 ): List<DrawerGroup> {
     val rest = withoutApp(groups, key)
-    return if (rest.any { it.name == name }) {
-        rest.map { if (it.name == name) it.copy(keys = it.keys + key) else it }
+    val same = rest.indexOfFirst { it.name.equals(name, ignoreCase = true) }
+    return if (same >= 0) {
+        rest.mapIndexed { i, g -> if (i == same) g.copy(keys = g.keys + key) else g }
     } else {
         rest + DrawerGroup(name, listOf(key))
     }
@@ -75,24 +79,28 @@ internal fun withoutApp(
     key: String,
 ) = groups.map { if (key in it.keys) it.copy(keys = it.keys - key) else it }
 
-/** [groups] with [from] named [to]; unchanged when [to] is blank or another group already has that name. */
+/** [groups] with [from] named [to]; unchanged when [to] is blank or another group already has that name, in any case. */
 internal fun renamed(
     groups: List<DrawerGroup>,
     from: String,
     to: String,
 ): List<DrawerGroup> {
-    if (to.isBlank() || groups.any { it.name == to && it.name != from }) return groups
+    if (to.isBlank() || groups.any { it.name.equals(to, ignoreCase = true) && it.name != from }) return groups
     return groups.map { if (it.name == from) it.copy(name = to) else it }
 }
 
+/** The saved groups; ones whose names differ only in case, saved apart before [withApp] matched them, as the first. */
 internal fun read(json: String?): List<DrawerGroup> =
     runCatching {
         val array = JSONArray(json ?: return emptyList())
-        (0 until array.length()).map { i ->
-            val o = array.getJSONObject(i)
-            val keys = o.getJSONArray("keys")
-            DrawerGroup(o.getString("name"), (0 until keys.length()).map(keys::getString))
-        }
+        (0 until array.length())
+            .map { i ->
+                val o = array.getJSONObject(i)
+                val keys = o.getJSONArray("keys")
+                DrawerGroup(o.getString("name"), (0 until keys.length()).map(keys::getString))
+            }.groupBy { it.name.lowercase() }
+            .values
+            .map { same -> same.first().copy(keys = same.flatMap { it.keys }) }
     }.getOrDefault(emptyList())
 
 internal fun write(groups: List<DrawerGroup>): String =

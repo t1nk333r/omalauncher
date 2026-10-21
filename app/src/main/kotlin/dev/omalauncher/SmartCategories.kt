@@ -102,7 +102,7 @@ object SmartCategories {
             Category(MEDIA, "entertainment") to listOf("video", "youtube", "netflix", "twitch", "jellyfin", "findroid", "plex", "kodi", "movie", "anime", "player", "vlc", "mpv"),
             Category(INTERNET, "shopping") to listOf("shop", "amazon", "ebay", "aliexpress", "temu", "shein", "noon", "namshi", "jarir", "ikea"),
             Category(SETTINGS, "personalization") to listOf("theme", "wallpaper", "iconpack", "icon pack", "kwgt", "klwp", "kustom", "widget", "goodlock", "launcher", "font"),
-            Category(UTILITIES, "finance") to listOf("bank", "wallet", "finance", "money", "crypto", "coin", "alinma", "rajhi", "barq", "stcpay", "paypal", "revolut", "binance", "invest", "stock"),
+            Category(UTILITIES, "finance") to listOf("bank", "wallet", "finance", "money", "crypto", "coin", "alinma", "rajhi", "barq", "stcpay", "paypal", "stripe", "revolut", "binance", "invest", "stock"),
             Category(UTILITIES, "education") to listOf("learn", "duolingo", "school", "course", "dictionary", "translat", "anki", "quizlet", "khan"),
             Category(UTILITIES, "lifestyle") to listOf("food", "recipe", "delivery", "talabat", "hungerstation", "jahez", "keeta", "dating", "athkar", "azan", "adhan", "prayer", "muslim", "qibla"),
             Category(UTILITIES, "medical") to listOf("medical", "doctor", "clinic", "hospital", "pharmacy", "sehhaty", "tawakkalna", "mawid", "nahdi"),

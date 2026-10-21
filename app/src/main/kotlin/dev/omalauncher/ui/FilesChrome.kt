@@ -67,18 +67,25 @@ internal fun Breadcrumbs(
 
 /**
  * Quick jumps, like stock Files' drawer: home, config, the whole system; the one you're in is in the accent color.
- * Phone build: and the phone's storage while Linux sees it at /sdcard.
+ * Phone build: and the phone's storage while it's shared, at /sdcard; turned off, the mount point left there is empty.
+ * Read again when [resumed] changes.
  */
 @Composable
 internal fun Places(
     path: String,
     exists: (String) -> Boolean,
     onNavigate: (String) -> Unit,
+    resumed: Int = 0,
 ) {
     val places =
-        remember(path) {
-            listOf("home" to "/root", "config" to "/root/.config", "downloads" to "/root/Downloads", "phone" to SharedStorage.GUEST, "system" to "/")
-                .filter { exists(it.second) }
+        remember(path, resumed) {
+            listOfNotNull(
+                "home" to "/root",
+                "config" to "/root/.config",
+                "downloads" to "/root/Downloads",
+                ("phone" to SharedStorage.GUEST).takeIf { SharedStorage.allowed() },
+                "system" to "/",
+            ).filter { exists(it.second) }
         }
     LazyRow(Modifier.bleed(PanelPadding), contentPadding = PaddingValues(horizontal = PanelPadding - 8.dp)) {
         items(places) { (label, target) ->

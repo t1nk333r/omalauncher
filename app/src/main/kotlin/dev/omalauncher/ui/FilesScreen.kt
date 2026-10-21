@@ -48,12 +48,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/** A touch-first file manager for the guest filesystem, in the Omarchy theme. */
+/**
+ * A touch-first file manager for the guest filesystem, in the Omarchy theme. Phone build: [resumed] changing, it reads
+ * the folder and its places again.
+ */
 @Composable
 fun FilesScreen(
     runtime: Runtime,
     startPath: String,
     onExit: () -> Unit,
+    resumed: Int = 0,
 ) {
     val context = LocalContext.current
     val fs = remember { GuestFs(runtime.proot::hostFile, runtime.proot::mountsIn) }
@@ -69,7 +73,7 @@ fun FilesScreen(
     var dialog by remember { mutableStateOf<FileDialog?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
 
-    val entries by produceState<List<GuestEntry>?>(null, path, showHidden, reload) {
+    val entries by produceState<List<GuestEntry>?>(null, path, showHidden, reload, resumed) {
         value = withContext(Dispatchers.IO) { runCatching { fs.list(path, showHidden) }.getOrDefault(emptyList()) }
     }
     val shown = entries?.filter { e -> query.isNullOrBlank() || query!!.lowercase() in e.name.lowercase() }
@@ -208,7 +212,7 @@ fun FilesScreen(
             contentWidth = ReadingWidth,
         ) {
             Breadcrumbs(path, onNavigate = ::navigate)
-            Places(path, exists = fs::isDir, onNavigate = ::navigate)
+            Places(path, exists = fs::isDir, onNavigate = ::navigate, resumed = resumed)
             Spacer(Modifier.height(4.dp))
 
             Box(Modifier.weight(1f).fillMaxWidth()) {

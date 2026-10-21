@@ -184,8 +184,8 @@ class Proot(
     }
 
     /**
-     * The empty mount point [SharedStorage] binds over while it's allowed: without one, proot makes it up as it binds,
-     * and /sdcard works but isn't listed in / (nor in Files). Phone build: made as soon as it's allowed, from settings ›
+     * Phone build: the empty mount point [SharedStorage] binds over while it's allowed. Without one, proot makes it up
+     * as it binds, and /sdcard works but isn't listed in / (nor in Files). Made as soon as it's allowed, from settings ›
      * linux or before the next guest command, not only when Linux starts.
      */
     fun showSharedStorage() {
@@ -203,7 +203,7 @@ class Proot(
             .filter { (guest, host) -> guest.substringBeforeLast('/').ifEmpty { "/" } == dir && host.isDirectory }
             .map { it.first.substringAfterLast('/') }
 
-    /** A guest `sh -c [script]`, stderr merged into stdout. Needs [prepare] to have run. */
+    /** A guest `sh -c [script]`, stderr merged into stdout. Needs [prepare] to have run. Phone build: [showSharedStorage] first. */
     fun process(script: String): ProcessBuilder =
         ProcessBuilder(command(script).also { showSharedStorage() }).apply {
             environment().apply {
@@ -216,6 +216,7 @@ class Proot(
         }
 
     companion object {
+        // Phone build: for showSharedStorage's warning.
         private const val TAG = "proot"
         const val GUEST_HOME = "/root"
 

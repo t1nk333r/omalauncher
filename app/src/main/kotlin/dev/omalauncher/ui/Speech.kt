@@ -49,6 +49,8 @@ class Speech(
 
     /** Phone build: whether [recognizer] is the on-device one. */
     private var recognizerOnDevice = false
+
+    /** Phone build: whether the on-device recognizer is still to be tried, where there is one; off once it failed. */
     private var onDevice = true
 
     /**
@@ -73,7 +75,7 @@ class Speech(
      */
     private val unanswered =
         Runnable {
-            if (onDevice && !stopping) {
+            if (recognizerOnDevice && !stopping) {
                 useRegular("the on-device recognizer didn't answer")
             } else {
                 Log.w(TAG, "the speech recognizer didn't answer")
@@ -212,7 +214,7 @@ class Speech(
         val locale = Locale.getDefault()
         val wanted = Locale(locale.language, locale.country).toLanguageTag()
         val pools =
-            if (onDevice) {
+            if (recognizerOnDevice) {
                 listOf(support.installedOnDeviceLanguages, support.supportedOnDeviceLanguages, support.onlineLanguages)
             } else {
                 listOf(support.onlineLanguages, support.installedOnDeviceLanguages, support.supportedOnDeviceLanguages)
@@ -280,7 +282,7 @@ class Speech(
                 // this lasts; and the regular one without an offline model may online. Not once stopped: it would
                 // start listening again.
                 else ->
-                    if (onDevice && !stopping) {
+                    if (recognizerOnDevice && !stopping) {
                         useRegular("on-device recognition failed ($code)")
                     } else if (offline && !stopping && code in NO_OFFLINE_MODEL) {
                         Log.i(TAG, "offline recognition failed ($code), recognizing online")

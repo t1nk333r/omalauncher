@@ -16,6 +16,15 @@ class DrawerGroupsTest {
         assertEquals(listOf(games, DrawerGroup("work", listOf("a:mail"))), withApp(listOf(games), "a:mail", "work"))
     }
 
+    @Test fun aNameInAnotherCaseIsTheSameGroup() {
+        assertEquals(listOf(DrawerGroup("games", listOf("a:chess", "a:go", "a:mail"))), withApp(listOf(games), "a:mail", "Games"))
+        assertEquals(listOf(games, tools), renamed(listOf(games, tools), "tools", "Games"))
+        // Only its case changed: still the one group.
+        assertEquals(listOf(DrawerGroup("Games", games.keys), tools), renamed(listOf(games, tools), "games", "Games"))
+        // Two saved apart before are one.
+        assertEquals(listOf(DrawerGroup("games", listOf("a:chess", "a:go", "a:mail")), tools), read(write(listOf(games, tools, DrawerGroup("Games", listOf("a:mail"))))))
+    }
+
     @Test fun ungroupingLeavesTheGroup() {
         assertEquals(listOf(DrawerGroup("games", listOf("a:go"))), withoutApp(listOf(games), "a:chess"))
     }

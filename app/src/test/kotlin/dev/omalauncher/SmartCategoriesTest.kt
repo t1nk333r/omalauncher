@@ -77,8 +77,8 @@ class SmartCategoriesTest {
     @Test fun aShortWordOnlyCountsAtTheStartOfOne() {
         // Booking.com is travel, though "booking" starts with reading's "book".
         assertEquals(Category("utilities", "travel"), of("com.booking", "Booking.com"))
-        // "trip" isn't in Stripe, nor "book" in a notebook.
-        assertEquals(Category("utilities"), of("com.stripe.android.dashboard", "Stripe"))
+        // "trip" isn't in Stripe, which is finance, nor "book" in a notebook.
+        assertEquals(Category("utilities", "finance"), of("com.stripe.android.dashboard", "Stripe"))
         assertEquals(Category("utilities"), of("com.example.notebook", "Notebook"))
         assertEquals(Category("utilities", "travel"), of("com.tripadvisor.tripadvisor", "Tripadvisor"))
     }

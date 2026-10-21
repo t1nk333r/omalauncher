@@ -233,7 +233,7 @@ class Style(
         val DRAWER_ICON = Setting.Number("drawer.icon-size", 52.0, 36.0..80.0, "The drawer's icons, in dp.")
         val DRAWER_LABELS = Setting.Flag("drawer.labels", true, "Apps' names under their icons in the drawer; search results always show them.")
         val DRAWER_SECTIONS = Setting.Flag("drawer.sections", true, "The drawer's apps under headings (linux, shortcuts, android); false lists them all in one list.")
-        // Phone build, these three: the drawer in pages, by Smart Launcher's categories.
+        // Phone build: these three, the drawer in pages by Smart Launcher's categories.
         val DRAWER_LAYOUT =
             Setting.Choice(
                 "drawer.layout",
