@@ -43,6 +43,9 @@ enum class SettingsPage {
 
     /** The icon pack apps draw with, from the style screen. */
     IconPacks,
+
+    /** Phone build: settings kept on Feather, and restoring them. */
+    Backup,
 }
 
 /** Opens [page] over the ones in [stack]; one that's already open comes back to the top, closing what's over it. */
@@ -115,6 +118,7 @@ private fun SettingsPage(
                 onLinux = { stack.push(SettingsPage.Linux) },
                 onLicenses = { stack.push(SettingsPage.Licenses) },
                 onGestures = { stack.push(SettingsPage.Gestures) },
+                onBackup = { stack.push(SettingsPage.Backup) },
             )
         SettingsPage.Style ->
             StyleScreen(runtime, onDismiss = close, onBrowse = { stack.push(SettingsPage.Themes) }, onIconPacks = { stack.push(SettingsPage.IconPacks) })
@@ -159,5 +163,6 @@ private fun SettingsPage(
         SettingsPage.Licenses -> LicensesScreen(onDismiss = close)
         SettingsPage.Gestures -> GesturesScreen(runtime, onDismiss = close, onAgent = ::agent)
         SettingsPage.IconPacks -> IconPackScreen(runtime, onDismiss = close)
+        SettingsPage.Backup -> BackupScreen(runtime.backups, onDismiss = close)
     }
 }

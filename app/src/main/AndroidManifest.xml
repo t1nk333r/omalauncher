@@ -7,6 +7,9 @@
          at start and before Linux starts (PR #47), and from a row in settings while it's missing
          (LocalNetwork.kt). -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <!-- Phone build: the daily backup to Feather waits for Wi-Fi; from Android 14 a job with a network
+         constraint needs this, or scheduling it throws (backup/Backups.kt). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -353,6 +356,21 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- Phone build: the daily backup to Feather (backup/Backups.kt). -->
+        <service
+            android:name=".backup.BackupJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- Phone build: restarts the launcher after a restore is staged, from a process of its own (backup/RestartActivity.kt). -->
+        <activity
+            android:name=".backup.RestartActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:process=":restart"
+            android:theme="@android:style/Theme.NoDisplay" />
 
         <service
             android:name=".LinuxService"

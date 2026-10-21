@@ -6,6 +6,10 @@
   (64 MB of themes) is downloaded again too. With both, a backup fits Android's
   25 MB quota; with either, it was skipped whole. Same list as
   data_extraction_rules.xml.
+
+  Phone build: nor Feather backups' own settings (backup.xml), its sealed token and a
+  staged restore: another install must get its own device ID, and the token only
+  opens with this install's key anyway.
 -->
 <full-backup-content>
     <exclude domain="file" path="arch" />
@@ -20,4 +24,8 @@
     <exclude domain="file" path="updates.json" />
     <exclude domain="file" path="omarchy" />
     <exclude domain="file" path=".omarchy.download" />
+    <exclude domain="file" path="backup-token" />
+    <exclude domain="file" path=".restore" />
+    <exclude domain="file" path=".restore-kept" />
+    <exclude domain="sharedpref" path="backup.xml" />
 </full-backup-content>

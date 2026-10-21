@@ -114,6 +114,17 @@ ten; '[]' hides the bar. Termux's own
 actions (KEYBOARD, DRAWER) aren't keys here, and what can't be read shows in
 the banner on home while the last good layout stays.
 
+This phone build keeps its settings on a [Feather](https://github.com/t1nk333r/feather)
+server (its device backups, plan 088): settings › backup. Paste a token of
+kind *device backups only*, limited to `dev.omalauncher`; then back up now or
+daily on Wi-Fi, and restore any of this launcher's backups there: this phone's,
+an earlier install's or another phone's. A backup holds home and its pages,
+widgets and their saved values, the dock, drawer groups, hidden apps, app names
+and icons, gestures, style, and your own themes and backgrounds. It never holds
+Linux, a widget's secrets or Android widget IDs: enter secrets and add Android
+widgets again after a restore. A restore backs the phone up first, then
+restarts the launcher and puts the backup in place as it starts.
+
 ## Building
 
 ```sh

@@ -107,6 +107,9 @@ class Runtime(
     val updates = SystemUpdates(proot, pacman, agents)
     val gpu = Gpu(context, proot, pacman)
 
+    /** Phone build: settings kept on Feather. The app's, since its daily job runs without a runtime. */
+    val backups get() = (context.applicationContext as App).backups
+
     /** The launcher's own provided files (default widgets, their docs); see [Provisioner]. */
     private val launcherFiles = Provisioner(proot.filesDir, LauncherData.LAUNCHER_MANIFEST, listOf(widgets::managed, style::managed))
 

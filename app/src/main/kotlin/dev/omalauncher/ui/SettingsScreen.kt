@@ -48,10 +48,12 @@ fun SettingsScreen(
     onLinux: () -> Unit,
     onLicenses: () -> Unit,
     onGestures: () -> Unit,
+    onBackup: () -> Unit,
 ) {
     val context = LocalContext.current
     val linux by runtime.bootstrap.state.collectAsState()
     val installed = linux == LinuxState.Installed
+    val backup by runtime.backups.last.collectAsState()
     var localNetworkMissing by remember { mutableStateOf(LocalNetwork.missing(context)) }
     val askLocalNetwork =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -92,6 +94,8 @@ fun SettingsScreen(
                 } else {
                     null
                 },
+                // Phone build: settings kept on Feather.
+                Triple("backup", backup?.message ?: "keep home, widgets and style on feather; restore them on any phone", onBackup),
                 Triple("android settings", "the phone's system settings") {
                     context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 },
