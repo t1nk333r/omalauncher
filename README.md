@@ -136,7 +136,11 @@ adb push ArchLinuxARM-aarch64-latest.tar.gz ArchLinuxARM-aarch64-latest.tar.gz.s
 
 Linux images are downloaded over HTTPS and verified against Arch Linux ARM's pinned signing key before extraction. An ADB-supplied image also needs its matching `.tar.gz.sig`. Existing Linux installations are unchanged. See [Linux download verification](docs/LINUX_DOWNLOAD_VERIFICATION.md).
 
-Tests: `./gradlew :owl:test :app:testDebugUnitTest`. `./gradlew :owl:owlJar`
+Tests: `./gradlew $(scripts/affected-tests.py)` runs the unit tests a change can
+affect, from where the branch left its upstream to the working tree (`--base <ref>`
+starts elsewhere; it prints what it picked and why). It runs none when nothing they
+use changed, and all of them when a build file did. `./gradlew :owl:test
+:app:testDebugUnitTest` runs every test. `./gradlew :owl:owlJar`
 builds `owl/build/cli/owl.jar`, the checker the widget store's CI runs.
 
 Window recovery has Android device tests:

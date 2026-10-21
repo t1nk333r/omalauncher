@@ -27,7 +27,7 @@ and third-party installers retain their upstream trust model.
 
 ## Validation
 
-Run `./gradlew :owl:test :app:testDebugUnitTest :owl:owlJar :app:assembleDebug :app:lintDebug :app:lintRelease`.
+Run `./gradlew :app:testDebugUnitTest --tests dev.omalauncher.linux.RootfsSignatureTest --tests dev.omalauncher.linux.HttpsDownloadsTest :app:assembleDebug :app:lintDebug :app:lintRelease`.
 The tests cover valid/altered archives, wrong keys, malformed/missing signatures,
 weak hashes, the bundled key fingerprint, HTTPS downgrade rejection and redirects,
 including resume headers being set before connecting and preserved on redirects.

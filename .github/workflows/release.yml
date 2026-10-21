@@ -15,7 +15,10 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     steps:
+      # Full history and tags, so scripts/affected-tests.py can start from the previous release.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -63,8 +66,11 @@ jobs:
           keyPassword=$KEY_PASSWORD
           EOF
 
+      # The unit tests the changes since the previous tag can affect; the first release runs them all.
       - name: Test and build
-        run: ./gradlew :owl:test :app:testDebugUnitTest :app:assembleRelease
+        run: |
+          base=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          ./gradlew $(scripts/affected-tests.py --base "$base" --head HEAD) :app:assembleRelease
 
       # Checksum and provenance, so a sideloaded APK can be checked against what CI built:
       # sha256sum -c SHA256SUMS, or gh attestation verify <apk> -R SimonSchubert/omalauncher.

@@ -12,7 +12,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # Full history, so scripts/affected-tests.py finds where the push or pull request starts.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -27,8 +30,11 @@ jobs:
           ndk=$(sed -n 's/^NDK_VERSION=//p' scripts/fetch-proot.sh)
           [ -d "$ANDROID_HOME/ndk/$ndk" ] || yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" >/dev/null
 
+      # Only the unit tests the change can affect; a base it can't find (a new branch) runs them all.
       - name: Test
-        run: ./gradlew :owl:test :app:testDebugUnitTest :owl:owlJar
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: ./gradlew $(scripts/affected-tests.py --base "$BASE" --head HEAD) :owl:owlJar
 
       # Builds without proot (scripts/fetch-proot.sh), which is enough to compile wlbridge and run lint.
       - name: Build and lint
