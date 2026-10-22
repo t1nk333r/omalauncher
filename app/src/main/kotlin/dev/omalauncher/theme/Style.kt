@@ -215,6 +215,9 @@ class Style(
         val SCREEN_GAPS_OUT = Setting.Number("screens.gaps-out", 6.0, 0.0..48.0, "Space in dp from full-screen panels (settings, style, the stores) to the screen's edges.")
         val SCREEN_BORDER_WIDTH = Setting.Number("screens.border-width", 2.0, 0.0..8.0, "How thick full-screen panels' outlines are, in dp.")
 
+        val KEYBAR_GAPS_OUT = Setting.Number("keybar.gaps-out", 6.0, 0.0..48.0, "Space in dp from the terminal key bar's frame to the screen's sides and the keyboard.")
+        val KEYBAR_BORDER_WIDTH = Setting.Number("keybar.border-width", 2.0, 0.0..8.0, "How thick the terminal key bar's frame is, in dp. 0 draws none.")
+
         val MONOCHROME_ICONS = Setting.Flag("icons.monochrome", false, "App icons as silhouettes in the accent color, as on Omarchy, rather than in their own colors.")
         val ICON_PACK = Setting.Name("icons.pack", "An icon pack for Nova, ADW or Lawnchair, by its app's package name: Android apps it has an icon for draw with that one. Unset: each app's own icon. An icon set in an app's customize wins either way.")
 
@@ -330,7 +333,7 @@ object StyleFile {
         with(Style) {
             listOf(THEME, BACKGROUND, FONT, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, WEB_SEARCH, HOME_ROWS, COLUMNS, FORCE_SINGLE_PAGE) +
                 listOf(GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
-                listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, MONOCHROME_ICONS, ICON_PACK, CORNER_SCALE) +
+                listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, KEYBAR_GAPS_OUT, KEYBAR_BORDER_WIDTH, MONOCHROME_ICONS, ICON_PACK, CORNER_SCALE) +
                 listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_LAYOUT, DRAWER_CATEGORIES, DRAWER_EXTRAS, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +
                 listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, TERMINAL_KEYBOARD_TEXT, EXTRA_KEYS, SWIPE_UP, SWIPE_DOWN)
         }

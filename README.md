@@ -72,7 +72,8 @@ The keys above the soft keyboard in terminals are the widgets folder's
 `keybar.owl`, which you or an agent can change (its `docs/keybar.md`).
 This phone build also reads `terminal.extra-keys` in
 `~/.config/omalauncher/style/style.toml`, in Termux's extra-keys format; while
-it's set, its keys stand in for keybar.owl's:
+it's set, its keys stand in for keybar.owl's, in settings › style's terminal key
+bar gaps and border width:
 
 ```toml
 [terminal]

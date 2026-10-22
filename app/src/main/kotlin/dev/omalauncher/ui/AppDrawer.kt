@@ -835,8 +835,25 @@ internal fun recentApps(
     runtime: Runtime,
     limit: Int,
 ): List<AppHit> {
-    val byKey = allApps(runtime).shown(runtime.hiddenApps.keys, showHidden = false).associateBy { it.key }
-    return runtime.usage.recent.mapNotNull { byKey[it] }.take(limit)
+    // By kind, as appIconOf does, rather than through allApps: the strip asks on each recomposition, for a handful of keys.
+    val android = runtime.androidApps
+    val owl by lazy { runtime.widgets.apps() }
+    // Phone build: hidden apps stay out of the strip, as out of the drawer.
+    val hidden = runtime.hiddenApps.keys
+    return runtime.usage.recent
+        .asSequence()
+        .filterNot { it in hidden }
+        .mapNotNull { key ->
+            val id = key.substringAfter(':')
+            when (key.substringBefore(':')) {
+                "a" -> android.byKey[id]?.let(AppHit::Android)
+                "s" -> android.shortcuts.lastOrNull { it.key == id }?.let(AppHit::Shortcut)
+                "l" -> runtime.linuxApps.apps.lastOrNull { it.id == id }?.let(AppHit::Linux)
+                "o" -> owl.lastOrNull { it.file.name == id }?.let(AppHit::Owl)
+                else -> null
+            }
+        }.take(limit)
+        .toList()
 }
 
 @Composable

@@ -1,7 +1,9 @@
 package dev.omalauncher.linux
 
 import android.content.Context
+import android.system.ErrnoException
 import android.system.Os
+import android.system.OsConstants
 import android.util.Log
 import dev.omalauncher.CountingInputStream
 import dev.omalauncher.LauncherData
@@ -10,6 +12,7 @@ import dev.omalauncher.openHttp
 import dev.omalauncher.upgrade.Provisioner
 import dev.omalauncher.upgrade.StepJournal
 import dev.omalauncher.upgrade.writeAtomically
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,6 +34,25 @@ private const val TARBALL = "ArchLinuxARM-aarch64-latest.tar.gz"
 
 /** Attempts per network step before setup (or an update) reports a failure. */
 private const val NETWORK_TRIES = 3
+
+/** Room for the download (~830 MB). */
+private const val TARBALL_SPACE = 900_000_000L
+
+/** Room for the unpacked system and what setup installs into it (~1.9 GB with an agent), with some to spare. */
+private const val SYSTEM_SPACE = 2_100_000_000L
+
+/** A failure that trying again can't fix, like a full disk: a network step stops at once rather than downloading again. */
+private class NoRetry(
+    message: String,
+    cause: Throwable? = null,
+) : IOException(message, cause)
+
+private fun Throwable.outOfSpace() =
+    generateSequence(this) { it.cause }.any {
+        (it is ErrnoException && it.errno == OsConstants.ENOSPC) || it.message?.contains("ENOSPC") == true
+    }
+
+private fun gigabytes(bytes: Long) = "%.1f GB".format(bytes / 1e9)
 
 /**
  * Omarchy's classic terminal apps. The Nerd Font glyphs come from the
@@ -195,6 +217,7 @@ class Bootstrap(
             try {
                 return run()
             } catch (e: Exception) {
+                if (e is NoRetry || e is CancellationException) throw e
                 log.add("${e.message}; trying again (${n + 2} of $NETWORK_TRIES)")
                 kotlinx.coroutines.delay(5_000L * (n + 1))
             }
@@ -222,11 +245,38 @@ class Bootstrap(
                 }
                 _state.value = LinuxState.Installed
             } catch (e: Throwable) {
+                // A cancelled install is about to be removed; it didn't fail.
+                if (cancelled) {
+                    Log.i(TAG, "setup cancelled")
+                    return@withContext
+                }
                 // Errors too (out of memory): otherwise the screen shows the step running forever.
                 Log.e(TAG, "setup failed", e)
                 _state.value = LinuxState.Failed(stage, e.message ?: e.toString(), log.toList())
             }
         }
+
+    @Volatile private var cancelled = false
+
+    @Volatile private var connection: HttpURLConnection? = null
+
+    /** Whether the install can still be cancelled: until setup completes. An update of an installed system can't. */
+    val cancellable get() = !journal.setupComplete && !cancelled
+
+    /**
+     * Stops an install that hasn't completed: the download and the unpack stop at their next block. The caller kills
+     * guest commands, waits for [run] to return, then calls [remove]. False when there's nothing to cancel.
+     */
+    fun cancel(): Boolean {
+        if (!cancellable) return false
+        cancelled = true
+        connection?.disconnect()
+        return true
+    }
+
+    private fun checkCancelled() {
+        if (cancelled) throw CancellationException("cancelled")
+    }
 
     /** Starts installing Linux with [picked] coding agents; see [run]. */
     suspend fun install(picked: List<Agent>) {
@@ -255,6 +305,7 @@ class Bootstrap(
                 proot.keymap.delete()
                 context.cacheDir.listFiles { f -> f.name.startsWith(TARBALL) }?.forEach { it.delete() }
                 log.clear()
+                cancelled = false
             }
             _state.value = LinuxState.NotInstalled
         }
@@ -267,16 +318,18 @@ class Bootstrap(
     private suspend fun setup() {
         for (step in steps) {
             if (step.done()) continue
+            checkCancelled()
             report(step.stage, step.label)
             try {
                 step.attempt()
                 journal.mark(step.id)
             } catch (e: Exception) {
-                if (!step.optional) throw e
+                if (!step.optional || e is CancellationException) throw e
                 log.add("${step.label} failed: ${e.message}; retry in settings")
             }
         }
         installAgents()
+        checkCancelled()
         journal.completeSetup()
     }
 
@@ -337,6 +390,7 @@ class Bootstrap(
         val chosen = chosenAgents
         for (agent in chosen) {
             if (agents.isInstalled(agent)) continue
+            checkCancelled()
             try {
                 report(Stage.Agents, "Installing ${agent.name}")
                 guest(agents.installScript(agent))
@@ -363,7 +417,14 @@ class Bootstrap(
     private fun installRootfs() {
         // Unpacking replaces the rootfs: the user's home, packages and agents. Only ever before a setup finished.
         check(!journal.setupComplete) { "refusing to replace a set-up system" }
-        val obtained = obtainTarball()
+        // A half-unpacked rootfs from an earlier try only takes up room the download needs.
+        LauncherData.deleteTree(proot.rootfs)
+        val obtained =
+            try {
+                obtainTarball()
+            } catch (e: Exception) {
+                throw if (e.outOfSpace()) outOfSpace(e) else e
+            }
         // External storage can change independently: verify and extract the same internal snapshot.
         val supplied = obtained.parentFile != context.cacheDir
         val tarball = if (supplied) File(context.cacheDir, "$TARBALL.supplied") else obtained
@@ -371,7 +432,9 @@ class Bootstrap(
         try {
             if (supplied) {
                 check(obtained.length() <= 3L * 1024 * 1024 * 1024) { "Linux archive is too large" }
+                requireSpace(obtained.length() + SYSTEM_SPACE)
                 obtained.copyTo(tarball, overwrite = true)
+                checkCancelled()
             }
             report(Stage.Download, "Verifying Arch Linux ARM signature")
             val signature = if (supplied) {
@@ -385,8 +448,14 @@ class Bootstrap(
             context.assets.open("security/archlinuxarm.asc").use { key ->
                 signature.inputStream().use { RootfsSignature.verify(tarball, it, key) }
             }
+            checkCancelled()
             extract(tarball)
         } catch (e: Exception) {
+            if (e is NoRetry || e is CancellationException || e.outOfSpace()) {
+                // The download is fine and kept for the next try; what was unpacked gives its room back.
+                runCatching { LauncherData.deleteTree(proot.rootfs) }
+                throw if (e is NoRetry || e is CancellationException) e else outOfSpace(e)
+            }
             // Discard a failed image, but keep a complete download if only fetching its signature failed.
             if (verificationStarted) tarball.delete()
             throw e
@@ -395,6 +464,17 @@ class Bootstrap(
         }
         obtained.delete() // ~830 MB we no longer need
     }
+
+    /** Stops before writing when the app's storage has less than [bytes] free: a full phone fails at once, not after the download. */
+    private fun requireSpace(bytes: Long) {
+        val free = proot.filesDir.usableSpace
+        if (free < bytes) {
+            throw NoRetry("not enough space: Linux needs ${gigabytes(bytes)} free, the phone has ${gigabytes(free)}; free some up, then try again")
+        }
+    }
+
+    private fun outOfSpace(e: Exception) =
+        NoRetry("the phone ran out of space; Linux needs about ${gigabytes(TARBALL_SPACE + SYSTEM_SPACE)} free; free some up, then try again", e)
 
     /**
      * Prefers a tarball pushed via adb to the app's external files dir; downloads otherwise.
@@ -408,15 +488,20 @@ class Bootstrap(
         if (target.exists()) return target
         val partial = File(context.cacheDir, "$TARBALL.part")
         val validator = File(context.cacheDir, "$TARBALL.version")
+        requireSpace(TARBALL_SPACE - (if (partial.exists()) partial.length() else 0L) + SYSTEM_SPACE)
         report(Stage.Download, "Downloading Arch Linux ARM", 0f)
         val have = if (partial.exists() && validator.exists()) partial.length() else 0L
         val headers = if (have > 0) mapOf("Range" to "bytes=$have-", "If-Range" to validator.readText()) else emptyMap()
         val conn = openHttps(URL(ROOTFS_URL), headers)
+        connection = conn
         try {
+            checkCancelled()
             download(conn, partial, validator, have)
         } finally {
+            connection = null
             conn.disconnect()
         }
+        checkCancelled()
         // Only a complete download is kept for a retry.
         check(partial.renameTo(target)) { "can't move the download into place" }
         validator.delete()
@@ -441,6 +526,7 @@ class Bootstrap(
                 var done = start
                 var lastReport = 0L
                 while (true) {
+                    checkCancelled()
                     val n = input.read(buf)
                     if (n < 0) break
                     out.write(buf, 0, n)
@@ -464,6 +550,7 @@ class Bootstrap(
         report(Stage.Extract, "Starting", 0f)
         val root = proot.rootfs
         LauncherData.deleteTree(root)
+        requireSpace(SYSTEM_SPACE)
         root.mkdirs()
         // Nothing we recorded about the old rootfs holds for this one.
         journal.reset()
@@ -473,6 +560,7 @@ class Bootstrap(
         TarArchiveInputStream(GZIPInputStream(BufferedInputStream(counter, 1 shl 16), 1 shl 16)).use { tar ->
             var count = 0
             while (true) {
+                checkCancelled()
                 val entry = tar.nextEntry ?: break
                 val name = entry.name.removePrefix("./").trimEnd('/')
                 if (name.isEmpty() || skipEntry(name)) continue

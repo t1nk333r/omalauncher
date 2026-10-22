@@ -1,8 +1,8 @@
-# Extra keys
+# Terminal key bar
 
 Part of the widget docs: README.md, one folder up, comes first, and paths here are from the widgets folder.
 
-While you type in a terminal, on home or in a Linux app's window, a bar of extra keys sits over the soft keyboard: esc,
+While you type in a terminal, on home or in a Linux app's window, a key bar sits over the soft keyboard: esc,
 tab, ctrl, alt, the arrows and the rest a phone keyboard lacks. It's the file `keybar.owl`, a `keybar "…" { }` file, and
 it's yours to change: different keys, more rows, a key that types a command. `.stock-keybar.owl` is the bar as this
 launcher ships it, which it keeps that way; it shows while `keybar.owl` is gone or doesn't compile (home's banner says
@@ -10,7 +10,7 @@ so), and comparing the two shows what changed in a newer launcher. The keys only
 hardware keyboard has these keys already.
 
 On this phone build, style.toml's `terminal.extra-keys` (Termux's extra-keys format) shows instead of `keybar.owl`
-while it's set; unset it to use this file.
+while it's set, with `keybar.gaps-out` and `keybar.border-width` as its frame; unset it to use this file.
 
 ```owl
 keybar "my keys" {
@@ -20,7 +20,7 @@ keybar "my keys" {
     Box { weight: 1; height: 40; padding: 3
       Box { fill: true; align: center; radius: 8 * corners; background: surface; repeats: send == "up" || send == "down"
         onPress: { if repeat == 0 { haptic() }; pressKey(send) }
-        Text { text: label; font: mono } } }
+        Text { text: label; font: mono; align: center } } }
   }
   Row {
     gap: 0
@@ -30,12 +30,12 @@ keybar "my keys" {
     Box { weight: 1; height: 40; padding: 3
       Box { fill: true; align: center; radius: 8 * corners; background: get(kb ?? {}, "ctrl", "off") == "off" ? surface : accent
         onTap: latch("ctrl"); onLongPress: latch("ctrl", "locked")
-        Text { text: "ctrl"; font: mono } } }
+        Text { text: "ctrl"; font: mono; align: center } } }
     K { label: "↑"; send: "up" }
     K { label: "↓"; send: "down" }
     Box { weight: 1; height: 40; padding: 3
       Box { fill: true; align: center; radius: 8 * corners; background: surface; onPress: typeText("git status\n")
-        Text { text: "gs"; font: mono } } }
+        Text { text: "gs"; font: mono; align: center } } }
   }
 }
 ```
@@ -49,3 +49,8 @@ as `onTap` does, and `repeats: true` keeps an arrow going while it's held. `pres
 `latch` is how the stock bar's ctrl and alt work: a tap holds one for the next key, from the bar or the keyboard, a
 long press until it's tapped again, and `android.modifiers` tells the key how to look meanwhile. Closing the keyboard
 lets every latch go. `owl-check keybar.owl` draws the bar at the bottom of a phone's screen.
+
+The terminal key bar has its own gaps and border width in settings › style (`keybar.gaps-out` and `keybar.border-width`
+in style.toml), apart from the widgets'. In a keybar file `gapsOut` and `borderWidth` read them, and `gapsIn` is the
+widgets' as anywhere: the stock bar keeps `gapsOut` to the screen's sides and the keyboard and draws its frame
+`borderWidth` thick, so a bar that follows them changes with the setting.

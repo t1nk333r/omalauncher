@@ -48,13 +48,13 @@ after it in its block (and blocks inside them), and needs a name not used for a 
 | `ask(text)` | opens a terminal with the default agent answering `text`, as sending it from the prompt bar does; `ask(text, "codex")` asks that installed agent. Without one installed it opens the agents settings. The store's reviewer sees what a widget asks (owl 10) |
 | `copy(text)` | copies text to the Android clipboard |
 | `notify("title", "text")` | posts an Android notification (if the launcher may post them) |
-| `post("https://...", body, headers)` | sends an HTTP POST from Android: a map or list `body` goes as JSON, text as it is; `headers` is a map like `http(...)`'s. `x = post(...)` puts the answer into the state `x` when it arrives: `{code, ok, out}`, with `out` parsed when it's JSON. `method: "PUT"` or `method: "DELETE"` sends that instead (owl 12). Never retried; a null URL sends nothing. When it succeeds, the widget's sources run again. See Sending (owl 8) |
+| `post("https://...", body, headers)` | sends an HTTP POST from Android: a map or list `body` goes as JSON, text as it is; `headers` is a map like `http(...)`'s. `x = post(...)` puts the answer into the state `x` when it arrives: `{code, ok, out, err}`, with `out` parsed when it's JSON and `err` why it failed (code -1 when no answer came: offline, a timeout, a redirect it didn't follow). `method: "PUT"`, `"PATCH"` or `"DELETE"` sends that instead (owl 12). Never retried; a null URL sends nothing. When it succeeds, the widget's sources run again. See Sending (owl 8) |
 | `url("https://...")` | opens in the Android browser. Other links open in the app that takes them: `tel:` the dialer, `geo:` maps, `mailto:` email |
 | `share(text)` | opens Android's share sheet with the text (owl 7) |
 | `haptic()` | a short tap of haptic feedback, if the user has touch feedback on (owl 7) |
-| `pressKey("ctrl+c")` | presses a key in the Linux window being typed in (a terminal tile, or a Linux app's window: a terminal or a graphical app), with any modifiers latched on the extra keys held too: a name, `esc`, `tab`, `enter`, `backspace`, `delete`, `insert`, `space`, `home`, `end`, `pgup`, `pgdn`, `up`, `down`, `left`, `right`, `f1`…`f12`, or a character on a US keyboard (`/`, `A`, `:`), after any of `ctrl+`, `alt+`, `shift+` and `super+`. Nothing happens while no Linux window has the keyboard, and a tap on another tile takes it from a terminal tile first: a key on home works from the extra keys, or from a widget's own tile next to its `Terminal`, not from another tile or an app. Only from a touch, not in a trigger; the store's reviewer sees which keys. See docs/keybar.md (owl 12) |
+| `pressKey("ctrl+c")` | presses a key in the Linux window being typed in (a terminal tile, or a Linux app's window: a terminal or a graphical app), with any modifiers latched on the key bar held too: a name, `esc`, `tab`, `enter`, `backspace`, `delete`, `insert`, `space`, `home`, `end`, `pgup`, `pgdn`, `up`, `down`, `left`, `right`, `f1`…`f12`, or a character on a US keyboard (`/`, `A`, `:`), after any of `ctrl+`, `alt+`, `shift+` and `super+`; a letter after them is the key as written on it, so `ctrl+C` is Ctrl+C, and Ctrl+Shift+C is `ctrl+shift+c`. Nothing happens while no Linux window has the keyboard, and a tap on another tile takes it from a terminal tile first: a key on home works from the key bar, or from a widget's own tile next to its `Terminal`, not from another tile or an app. Only from a touch, not in a trigger; the store's reviewer sees which keys. See docs/keybar.md (owl 12) |
 | `typeText("git status\n")` | types the text into the same window, as the keyboard would, latched modifiers and all; `\n` is Enter (owl 12) |
-| `latch("ctrl")` | holds `ctrl`, `alt` or `shift` for the next key, the extra keys' or the keyboard's, or lets it go if it's held; `latch("ctrl", "locked")` holds it until set `off`, and `"once"` or `"off"` set it so. `android.modifiers` says how each is held (owl 12) |
+| `latch("ctrl")` | holds `ctrl`, `alt` or `shift` for the next key, the key bar's or the keyboard's, or lets it go if it's held; `latch("ctrl", "locked")` holds it until set `off`, and `"once"` or `"off"` set it so. `android.modifiers` says how each is held (owl 12) |
 | `sound("https://…/a.mp3")` | plays a sound once, in place of the one playing; `sound("stop")` stops it. Takes a URL, an asset or a file, like `Image`; see Sounds (owl 8) |
 | `torch(true)` | turns the torch on or off; also `torch("toggle")`. Does nothing on a phone without a flash, or while the camera app holds it (owl 7) |
 | `launcher("style")` | opens a launcher screen: `style` (theme, background, home screen, terminal; `themes` too), `agents`, `store`, `drawer`, `linux` (the sheet that installs Linux) or `settings` (owl 11 launchers; older ones ignore it). This phone build adds, for the drawer: `close` (slides the drawer away), `ask` and `web` (send the bar's text to the agent or the web, as the bar's Enter does), `hidden` (list hidden apps or stop, behind the fingerprint or screen lock with style's `drawer.lock-hidden`) and `cancel` (stop picking apps) |
@@ -89,10 +89,10 @@ code. Before owl 9 the same took a null URL, which sends nothing. The URLs are l
 keep the server fixed and put values into the URL with `enc(...)`.
 
 A REST API changes and removes things with other methods than POST: `method: "PUT"` sends a PUT (to
-replace or update what's at the URL) and `method: "DELETE"` a DELETE (to remove it), both like a POST
-otherwise (owl 12). The method is written as it is, never a value, and listed for review with the URL,
-as `http DELETE https://…`. A DELETE goes without a body unless it's given one. There's no PATCH
-(Android doesn't send it); use PUT, or a POST if that's what the API takes:
+replace what's at the URL), `method: "PATCH"` a PATCH (to change some of its fields) and
+`method: "DELETE"` a DELETE (to remove it), each like a POST otherwise (owl 12). The method is written as
+it is, never a value, and listed for review with the URL, as `http DELETE https://…`. A DELETE goes
+without a body unless it's given one:
 
 ```owl
 app "todo" {
@@ -102,8 +102,8 @@ app "todo" {
     for i in items ?? [] {
       Row {
         Text { text: i.title; weight: 1 }
-        Text { text: i.done ? "☑" : "☐"; onTap: post("https://api.example.com/items/${enc(i.id)}", {title: i.title, done: !i.done}, {}, method: "PUT") }
-        Text { text: "✕"; onTap: post("https://api.example.com/items/${enc(i.id)}", null, {}, method: "DELETE") }
+        Text { text: i.done ? "☑" : "☐"; onTap: post("https://api.example.com/items/${enc(i.id)}", {title: i.title, done: !i.done}, method: "PUT") }
+        Text { text: "✕"; onTap: post("https://api.example.com/items/${enc(i.id)}", null, method: "DELETE") }
       }
     }
   }
@@ -125,11 +125,14 @@ the widget never holds it. Never write a token into the file itself either: ask 
 whose `password: true` shows dots and keeps the keyboard from suggesting or learning what's typed.
 
 The compiler lets a secret go only into `http(...)`'s and `post(...)`'s headers and `post`'s body
-(through anything there, like `toBase64(...)`), and into `token == null` or `token != ""` to see whether
-it's set. Showing it, putting it in a URL, a command or a notification, copying it, a trigger on it or
-assigning it to another state is a compile error. A handler may set it: `token = value` from the Input,
-`token = null` to sign out; `owl-send` can't. The server a secret goes to is written out in the URL
-(`"https://api.example.com/${enc(id)}"`), not taken from a value.
+(through anything there, like `toBase64(...)`), written out at each call, since a `let` can't hold it,
+and into `token == null`, `token != null` or `token != ""` to see whether it's set. An API that takes its key in the URL gets it as `enc(key)` there, written just so:
+`"https://api.example.com/data?appid=${enc(key)}"`. Showing it, putting it in a URL any other way, a
+command or a notification, copying it, a trigger on it or assigning it to another state is a compile
+error. A handler may set it: `token = value` from the Input, `token = null` to sign out; `owl-send`
+can't, so owl-check's preview shows the widget signed out, and the user types the token in on the phone. The server a secret goes to is written out in the URL (`"https://api.example.com/${enc(id)}"`),
+not taken from a value, and it's an `https://` one. Prefer a header when the API takes one: servers often log the URLs they're asked
+for.
 
 ```owl
 widget "nas" {

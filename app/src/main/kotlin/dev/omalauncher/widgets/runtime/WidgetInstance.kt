@@ -23,18 +23,24 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.graphics.toArgb
 import dev.omalauncher.linux.ShellResult
+import dev.omalauncher.theme.Setting
+import dev.omalauncher.theme.Style
 import dev.omalauncher.ui.EmbeddedTerminal
 import dev.omalauncher.ui.LauncherStyle
 import dev.omalauncher.ui.Palette
+import dev.omalauncher.widgets.HTTP_TOO_BIG
 import dev.omalauncher.widgets.lang.Budget
 import dev.omalauncher.widgets.lang.Env
 import dev.omalauncher.widgets.lang.Ev
 import dev.omalauncher.widgets.lang.Global
 import dev.omalauncher.widgets.lang.Host
+import dev.omalauncher.widgets.lang.KeyNames
 import dev.omalauncher.widgets.lang.Json
 import dev.omalauncher.widgets.lang.Lst
+import dev.omalauncher.widgets.lang.MAX_TEXT
 import dev.omalauncher.widgets.lang.Null
 import dev.omalauncher.widgets.lang.Num
+import dev.omalauncher.widgets.lang.OwlKind
 import dev.omalauncher.widgets.lang.Obj
 import dev.omalauncher.widgets.lang.TRUE
 import dev.omalauncher.widgets.lang.FALSE
@@ -42,6 +48,7 @@ import dev.omalauncher.widgets.lang.Program
 import dev.omalauncher.widgets.lang.Sprite
 import dev.omalauncher.widgets.lang.Str
 import dev.omalauncher.widgets.lang.text
+import dev.omalauncher.widgets.lang.urlEncode
 import dev.omalauncher.widgets.lang.Value
 import dev.omalauncher.widgets.lang.Trigger
 import dev.omalauncher.widgets.lang.WidgetError
@@ -157,8 +164,8 @@ interface Services {
         done: () -> Unit,
     )
 
-    /** A file inside the guest, for Image { src: "~/pics/x.png" }. */
-    fun guestFile(path: String): java.io.File
+    /** A file inside the guest, for Image { src: "~/pics/x.png" }; null for one out of it. */
+    fun guestFile(path: String): java.io.File?
 
     /** A guest file's text now and after every change, for `file(...)`; a missing file reads as "". */
     fun fileUpdates(path: String): Flow<String>
@@ -255,8 +262,12 @@ class WidgetInstance(
 
     private fun unseal() {
         val file = secretFile?.takeIf { secrets.isNotEmpty() && it.exists() } ?: return
-        val text = runCatching { file.readBytes() }.getOrNull()?.let(services::unseal)?.toString(Charsets.UTF_8) ?: return
-        val saved = (runCatching { Json.parse(text) }.getOrNull() as? Obj)?.fields ?: return
+        // As if just written: one that can't be read (another install's key, or a keystore not ready yet) stays for the
+        // next start, rather than being deleted as all unset, until a secret is set again.
+        lastSealed = secrets.map { read(it) }
+        val unreadable = "couldn't read the secrets it kept, so it asks for them again"
+        val text = runCatching { file.readBytes() }.getOrNull()?.let(services::unseal)?.toString(Charsets.UTF_8) ?: return report(unreadable)
+        val saved = (runCatching { Json.parse(text) }.getOrNull() as? Obj)?.fields ?: return report(unreadable)
         for (i in secrets) {
             val name = program.globals[i].name
             // Sealed for other servers: the file was changed to send it elsewhere, so it's asked for again.
@@ -268,7 +279,8 @@ class WidgetInstance(
     /** The servers [name] is sent to, as kept with it. */
     private fun hosts(name: String): Value = Lst(program.secretHosts[name].orEmpty().map { Str(it) })
 
-    /** Writes the secrets, sealed, if they changed; all unset deletes the file. */
+    /** Writes the secrets, sealed, if they changed; all unset deletes the file. From the writer and from [stop], so one at a time. */
+    @Synchronized
     private fun seal(values: List<Value>) {
         val file = secretFile ?: return
         if (values == lastSealed) return
@@ -298,7 +310,8 @@ class WidgetInstance(
         lastSaved = persisted.map { read(it) }
     }
 
-    /** Writes the persisted values if they changed since the last write. */
+    /** Writes the persisted values if they changed since the last write. From the writer and from [stop], so one at a time. */
+    @Synchronized
     private fun save(values: List<Value>) {
         val file = savedFile ?: return
         if (values == lastSaved) return
@@ -421,6 +434,7 @@ class WidgetInstance(
             when (name) {
                 "linux" -> return bool(linux())
                 "corners" -> return Num(LauncherStyle.cornerScale.toDouble())
+                "gapsIn", "gapsOut", "borderWidth" -> return Num(LauncherStyle.style[frameSetting(name)])
                 "screenWidth" -> screenSize.value[0]
                 "screenHeight" -> screenSize.value[1]
                 "screenInset" -> screenInset.doubleValue
@@ -432,6 +446,16 @@ class WidgetInstance(
                 else -> null
             }
         return v?.let { Num(Math.round(it).toDouble()) } ?: Null
+    }
+
+    /** The style setting [tile]'s gapsIn, gapsOut or borderWidth reads: the widgets', but the extra keys' own gapsOut and borderWidth in a keybar. */
+    private fun frameSetting(name: String): Setting.Number {
+        val keybar = program.kind == OwlKind.Keybar
+        return when (name) {
+            "gapsIn" -> Style.GAPS_IN
+            "gapsOut" -> if (keybar) Style.KEYBAR_GAPS_OUT else Style.GAPS_OUT
+            else -> if (keybar) Style.KEYBAR_BORDER_WIDTH else Style.TILE_BORDER_WIDTH
+        }
     }
 
     var time: Double
@@ -467,7 +491,7 @@ class WidgetInstance(
         method: String,
     ) {
         // A map or list goes as JSON, anything else as its text.
-        val json = if (body is Obj || body is Lst) Json.write(body) else null
+        val json = if (body is Obj || body is Lst) Json.write(body, MAX_TEXT) else null
         val bytes = (json ?: if (body == Null) "" else body.toString()).toByteArray()
         val sent = if (json != null && headers.keys.none { it.equals("Content-Type", true) }) headers + ("Content-Type" to "application/json") else headers
         val scope = scope ?: return
@@ -477,7 +501,8 @@ class WidgetInstance(
             // `x = post(...)` gets the answer and handles it (a sign-in polled while pending is a 400 each time).
             if (!ok && slot == null) report("post: ${httpFailure(r)}")
             if (slot != null) {
-                write(slot, Obj(mapOf("code" to Num(r.code.toDouble()), "ok" to if (ok) TRUE else FALSE, "out" to if (r.out.isEmpty()) Null else Json.parseOrText(r.out))))
+                // err says why it failed, as a source's status does: offline, refused, a redirect not followed.
+                write(slot, Obj(mapOf("code" to Num(r.code.toDouble()), "ok" to if (ok) TRUE else FALSE, "out" to if (r.out.isEmpty()) Null else Json.parseOrText(r.out), "err" to Str(r.err))))
             }
             // What it changed shows in this widget's sources. A refusal changed nothing: a sign-in polled
             // until it's approved mustn't fetch everything again each time.
@@ -506,6 +531,12 @@ class WidgetInstance(
         if ((name == "ask" || name == "open") && inTrigger && !foreground()) return report("$name(...) in a trigger works only while the app or screen is open")
         // Keys go to whatever window has the keyboard: only from a touch, never on a timer or a fetched value.
         if ((name == "pressKey" || name == "typeText" || name == "latch") && inTrigger) return report("$name(...) works in handlers like onPress, not in a trigger")
+        // Names built from values, which the compiler couldn't check: say so rather than press nothing.
+        val key = args.firstOrNull()?.takeIf { it != Null }?.toString()
+        if (name == "pressKey" && key != null && KeyNames.combo(key) == null) return report("pressKey(\"$key\") names no key; ${KeyNames.help}")
+        if (name == "latch" && key != null && key !in KeyNames.latches) return report("latch(\"$key\"): latch takes ${KeyNames.latches.joinToString()}")
+        val how = args.getOrNull(1)?.takeIf { it != Null }?.toString()
+        if (name == "latch" && how != null && how !in KeyNames.hows) return report("latch's second value is ${KeyNames.hows.joinToString()}, not \"$how\"")
         // Only this widget refreshes afterwards; the others keep their own intervals.
         services.act(name, args) { refresh() }
     }
@@ -548,7 +579,7 @@ class WidgetInstance(
     ): Value {
         ev.const?.let { return it }
         return try {
-            budget.run { ev(env) }
+            budget.eval(ev, env)
         } catch (e: WidgetError) {
             report("$where: ${e.message}")
             Null
@@ -558,12 +589,20 @@ class WidgetInstance(
         } catch (e: StackOverflowError) {
             report("$where: too deeply nested")
             Null
+        } catch (e: OutOfMemoryError) {
+            // What failed is the widget's one huge value, gone again once this unwinds.
+            report("$where: out of memory")
+            Null
         }
     }
 
     override fun report(message: String) {
-        // An error about a request's header or body could quote a secret; this goes to logcat and to Linux.
-        val message = secrets.fold(message) { m, i -> read(i).toString().takeIf { it.isNotEmpty() && read(i) != Null }?.let { m.replace(it, "•••") } ?: m }
+        // An error about a request could quote a secret, as it is or as enc(...) put it in the URL; this goes to logcat and to Linux.
+        val message =
+            secrets.fold(message) { m, i ->
+                val v = read(i).takeIf { it != Null }?.toString().orEmpty()
+                if (v.isEmpty()) m else m.replace(v, "•••").replace(urlEncode(v), "•••")
+            }
         if (reported.add(message) && reported.size < 50) {
             Log.w("widgets", "${program.name}: $message")
             onError(message)
@@ -572,6 +611,12 @@ class WidgetInstance(
 
     /** See [WidgetImages.image]. */
     fun image(src: String): WidgetImage? = images.image(src)
+
+    /** An Image node showing [src] came on screen, or left it ([on] false); see [WidgetImages.show]. */
+    fun imageShown(
+        src: String,
+        on: Boolean,
+    ) = if (on) images.show(src) else images.hide(src)
 
     /** See [WidgetFonts.font]. */
     fun font(src: String): androidx.compose.ui.text.font.FontFamily? = fonts.font(src)
@@ -674,9 +719,16 @@ class WidgetInstance(
                         }
                         when (g.kind) {
                             "stream" -> {
-                                val command = eval(g.arg!!, root, g.name).toString()
-                                // Off screen: stop listening (the process stops once nobody listens).
-                                val ended = untilPaused(active, g) { services.stream(command) { line -> set(slot, g, line) } }
+                                val command = eval(g.arg!!, root, g.name)
+                                if (command == Null) {
+                                    // Built from a value still loading: it waits for it, rather than running "null".
+                                    untilPaused(active, g) { snapshotFlow { eval(g.arg!!, root, g.name) }.first { it != Null } }
+                                    continue
+                                }
+                                // Off screen: stop listening (the process stops once nobody listens). A command built from
+                                // state starts anew when it changes, as a cmd's runs again: it kept printing for the old value.
+                                val current = if (g.arg!!.const == null) ({ active() && eval(g.arg!!, root, g.name) == command }) else active
+                                val ended = untilPaused(current, g) { services.stream(command.toString()) { line -> set(slot, g, line) } }
                                 if (ended) delay(5000) // the command exited: restart it, but not in a tight loop
                             }
                             "file" ->
@@ -858,7 +910,7 @@ class WidgetInstance(
                     when {
                         src.startsWith("https://") -> services.remoteFile(src) to null
                         src.startsWith("asset:") -> null to (program.globals.firstOrNull { it.name == src.removePrefix("asset:") } as? Global.Asset)?.bytes
-                        else -> services.guestFile(src).takeIf { it.isFile } to null
+                        else -> services.guestFile(src)?.takeIf { it.isFile } to null
                     }
                 }
             if (n != sounds) return@launch
@@ -965,8 +1017,10 @@ class WidgetInstance(
                             } else {
                                 services.cmd(target, g.timeout)
                             }
-                        val out = if (g.json) Json.parseOrText(r.out) else Str(r.out)
-                        fetched = g.kind != "http" || ok(g, r)
+                        // Up to a megabyte of JSON: parsed off the main thread.
+                        val out = if (g.json) withContext(Dispatchers.Default) { Json.parseOrText(r.out) } else Str(r.out)
+                        // A response too big now is as big in 30 seconds.
+                        fetched = g.kind != "http" || ok(g, r) || r.err == HTTP_TOO_BIG
                         if (g.status) {
                             Obj(mapOf("out" to out, "err" to Str(r.err), "code" to Num(r.code.toDouble()), "ok" to bool(ok(g, r))))
                         } else {
