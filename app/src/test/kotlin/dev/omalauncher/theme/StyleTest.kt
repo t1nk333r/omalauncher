@@ -151,6 +151,40 @@ class StyleTest {
         }
     }
 
+    @Test fun widgetsOpacityAndFrost() {
+        // A file from before them: the glass as it always was, no frost.
+        assertEquals(Style.GLASS, StyleFile.decode(Toml.parse("[widgets]\ngaps-in = 3\n")).style[Style.TILE_OPACITY], 0.0)
+        assertEquals(false, Style()[Style.TILE_FROST])
+        val t = Toml.parse("[widgets]\nopacity = 0.6\nfrost = true\n")
+        val decoded = StyleFile.decode(t)
+        assertEquals(0.6, decoded.style[Style.TILE_OPACITY], 0.0)
+        assertEquals(true, decoded.style[Style.TILE_FROST])
+        assertEquals(emptyList<String>(), decoded.problems)
+        // A whole number is a number too: solid.
+        assertEquals(1.0, StyleFile.decode(Toml.parse("[widgets]\nopacity = 1\n")).style[Style.TILE_OPACITY], 0.0)
+        assertEquals("version = 1\n\n[widgets]\nopacity = 0.6\nfrost = true\n", Toml.write(StyleFile.encode(t, decoded.style), ""))
+        // Bad values keep the previous ones; the bars' bands keep their own opacity.
+        val previous = Style().with(Style.TILE_OPACITY, 0.7)
+        val bad = StyleFile.decode(mapOf("widgets.opacity" to 1.5, "widgets.frost" to "yes"), previous)
+        assertEquals(0.7, bad.style[Style.TILE_OPACITY], 0.0)
+        assertEquals(false, bad.style[Style.TILE_FROST])
+        assertEquals(listOf("widgets.opacity", "widgets.frost"), bad.problems.map { it.substringBefore(':') })
+        assertEquals(Style.GLASS, decoded.style[Style.STATUS_BAR.opacity], 0.0)
+    }
+
+    @Test fun drawerOpacityCoversPanels() {
+        // Phone build: drawer.opacity is upstream's panels.opacity. A file without it: the drawer as it always was, near-opaque, whatever the widgets' glass is.
+        assertEquals(0.97, StyleFile.decode(Toml.parse("[widgets]\nopacity = 0.3\n")).style[Style.DRAWER_OPACITY], 0.0)
+        val t = Toml.parse("[drawer]\nopacity = 1\n")
+        val decoded = StyleFile.decode(t)
+        assertEquals(1.0, decoded.style[Style.DRAWER_OPACITY], 0.0)
+        assertEquals(emptyList<String>(), decoded.problems)
+        assertEquals("version = 1\n\n[drawer]\nopacity = 1\n", Toml.write(StyleFile.encode(t, decoded.style), ""))
+        val bad = StyleFile.decode(mapOf("drawer.opacity" to -0.5), Style().with(Style.DRAWER_OPACITY, 0.8))
+        assertEquals(0.8, bad.style[Style.DRAWER_OPACITY], 0.0)
+        assertEquals(listOf("drawer.opacity"), bad.problems.map { it.substringBefore(':') })
+    }
+
     @Test fun absentKeysAreDefaultsNotThePreviousValues() {
         val previous = Style().with(Style.GAPS_IN, 10.0)
         assertEquals(6.0, StyleFile.decode(emptyMap(), previous).style[Style.GAPS_IN], 0.0)

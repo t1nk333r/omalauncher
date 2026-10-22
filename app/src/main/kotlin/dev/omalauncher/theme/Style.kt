@@ -173,7 +173,7 @@ class Style(
     fun changed(other: Style) = StyleFile.ALL.filter { this[it] != other[it] }.map { it.key }.toSet()
 
     companion object {
-        /** How much tiles and the system bars' bands cover the wallpaper. */
+        /** How much tiles and the system bars' bands cover the wallpaper, by default. */
         const val GLASS = 0.88
 
         val THEME = Setting.Name("theme", "The Omarchy theme, by its directory name in ~/.local/share/omarchy/themes or ~/.config/omarchy/themes (yours win).")
@@ -206,8 +206,18 @@ class Style(
 
         val GAPS_IN = Setting.Number("widgets.gaps-in", 6.0, 0.0..24.0, "Space in dp between two of home's widgets (all of it, unlike Hyprland's gaps_in, which each window has on its side).")
         val GAPS_OUT = Setting.Number("widgets.gaps-out", 6.0, 0.0..48.0, "Space in dp from home's widgets, the strip and the prompt bar to the screen's edges.")
-        val WIDGET_OPACITY = Setting.Number("widgets.opacity", GLASS, 0.0..1.0, "How much widgets, the prompt bar and the rails cover the wallpaper: 0 clear glass, ${Toml.format(GLASS)} default, 1 solid.")
+        val TILE_OPACITY =
+            Setting.Number(
+                "widgets.opacity",
+                GLASS,
+                0.0..1.0,
+                "How much widgets, the prompt bar and the rails cover the wallpaper (terminal widgets too, as far as terminal.opacity leaves foot's background clear): 0 clear, 1 solid. The system bars' bands have their own.",
+            )
         val WIDGET_BLUR = Setting.Number("widgets.blur", 0.0, 0.0..64.0, "Blurs the wallpaper behind widgets, the prompt bar and the rails, in dp, like Hyprland's blur behind Omarchy's windows: 0 none, 20 frosted.")
+        val TILE_FROST = Setting.Flag("widgets.frost", false, "Upstream's frosted-glass switch: while widgets.blur is 0, blurs the wallpaper behind widgets by ${TILE_FROST_DP.toInt()} dp.")
+
+        /** How much widgets.frost blurs, in dp: owl's frost: 24, as its examples use. */
+        const val TILE_FROST_DP = 24.0
         val TILE_BORDER_WIDTH = Setting.Number("widgets.border-width", 2.0, 0.0..8.0, "How thick widgets' outlines are, in dp. 0 draws none, but the focused one's.")
         val TILE_BORDER = Setting.Color("widgets.border", "The outline of widgets, the prompt bar and the rails: \"theme\" is the theme's border color.")
         val TILE_BORDER_FOCUSED = Setting.Color("widgets.border-focused", "The outline of the widget in use or being arranged: \"theme\" is the theme's accent.")
@@ -260,7 +270,7 @@ class Style(
                     "music, entertainment, productivity, shopping, personalization, finance, business, education, travel, lifestyle, fitness, sport, weather, " +
                     "smart home, medical, wearable. An app goes to one of these when it's added, else to its first six's. Unset: none.",
             ) { v -> v.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { require(it in SmartCategories.EXTRAS) { "isn't one of Smart Launcher's categories: $it" } } }
-        val DRAWER_OPACITY = Setting.Number("drawer.opacity", 0.97, 0.0..1.0, "How much the drawer's background covers home behind it: 0 clear, 1 solid.")
+        val DRAWER_OPACITY = Setting.Number("drawer.opacity", 0.97, 0.0..1.0, "How much the app drawer and the panel swiping down opens cover home: 0 clear, 1 solid (upstream's panels.opacity).")
         val DRAWER_BLUR = Setting.Number("drawer.blur", 0.0, 0.0..48.0, "Blurs home behind the drawer, in dp (Android 12 and later).")
         val DRAWER_LOCK = Setting.Flag("drawer.lock-hidden", false, "Showing hidden apps asks for the fingerprint, face or screen lock first.")
 
@@ -303,7 +313,7 @@ class Style(
     ) {
         val framed = Setting.Flag("$name.framed", false, "$what on a band of the tiles' glass; false leaves the bare wallpaper.")
         val background = Setting.Color("$name.background", "The band's color: \"theme\" is the theme's background, like the tiles.")
-        val opacity = Setting.Number("$name.opacity", GLASS, 0.0..1.0, "How much the band covers the wallpaper: ${Toml.format(GLASS)} like the tiles, 1 solid.")
+        val opacity = Setting.Number("$name.opacity", GLASS, 0.0..1.0, "How much the band covers the wallpaper: ${Toml.format(GLASS)} like the tiles by default (widgets.opacity), 1 solid.")
         val border = Setting.Color("$name.border", "The line on the band's side facing the widgets: \"theme\" follows widgets.border.", noneAllowed = true)
         val borderWidth = Setting.Number("$name.border-width", 2.0, 0.0..8.0, "How thick that line is, in dp; 0 draws none.")
         val all = listOf(framed, background, opacity, border, borderWidth)
@@ -332,7 +342,7 @@ object StyleFile {
     val ALL: List<Setting<*>> =
         with(Style) {
             listOf(THEME, BACKGROUND, FONT, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, WEB_SEARCH, HOME_ROWS, COLUMNS, FORCE_SINGLE_PAGE) +
-                listOf(GAPS_IN, GAPS_OUT, WIDGET_OPACITY, WIDGET_BLUR, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
+                listOf(GAPS_IN, GAPS_OUT, TILE_OPACITY, WIDGET_BLUR, TILE_FROST, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, KEYBAR_GAPS_OUT, KEYBAR_BORDER_WIDTH, MONOCHROME_ICONS, ICON_PACK, CORNER_SCALE) +
                 listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_LAYOUT, DRAWER_CATEGORIES, DRAWER_EXTRAS, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +
                 listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, TERMINAL_KEYBOARD_TEXT, EXTRA_KEYS, SWIPE_UP, SWIPE_DOWN)

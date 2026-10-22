@@ -32,6 +32,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.ImageBitmap
 import dev.omalauncher.BuildConfig
 import android.os.Process
+import android.net.TrafficStats
 import android.os.SystemClock
 import android.os.UserHandle
 import android.os.UserManager
@@ -97,6 +98,7 @@ import dev.omalauncher.widgets.runtime.Modes
 import dev.omalauncher.widgets.runtime.Notifications
 import dev.omalauncher.widgets.runtime.Services
 import dev.omalauncher.widgets.runtime.Streams
+import dev.omalauncher.widgets.runtime.SystemPanels
 import dev.omalauncher.widgets.runtime.Volume
 import dev.omalauncher.widgets.runtime.watchFile
 import kotlinx.coroutines.CoroutineScope
@@ -169,6 +171,7 @@ class WidgetServices(
     private val volume = Volume(context)
     private val alarm = Alarm(context)
     private val modes = Modes(context)
+    private val panels = SystemPanels(context)
 
     /** Opens launcher screens ("style" or "themes", "agents", "drawer"); set by the UI. */
     var launcherAction: ((String) -> Unit)? = null
@@ -206,6 +209,7 @@ class WidgetServices(
             "battery" -> battery()
             "device" -> device()
             "system" -> system()
+            "network" -> network()
             "media" -> media.value()
             "notifications" -> notifications.value()
             "volume" -> volume.value()
@@ -372,6 +376,24 @@ class WidgetServices(
         (0 until java.lang.Runtime.getRuntime().availableProcessors()).mapNotNull { i ->
             runCatching { File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq").readText().trim().toLong() }.getOrNull()
         }.maxOrNull()
+    }
+
+    /**
+     * Bytes sent and received since boot, as Android counts them for every app (no permission needed), with when they
+     * were read: a widget's rate is the change in bytes over the change in [SystemClock.elapsedRealtime], whatever the
+     * gap. A phone that doesn't keep a counter answers -1 for it, null here.
+     */
+    private fun network(): Value {
+        fun bytes(v: Long) = if (v == TrafficStats.UNSUPPORTED.toLong()) Null else Num(v.toDouble())
+        return Obj(
+            mapOf(
+                "rx" to bytes(TrafficStats.getTotalRxBytes()),
+                "tx" to bytes(TrafficStats.getTotalTxBytes()),
+                "mobileRx" to bytes(TrafficStats.getMobileRxBytes()),
+                "mobileTx" to bytes(TrafficStats.getMobileTxBytes()),
+                "uptime" to Num(SystemClock.elapsedRealtime() / 1000.0),
+            ),
+        )
     }
 
     private fun system(): Value {
@@ -653,8 +675,9 @@ class WidgetServices(
             "url" -> if (!context.openUrl(arg)) Toast.makeText(context, "no app opens $arg", Toast.LENGTH_SHORT).show()
             "launcher" -> launcherAction?.invoke(arg)
             "media" -> media.control(arg)
-            "volume" -> volume.control(args[0])
-            "notification" -> args.getOrNull(1)?.takeIf { it != Null }?.let { notifications.control(arg, it.toString()) }
+            "volume" -> volume.control(args[0], args.getOrNull(1)?.takeIf { it != Null }?.toString())
+            "notification" -> notifications.control(arg, args.getOrNull(1)?.takeIf { it != Null }?.toString(), args.getOrNull(2))
+            "settings" -> panels.open(arg, media.playingPackage())
             "androidApp" -> openAndroidApp(arg)
             "copy" -> copy(arg)
             "notify" -> notify(arg, args.getOrNull(1)?.takeIf { it != Null }?.toString())

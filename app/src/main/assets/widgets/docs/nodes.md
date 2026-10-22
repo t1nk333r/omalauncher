@@ -40,7 +40,10 @@ Every node also takes:
 - `dragApp` (phone build, in a panel in the drawer's place): long-press then drag carries the app with this key
   (from `android.drawer`) onto home or the dock, as the drawer does; the panel steps aside meanwhile and closes once
   it's dropped. `""` or null carries nothing. A long-press without a drag still runs `onLongPress`
-- handlers: `onTap` (with `x`, `y`) and `onDrag` (with `dx`, `dy`, `x`, `y`); `onSwipe` (phone build) runs once
+- handlers: `onTap` (with `x`, `y`) and `onDrag` (with `dx`, `dy`, `x`, `y`). Since owl 13, `drag: horizontal` (or
+  `vertical`) has `onDrag` take only moves along it, so a list it's in still scrolls the other way, and `onDragEnd` runs as
+  the finger lets go, with `vx` and `vy`, how fast it was moving in dp a second: a row that follows the finger with
+  `offset: [dragX, 0]` can go when it's let go far out or flicked (see `controls.owl`); `onSwipe` (phone build) runs once
   as a sideways swipe lifts, with `value` `left` or `right` as the finger went, and leaves up and down to a list
   inside; `Pages` takes `onPage` (phone build, with `value`); `onPress` as the finger goes down, before
   it's a tap (with `x`, `y` and `repeat`), and `onRelease` when it lifts or moves on to a scroll (owl 12). `onPress` runs for
@@ -241,3 +244,6 @@ widget "shell" {
   tap the restart hint, even after leaving and returning to its page. Use
   `"btop; exec bash"` to fall back to a shell.
 - `padding: 0` lets the terminal fill the tile's frame.
+- Its background is as see-through as style.toml's `terminal.opacity` (this phone build's; solid at 1, the default):
+  below that the tile's glass (`widgets.opacity`), or a `background` behind it, shows where the program leaves the
+  terminal's own. Cells a program colors, like a status line, stay solid.

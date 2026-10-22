@@ -216,7 +216,7 @@ internal fun GlassActions(
     name: String,
 ) {
     val own = layout.glass(name)
-    val value = own ?: LauncherStyle.style[dev.omalauncher.theme.Style.WIDGET_OPACITY]
+    val value = own ?: LauncherStyle.style[dev.omalauncher.theme.Style.TILE_OPACITY]
     fun step(by: Int) = layout.setGlass(name, (Math.round(value * 20) + by) / 20.0)
     EditAction("−", if (value > 0.0) Palette.foreground else Palette.muted) { if (value > 0.0) step(-1) }
     EditAction("${Math.round(value * 100)}%", if (own != null) Palette.accent else Palette.muted) { layout.setGlass(name, null) }

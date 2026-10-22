@@ -111,7 +111,10 @@ object Palette {
     val green get() = current.green
 
     /** The translucent fill of tiles, bars and rails over the wallpaper. */
-    val glass get() = background.copy(alpha = LauncherStyle.style[Style.WIDGET_OPACITY].toFloat())
+    val glass get() = background.copy(alpha = LauncherStyle.style[Style.TILE_OPACITY].toFloat())
+
+    /** Behind the app drawer and the swipe-down panel: phone build, style's drawer.opacity (upstream's panels.opacity). */
+    val panel get() = background.copy(alpha = LauncherStyle.drawerOpacity)
 }
 
 /**

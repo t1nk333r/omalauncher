@@ -126,7 +126,8 @@ private fun DesktopScreen(
     }
 
     // Frosted glass: a blurred copy of the wallpaper the tiles draw their part of; see Backdrop.
-    val blurDp = LauncherStyle.style[Style.WIDGET_BLUR]
+    // widgets.blur, or upstream's widgets.frost switch at its blur while that's 0: one blur, never both.
+    val blurDp = LauncherStyle.style[Style.WIDGET_BLUR].takeIf { it > 0 } ?: if (LauncherStyle.style[Style.TILE_FROST]) Style.TILE_FROST_DP else 0.0
     // None while Android's own wallpaper shows behind home: there's no image of it to blur.
     val wallpaper = runtime.themes.wallpaper.takeUnless { runtime.themes.wallpaperBehind }
     val density = LocalDensity.current.density
@@ -277,7 +278,7 @@ private fun DesktopScreen(
                 .fillMaxSize()
                 // Gone while an app is carried out of the drawer, so home shows to drop it on.
                 .graphicsLayer { alpha = if (state.drawerDrag) 0f else state.drawer.value.coerceAtMost(1f) }
-                .background(Palette.background.copy(alpha = LauncherStyle.drawerOpacity))
+                .background(Palette.panel)
                 .clickable { state.close() }
                 .drawerSwipe(state),
         )

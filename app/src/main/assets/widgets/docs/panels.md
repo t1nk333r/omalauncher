@@ -5,9 +5,10 @@ Part of the widget docs: README.md, one folder up, comes first, and paths here a
 A panel is a file of its own that a swipe on home can open. On this phone build the app drawer is one: `drawer.owl`,
 which swiping up shows above the prompt bar, as search and every other way to the drawer do; edit it, or read it to
 see how a drawer is put together. Settings › gestures can set a swipe to "owl panel" instead: swiping up then shows
-the panel picked in the drawer's place, and swiping down brings it from the top. Which panel is picked in settings ›
-gestures, or in style.toml as the panel's file name (see `defaults.toml`); a name counts only while its swipe is set
-to "owl panel", which only settings › gestures sets:
+the panel picked in the drawer's place, and swiping down brings it from the top. The launcher ships one more,
+`controls.owl`, for swiping down: the phone's switches, the volume, what's playing, the next alarm and the
+notifications. Which panel is picked in settings › gestures, or in style.toml as the panel's file name (see
+`defaults.toml`); a name counts only while its swipe is set to "owl panel", which only settings › gestures sets:
 
 ```toml
 [gestures]
@@ -26,6 +27,10 @@ on together, in the order picked, null while none are (`appAction("select", a.ke
 `launcher("cancel")` stops, and closing the drawer does too); `showHidden`, whether hidden apps are listed
 (`launcher("hidden")`); and `dragging`, the key of the app being carried onto home with `dragApp`, null while none is,
 so its long-press menu can give way.
+
+Behind a panel the launcher draws the theme's background, as opaque as `drawer.opacity` in style.toml says (this phone build's name for upstream's `panels.opacity`; 0.97, so
+home barely shows through; the user's to change). Leave a panel's outer node without a `background` of its own, or it
+covers home whatever that setting is; a background on the boxes inside it is fine.
 
 ```owl
 panel "my drawer" {

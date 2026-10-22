@@ -39,7 +39,7 @@ data class SurfaceHit(
 class WindowRenderer(
     private val server: WaylandServer,
     private val window: XdgToplevel,
-    /** Keeps alpha, for a window drawn over the wallpaper; a full-screen one stays opaque. */
+    /** Keeps the window's alpha, for a view that isn't opaque to show what's behind it; else it's filled with [background]. */
     private val translucent: Boolean = false,
 ) {
     private val thread = HandlerThread("wl-render").apply { start() }

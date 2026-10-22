@@ -312,7 +312,7 @@ private fun StylePane(
         StyleTab.Widgets -> {
             // Like Hyprland's gaps_in, gaps_out and border_size; the colors are in style.toml.
             Heading("widgets")
-            OpacityStepper("opacity", style, Style.WIDGET_OPACITY)
+            OpacityStepper("opacity", style, Style.TILE_OPACITY)
             Stepper("blur", style, Style.WIDGET_BLUR, step = 4.0)
             Stepper("gaps in", style, Style.GAPS_IN)
             Stepper("gaps out", style, Style.GAPS_OUT)
