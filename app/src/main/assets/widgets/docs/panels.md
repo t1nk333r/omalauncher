@@ -28,9 +28,13 @@ on together, in the order picked, null while none are (`appAction("select", a.ke
 (`launcher("hidden")`); and `dragging`, the key of the app being carried onto home with `dragApp`, null while none is,
 so its long-press menu can give way.
 
-Behind a panel the launcher draws the theme's background, as opaque as `drawer.opacity` in style.toml says (this phone build's name for upstream's `panels.opacity`; 0.97, so
-home barely shows through; the user's to change). Leave a panel's outer node without a `background` of its own, or it
-covers home whatever that setting is; a background on the boxes inside it is fine.
+Behind a panel the launcher draws the theme's background, as opaque as the panel's `opacity` says: from 0, home shows
+through, to 1, solid; without one 0.97, so home barely shows (owl 13). `controls.owl` has 0.97. Leave
+a panel's outer node without a `background` of its own, or it covers home whatever `opacity` is; a background on the
+boxes inside it is fine.
+
+On this phone build the drawer's backdrop follows style.toml's `drawer.opacity` (Style › drawer › background)
+instead of `drawer.owl`'s `opacity`, so the drawer's stays the user's to set without editing the file.
 
 ```owl
 panel "my drawer" {
@@ -65,5 +69,5 @@ panel opened by swiping up has the bar: in one from the top, `query` stays "" an
 Shift+Tab go to `onKey` with `value` set to `up`, `down`, `tab` or `shift-tab`, so a panel can move its own
 highlight (drawer.owl keeps a `pick`). Up and Down come only while what's typed is one line; in more, they move
 between its lines. Without `onKey`, the keys stay with the bar and do what they do in any text field. `open(...)` and `appAction(...)` leave the
-panel as opening an app from the drawer does, and `close()` slides it away. Besides `enter`, a panel has no
-properties, title or icon; like an app's, its nodes are the screen's. Give a long list `lazy: true`.
+panel as opening an app from the drawer does, and `close()` slides it away. Besides `enter` and
+`opacity`, a panel has no properties, title or icon; like an app's, its nodes are the screen's. Give a long list `lazy: true`.

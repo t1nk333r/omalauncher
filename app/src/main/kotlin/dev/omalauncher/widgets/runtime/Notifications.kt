@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import dev.omalauncher.widgets.lang.textOrNull
 
 /**
  * The phone's notifications, for `source n = android.notifications`, and `notification(...)` to open, dismiss or
@@ -119,7 +120,9 @@ class Notifications(
     /**
      * "open" runs the notification's tap action and "dismiss" clears it; "clear" clears every one that can be, as the
      * shade's Clear all does. "action" presses the [arg]-th of its buttons, and "reply" sends [arg] as typed text through
-     * the one that takes it. Without access, opens the setting that grants it.
+     * the one that takes it. "snooze" hides it for [arg] seconds, after which Android shows it again; "snoozeAll" every
+     * one that can be cleared, for [key] seconds. "unsnooze" brings a snoozed one back now, "unsnoozeAll" every one,
+     * the shade's snoozes too. Without access, opens the setting that grants it.
      */
     fun control(
         command: String,
@@ -129,17 +132,30 @@ class Notifications(
         val listener = MediaListener.connected
         if (!media.granted || listener == null) return media.openAccessSettings()
         if (command == "clear") return listener.cancelAllNotifications()
+        // Every one that can be cleared, for "mute 1h": each comes back when its time is up. The seconds come in key's place.
+        if (command == "snoozeAll") {
+            val ms = snoozeMs(key?.toDoubleOrNull()) ?: return
+            for (sbn in shown()) if (sbn.isClearable) runCatching { listener.snoozeNotification(sbn.key, ms) }
+            return
+        }
+        // Android has no unsnooze for apps, but snoozing a snoozed one again replaces its time: a moment, and it's back.
+        if (command == "unsnooze" || command == "unsnoozeAll") {
+            val snoozed = runCatching { listener.snoozedNotifications }.getOrNull().orEmpty()
+            for (sbn in snoozed) if (command == "unsnoozeAll" || sbn.key == key) runCatching { listener.snoozeNotification(sbn.key, UNSNOOZE_MS) }
+            return
+        }
         val sbn = key?.let { runCatching { listener.getActiveNotifications(arrayOf(it)) }.getOrNull()?.firstOrNull() } ?: return
         when (command) {
             "open" -> if (send(sbn.notification.contentIntent)) autoCancel(listener, sbn)
             "dismiss" -> listener.cancelNotification(sbn.key)
+            "snooze" -> snoozeMs(arg?.num())?.let { if (sbn.isClearable) runCatching { listener.snoozeNotification(sbn.key, it) } }
             "action" -> {
                 val action = arg?.num()?.toInt()?.let { actions(sbn).getOrNull(it) } ?: return
                 // Pressed bare, a reply button would send the app no text: that's "reply".
                 if (!replies(action)) send(action.actionIntent)
             }
             "reply" -> {
-                val text = arg?.takeIf { it != Null }?.toString()?.takeIf { it.isNotBlank() } ?: return
+                val text = arg.textOrNull()?.takeIf { it.isNotBlank() } ?: return
                 val action = actions(sbn).firstOrNull(::replies) ?: return
                 val inputs = action.remoteInputs.filter { it.allowFreeFormInput }.toTypedArray()
                 val fill = Intent().addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
@@ -150,6 +166,12 @@ class Notifications(
             }
         }
     }
+
+    /** How long an unsnoozed notification stays away: the shortest snooze that still reliably ends. */
+    private val UNSNOOZE_MS = 1000L
+
+    /** A snooze of [seconds], from a minute to a week; null for none. */
+    private fun snoozeMs(seconds: Double?) = seconds?.takeIf { it > 0 }?.coerceIn(60.0, 7 * 24 * 3600.0)?.let { (it * 1000).toLong() }
 
     /** Sends one of a notification's intents from the launcher, in front; false if the app had cancelled it. */
     private fun send(

@@ -152,7 +152,7 @@ fun BackupScreen(
                 item(key = "restore-label") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         SectionLabel("restore", Modifier.weight(1f))
-                        BracketAction("refresh", Palette.muted, ::refresh)
+                        BracketAction("refresh", Palette.muted, onClick = ::refresh)
                     }
                 }
                 val list = devices

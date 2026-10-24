@@ -270,7 +270,7 @@ class Style(
                     "music, entertainment, productivity, shopping, personalization, finance, business, education, travel, lifestyle, fitness, sport, weather, " +
                     "smart home, medical, wearable. An app goes to one of these when it's added, else to its first six's. Unset: none.",
             ) { v -> v.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { require(it in SmartCategories.EXTRAS) { "isn't one of Smart Launcher's categories: $it" } } }
-        val DRAWER_OPACITY = Setting.Number("drawer.opacity", 0.97, 0.0..1.0, "How much the app drawer and the panel swiping down opens cover home: 0 clear, 1 solid (upstream's panels.opacity).")
+        val DRAWER_OPACITY = Setting.Number("drawer.opacity", 0.97, 0.0..1.0, "How much the app drawer covers home: 0 clear, 1 solid. A panel swiping down opens sets its own, with opacity: in its file.")
         val DRAWER_BLUR = Setting.Number("drawer.blur", 0.0, 0.0..48.0, "Blurs home behind the drawer, in dp (Android 12 and later).")
         val DRAWER_LOCK = Setting.Flag("drawer.lock-hidden", false, "Showing hidden apps asks for the fingerprint, face or screen lock first.")
 

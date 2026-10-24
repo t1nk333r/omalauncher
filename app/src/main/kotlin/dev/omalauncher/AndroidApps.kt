@@ -241,6 +241,11 @@ class AndroidAppCatalog(
 
     /** Phone build: the Smart Launcher on the phone's category icons, which the drawer's pages draw, by category; empty without one. */
     var categoryIcons by mutableStateOf<Map<String, String>>(emptyMap())
+    /** Keys of the apps whose icons are drawn first, ahead of the alphabet: the ones showing as the launcher starts. */
+    var iconsFirst: () -> Set<String> = { emptySet() }
+
+    /** Whether the apps have been listed once; until then [apps] is empty because nothing was asked yet, not because there are none. */
+    var listed by mutableStateOf(false)
         private set
 
     /** Icon edge in px: the drawer's 52dp icon at this screen's density. */
@@ -588,11 +593,15 @@ class AndroidAppCatalog(
                     shortcuts.clear()
                     shortcuts += pinned
                 }
+                this@AndroidAppCatalog.listed = true
                 val present = (list.map { it.key } + pinned.map { it.key }).toHashSet()
                 icons.keys.retainAll(present)
                 masks.keys.retainAll(present)
                 drawnIn.keys.retainAll(present)
-                for ((info, app) in infos) {
+                // Started in this order, and they run four at a time: with hundreds of apps, the recent strip's would
+                // otherwise wait their turn in the alphabet.
+                val first = iconsFirst()
+                for ((info, app) in infos.sortedBy { it.second.key !in first }) {
                     // Missing, or drawn before another icon pack was picked.
                     if (app.key !in icons || drawnIn[app.key] != iconGeneration) loadAppIcon(info, app)
                 }

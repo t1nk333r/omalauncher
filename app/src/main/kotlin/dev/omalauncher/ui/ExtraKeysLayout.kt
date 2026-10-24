@@ -1,5 +1,6 @@
 package dev.omalauncher.ui
 
+import dev.omalauncher.widgets.lang.KeyNames
 import dev.omalauncher.wayland.Keys
 import org.json.JSONArray
 import org.json.JSONException
@@ -93,9 +94,9 @@ object ExtraKeysLayout {
             alias("ENTER RETURN", Stroke(Keys.KEY_ENTER))
             alias("SPACE", Stroke(Keys.KEY_SPACE))
             // Termux's named punctuation keys must send characters, not their literal names.
-            alias("BACKSLASH", Stroke(Keys.forChar('\\')!!.first))
-            alias("QUOTE", Stroke(Keys.forChar('"')!!.first, SHIFT))
-            alias("APOSTROPHE", Stroke(Keys.forChar('\'')!!.first))
+            alias("BACKSLASH", Stroke(KeyNames.forChar('\\')!!.first))
+            alias("QUOTE", Stroke(KeyNames.forChar('"')!!.first, SHIFT))
+            alias("APOSTROPHE", Stroke(KeyNames.forChar('\'')!!.first))
             alias("BKSP BACKSPACE", Stroke(Keys.KEY_BACKSPACE))
             alias("DEL DELETE", Stroke(Keys.KEY_DELETE))
             alias("INS INSERT", Stroke(Keys.KEY_INSERT))
@@ -301,7 +302,7 @@ object ExtraKeysLayout {
             return Stroke(Keys.KEY_TAB, SHIFT)
         }
         if (name.length == 1) {
-            Keys.forChar(name[0])?.let { (code, shifted) -> return Stroke(code, if (shifted) SHIFT else emptyList()) }
+            KeyNames.forChar(name[0])?.let { (code, shifted) -> return Stroke(code, if (shifted) SHIFT else emptyList()) }
         }
         // As in Termux: anything else is typed as it is, like a character no US key has.
         return Stroke(text = name)

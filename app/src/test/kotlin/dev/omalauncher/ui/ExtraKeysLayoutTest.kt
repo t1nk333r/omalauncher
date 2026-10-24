@@ -1,5 +1,6 @@
 package dev.omalauncher.ui
 
+import dev.omalauncher.widgets.lang.KeyNames
 import dev.omalauncher.wayland.Keys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -70,7 +71,7 @@ class ExtraKeysLayoutTest {
         assertEquals("tmux exit", popup.label)
         // A sequence: Ctrl+F, then D on its own.
         assertEquals(
-            listOf(Keys.forChar('f')!!.first to listOf(ctrl), Keys.forChar('d')!!.first to emptyList<Int>()),
+            listOf(KeyNames.forChar('f')!!.first to listOf(ctrl), KeyNames.forChar('d')!!.first to emptyList<Int>()),
             popup.strokes.map { it.code to it.held },
         )
         // A key with a popup waits for its release, so it doesn't repeat.
@@ -86,7 +87,7 @@ class ExtraKeysLayoutTest {
         // "CTRL A" is Ctrl+A, not Ctrl+Shift+A; "CTRL SHIFT A" asks for the shift.
         assertEquals(listOf(ctrl), strokes[1].held)
         assertEquals(listOf(ctrl, shift), strokes[2].held)
-        assertEquals(listOf(Keys.KEY_ESC, Keys.forChar('[')!!.first, Keys.forChar('X')!!.first), strokes.drop(3).map { it.code })
+        assertEquals(listOf(Keys.KEY_ESC, KeyNames.forChar('[')!!.first, KeyNames.forChar('X')!!.first), strokes.drop(3).map { it.code })
         // A bare X is the shifted key, as typed.
         assertEquals(listOf(shift), strokes[5].held)
     }
@@ -107,8 +108,8 @@ class ExtraKeysLayoutTest {
             listOf(
                 Stroke(Keys.KEY_ENTER, listOf(shift)),
                 Stroke(Keys.KEY_TAB, listOf(shift)),
-                Stroke(Keys.forChar('b')!!.first, listOf(alt)),
-                Stroke(Keys.forChar('f')!!.first, listOf(alt)),
+                Stroke(KeyNames.forChar('b')!!.first, listOf(alt)),
+                Stroke(KeyNames.forChar('f')!!.first, listOf(alt)),
             ),
             row[0].drop(4).map { (it as Plain).strokes.single() },
         )
@@ -180,26 +181,26 @@ class ExtraKeysLayoutTest {
         val sequence = plain("""[[{macro: "CTRL f d\n"}]]""").strokes
         assertEquals(3, sequence.size)
         assertEquals(listOf(ctrl), sequence[0].held)
-        assertEquals(Keys.forChar('d')!!.first, sequence[1].code)
+        assertEquals(KeyNames.forChar('d')!!.first, sequence[1].code)
         assertEquals(Keys.KEY_ENTER, sequence[2].code)
     }
 
     @Test fun punctuationRetainsItsRequiredShiftWithCtrlAndAlt() {
         val strokes = plain("""[[{macro: "CTRL ! ALT ? CTRL A CTRL SHIFT A"}]]""").strokes
         assertEquals(listOf(ctrl, shift), strokes[0].held)
-        assertEquals(Keys.forChar('!')!!.first, strokes[0].code)
+        assertEquals(KeyNames.forChar('!')!!.first, strokes[0].code)
         assertEquals(listOf(alt, shift), strokes[1].held)
-        assertEquals(Keys.forChar('?')!!.first, strokes[1].code)
+        assertEquals(KeyNames.forChar('?')!!.first, strokes[1].code)
         assertEquals(listOf(ctrl), strokes[2].held)
         assertEquals(listOf(ctrl, shift), strokes[3].held)
     }
 
     @Test fun namedPunctuationResolvesToTermuxCharacters() {
         val strokes = parse("[[BACKSLASH, QUOTE, APOSTROPHE]]")[0].map { (it as Plain).strokes.single() }
-        assertEquals(Keys.forChar('\\')!!.first, strokes[0].code)
-        assertEquals(Keys.forChar('"')!!.first, strokes[1].code)
+        assertEquals(KeyNames.forChar('\\')!!.first, strokes[0].code)
+        assertEquals(KeyNames.forChar('"')!!.first, strokes[1].code)
         assertEquals(listOf(shift), strokes[1].held)
-        assertEquals(Keys.forChar('\'')!!.first, strokes[2].code)
+        assertEquals(KeyNames.forChar('\'')!!.first, strokes[2].code)
         assertTrue(strokes.all { it.text == null })
     }
 

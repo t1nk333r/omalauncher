@@ -97,6 +97,7 @@ import dev.omalauncher.widgets.runtime.Media
 import dev.omalauncher.widgets.runtime.Modes
 import dev.omalauncher.widgets.runtime.Notifications
 import dev.omalauncher.widgets.runtime.Services
+import dev.omalauncher.widgets.runtime.Sim
 import dev.omalauncher.widgets.runtime.Streams
 import dev.omalauncher.widgets.runtime.SystemPanels
 import dev.omalauncher.widgets.runtime.Volume
@@ -108,11 +109,14 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -122,6 +126,7 @@ import java.io.File
 import java.io.IOException
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
+import dev.omalauncher.widgets.lang.textOrNull
 
 private const val MAX_HTTP_BYTES = 1 shl 20
 
@@ -171,6 +176,7 @@ class WidgetServices(
     private val volume = Volume(context)
     private val alarm = Alarm(context)
     private val modes = Modes(context)
+    private val sim = Sim(context)
     private val panels = SystemPanels(context)
 
     /** Opens launcher screens ("style" or "themes", "agents", "drawer"); set by the UI. */
@@ -215,6 +221,7 @@ class WidgetServices(
             "volume" -> volume.value()
             "alarm" -> alarm.value()
             "modes" -> modes.value()
+            "sim" -> sim.value()
             "apps" -> apps()
             "agents" -> agents()
             "recent" -> recent()
@@ -223,13 +230,20 @@ class WidgetServices(
             else -> throw WidgetError("unknown android source $name")
         }
 
+    /** One flow per source, however many widgets read it: each built its own, so the drawer's list was made once for each. */
+    private val shared = HashMap<String, Flow<Value>?>()
+
     override fun androidUpdates(name: String): Flow<Value>? =
+        shared.getOrPut(name) { updatesOf(name)?.shareIn(scope, SharingStarted.WhileSubscribed(0, 0), replay = 1) }
+
+    private fun updatesOf(name: String): Flow<Value>? =
         when (name) {
             "media" -> media.updates()
             "notifications" -> notifications.updates()
             "volume" -> volume.updates()
             "alarm" -> alarm.updates()
             "modes" -> modes.updates()
+            "sim" -> sim.updates()
             // Both read Compose state: the app list and its usage, the installed agents and the one picked.
             "apps" -> snapshotFlow { apps() }
             "agents" -> snapshotFlow { agents() }
@@ -243,6 +257,8 @@ class WidgetServices(
                     emit(it)
                     delay(DRAWER_EVERY_MS)
                 }
+                // Hundreds of apps, made into values on each change: not on the main thread. All it reads is Compose state.
+                .flowOn(Dispatchers.Default)
             "battery" ->
                 callbackFlow {
                     val receiver =
@@ -636,7 +652,8 @@ class WidgetServices(
             mapOf(
                 "level" to Num(if (level >= 0) (level * 100 / scale).toDouble() else 0.0),
                 "charging" to bool(charging),
-                "status" to Str(if (charging) "charging" else "on battery"),
+                // Plugged in but not charging: full, or held below full to spare the battery.
+                "status" to Str(if (charging) "charging" else if (plugged != null) "plugged in" else "on battery"),
                 // Reported in tenths of a degree and in millivolts.
                 "temp" to (extra(BatteryManager.EXTRA_TEMPERATURE)?.let { Num(it / 10.0) } ?: Null),
                 "voltage" to (extra(BatteryManager.EXTRA_VOLTAGE)?.let { Num(it / 1000.0) } ?: Null),
@@ -665,7 +682,7 @@ class WidgetServices(
         when (name) {
             "pressKey" -> return KeyNames.combo(arg)?.let(runtime.keyboard::press) ?: Unit
             "typeText" -> return runtime.keyboard.type(arg)
-            "latch" -> return runtime.keyboard.latch(arg, args.getOrNull(1)?.takeIf { it != Null }?.toString())
+            "latch" -> return runtime.keyboard.latch(arg, args.getOrNull(1).textOrNull())
         }
         when (name) {
             // Named after the command (btop, dua, ...) unless the widget passes a name.
@@ -675,17 +692,27 @@ class WidgetServices(
             "url" -> if (!context.openUrl(arg)) Toast.makeText(context, "no app opens $arg", Toast.LENGTH_SHORT).show()
             "launcher" -> launcherAction?.invoke(arg)
             "media" -> media.control(arg)
-            "volume" -> volume.control(args[0], args.getOrNull(1)?.takeIf { it != Null }?.toString())
-            "notification" -> notifications.control(arg, args.getOrNull(1)?.takeIf { it != Null }?.toString(), args.getOrNull(2))
+            "volume" -> volume.control(args[0], args.getOrNull(1).textOrNull())
+            "notification" -> notifications.control(arg, args.getOrNull(1).textOrNull(), args.getOrNull(2))
             "settings" -> panels.open(arg, media.playingPackage())
             "androidApp" -> openAndroidApp(arg)
             "copy" -> copy(arg)
-            "notify" -> notify(arg, args.getOrNull(1)?.takeIf { it != Null }?.toString())
+            "notify" -> notify(arg, args.getOrNull(1).textOrNull())
             "torch" -> modes.torch(args[0])
+            // Notification access lets the launcher switch it; without it, the setting that grants it. Granted but not
+            // bound yet: Android's own DND setting this time, while the listener binds again for the next tap.
+            "dnd" ->
+                when {
+                    !media.granted -> media.openAccessSettings()
+                    !modes.dnd(args[0]) { panels.open("dnd") } -> {
+                        media.reconnect()
+                        panels.open("dnd")
+                    }
+                }
             "share" -> share(arg)
             "haptic" -> view?.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             "open" -> openApp(arg)
-            "ask" -> ask(arg, args.getOrNull(1)?.takeIf { it != Null }?.toString())
+            "ask" -> ask(arg, args.getOrNull(1).textOrNull())
             "appAction" -> args.getOrNull(1)?.takeIf { it != Null }?.let { appAction(arg, it) }
             "drawerGroup" -> args.getOrNull(1)?.takeIf { it != Null }?.let { drawerGroup(arg, it.toString()) }
             "workApps" -> workApps(arg)

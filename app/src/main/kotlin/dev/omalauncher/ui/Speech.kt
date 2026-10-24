@@ -146,31 +146,49 @@ class Speech(
         main.postDelayed(unanswered, ANSWER_MS)
         val wanted = onDevice && onDeviceAvailable
         val r = recognizer?.takeIf { recognizerOnDevice == wanted } ?: newRecognizer(wanted)
-        if (language != null || Build.VERSION.SDK_INT < 33) return r.startListening(intent())
-        r.checkRecognitionSupport(
-            intent(),
-            context.mainExecutor,
-            object : RecognitionSupportCallback {
-                // Speech Services by Google answers twice; listening starts once.
-                private var started = false
+        if (language != null || Build.VERSION.SDK_INT < 33) return begin(r)
+        guarded {
+            r.checkRecognitionSupport(
+                intent(),
+                context.mainExecutor,
+                object : RecognitionSupportCallback {
+                    // Speech Services by Google answers twice; listening starts once.
+                    private var started = false
 
-                override fun onSupportResult(support: RecognitionSupport) {
-                    if (r !== recognizer || started) return
-                    language = closestLanguage(support)
-                    Log.i(TAG, "recognizing ${language ?: "the default language"}")
-                    start()
-                }
+                    override fun onSupportResult(support: RecognitionSupport) {
+                        if (r !== recognizer || started) return
+                        language = closestLanguage(support)
+                        Log.i(TAG, "recognizing ${language ?: "the default language"}")
+                        start()
+                    }
 
-                override fun onError(error: Int) {
-                    if (r === recognizer && !started) start()
-                }
+                    override fun onError(error: Int) {
+                        if (r === recognizer && !started) start()
+                    }
 
-                private fun start() {
-                    started = true
-                    r.startListening(intent())
-                }
-            },
-        )
+                    private fun start() {
+                        started = true
+                        begin(r)
+                    }
+                },
+            )
+        }
+    }
+
+    private fun begin(r: SpeechRecognizer) = guarded { r.startListening(intent()) }
+
+    /**
+     * Runs [call] on the recognizer. The phone's default one can be another app's that won't let
+     * others bind to it (ChatGPT's voice assistant): that throws instead of reporting an error.
+     */
+    private fun guarded(call: () -> Unit) {
+        try {
+            call()
+        } catch (e: SecurityException) {
+            Log.w(TAG, "the speech recognizer refused", e)
+            if (text.isBlank()) error = "the phone's speech recognizer doesn't let other apps use it"
+            finish()
+        }
     }
 
     /** The regular recognizer from now on, the on-device one having failed ([why]). */

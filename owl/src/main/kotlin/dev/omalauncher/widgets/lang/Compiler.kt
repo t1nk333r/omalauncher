@@ -1,6 +1,7 @@
 package dev.omalauncher.widgets.lang
 
 import java.util.Base64
+import kotlin.reflect.KMutableProperty0
 
 /**
  * Checks a parsed widget and compiles it: names resolve to slots, expressions
@@ -103,26 +104,24 @@ class Compiler private constructor(
     /** Each secret's servers, as `https://host:port`: it's kept only while the file sends it to these. */
     private val secretHosts = HashMap<String, MutableSet<String>>()
 
-    private fun <T> withSecrets(f: () -> T): T {
-        val was = secretOk
-        secretOk = true
+    /** Compiles [f] with [flag] set, as it was again after. */
+    private inline fun <T> setting(
+        flag: KMutableProperty0<Boolean>,
+        f: () -> T,
+    ): T {
+        val was = flag.get()
+        flag.set(true)
         try {
             return f()
         } finally {
-            secretOk = was
+            flag.set(was)
         }
     }
 
+    private fun <T> withSecrets(f: () -> T): T = setting(::secretOk, f)
+
     /** Compiles [f], part of a request's URL, where a secret may go as `enc(token)`. */
-    private fun <T> inRequestUrl(f: () -> T): T {
-        val was = inUrl
-        inUrl = true
-        try {
-            return f()
-        } finally {
-            inUrl = was
-        }
-    }
+    private fun <T> inRequestUrl(f: () -> T): T = setting(::inUrl, f)
 
     /**
      * Whether text put together now waits for each value in it: a URL, a command or an image's src with a value still
@@ -131,15 +130,7 @@ class Compiler private constructor(
     private var wholeOnly = false
 
     /** Compiles [f], what a request asks for, with [wholeOnly] set. */
-    private fun <T> whole(f: () -> T): T {
-        val was = wholeOnly
-        wholeOnly = true
-        try {
-            return f()
-        } finally {
-            wholeOnly = was
-        }
-    }
+    private fun <T> whole(f: () -> T): T = setting(::wholeOnly, f)
 
     /** Compiles [f] with secrets readable, but not sent: `token == null` only says whether it's set. */
     private fun <T> checking(f: () -> T): T {
@@ -264,15 +255,7 @@ class Compiler private constructor(
         if (v > (needs?.first ?: 1)) needs = Triple(v, feature, pos)
     }
 
-    private fun <T> chancy(f: () -> T): T {
-        val was = chance
-        chance = true
-        try {
-            return f()
-        } finally {
-            chance = was
-        }
-    }
+    private fun <T> chancy(f: () -> T): T = setting(::chance, f)
 
     private fun fail(
         msg: String,
@@ -363,7 +346,6 @@ class Compiler private constructor(
             meta = meta,
             level = level,
             size = props["size"]?.let { cells(it) },
-            isFace = isFace,
             statusBar = statusBar,
             kind = ast.kind,
             minSize = props["minSize"]?.let { cells(it) } ?: (1 to 1),
@@ -491,7 +473,9 @@ class Compiler private constructor(
         triggers: List<Trigger>,
     ): Program {
         since(PANEL_FILE, 0)
-        body.props.firstOrNull { it.name != "enter" }?.let { fail("a panel only takes enter (what the prompt bar says Enter does); the launcher frames it, and gesture settings pick which swipe opens it", it.pos) }
+        body.props.firstOrNull { it.name != "enter" && it.name != "opacity" }?.let {
+            fail("a panel only takes enter (what the prompt bar says Enter does) and opacity (how much it covers home); the launcher frames it, and gesture settings pick which swipe opens it", it.pos)
+        }
         body.handlers.firstOrNull { it.name != "onSubmit" && it.name != "onKey" }?.let {
             fail("handlers go on the nodes inside a panel; only onSubmit (Enter in the prompt bar) and onKey (its arrow and Tab keys) go at its top", it.pos)
         }
@@ -506,6 +490,14 @@ class Compiler private constructor(
         val onKey = body.handlers.firstOrNull { it.name == "onKey" }?.let { since("onKey", it.pos); handler(it, root) }
         // Before the level check, which counts what it uses.
         val enter = body.props.firstOrNull { it.name == "enter" }?.let { ex(it.value, root) }
+        val opacity =
+            body.props.firstOrNull { it.name == "opacity" }?.let {
+                since(PANEL_OPACITY, it.pos)
+                val e = ex(it.value, root)
+                val n = e.const?.let { c -> (c as? Num)?.v ?: Double.NaN }
+                if (n != null && n !in 0.0..1.0) fail("a panel's opacity is from 0 (home shows through) to 1 (solid)", it.pos)
+                e
+            }
         checkLevel(level)
         return Program(
             name = ast.name ?: "panel",
@@ -516,6 +508,7 @@ class Compiler private constructor(
             onSubmit = onSubmit,
             onKey = onKey,
             enter = enter,
+            opacity = opacity,
             triggers = triggers,
             commands = commands.toList(),
             secretHosts = secretHosts.mapValues { it.value.sorted() },
@@ -950,7 +943,7 @@ class Compiler private constructor(
         return WNode.Draw(
             c.name,
             c.args.map { a -> ex(a, scope) },
-            c.named.associate { (k, v) -> k to (enumOrNull(k, v, scope) ?: ex(v, scope)) },
+            c.named.associate { (k, v) -> k to (enumOrNull(k, v) ?: ex(v, scope)) },
             it.body?.let { b ->
                 noProps(b, c.name)
                 items(b.items, scope, Children.DRAW)
@@ -1012,6 +1005,7 @@ class Compiler private constructor(
         val animations =
             body.animations.associate { a ->
                 if (a.name !in ANIMATABLE) fail("'${a.name}' can't animate (${ANIMATABLE.joinToString()})", a.pos)
+                if (a.name == "offset") since(ANIMATE_OFFSET, a.pos)
                 a.name to ex(a.value, scope)
             }
         since(n.type, n.pos)
@@ -1075,7 +1069,6 @@ class Compiler private constructor(
     private fun enumOrNull(
         name: String,
         e: Expr,
-        scope: Scope,
     ): Ev? {
         val options = ENUMS[name] ?: return null
         // The word, even when a let, state, source or parameter has its name: `align: top` beside
@@ -1087,7 +1080,7 @@ class Compiler private constructor(
     private fun prop(
         p: Prop,
         scope: Scope,
-    ): Ev = enumOrNull(p.name, p.value, scope) ?: ex(p.value, scope)
+    ): Ev = enumOrNull(p.name, p.value) ?: ex(p.value, scope)
 
     private fun handler(
         h: Handler,
@@ -1201,6 +1194,8 @@ class Compiler private constructor(
                 since(call.name, call.pos)
                 // notification(...) with one value or three is a word from owl 13, even when the word isn't written out.
                 if (call.name == "notification" && call.args.size != 2) since("notification(\"action\")", call.pos)
+                // A written-out brightness; one from a value, like a Slider's, can't be told from on and off here.
+                if (call.name == "torch" && (args[0].const is Num || (args[0].const as? Str)?.v?.toDoubleOrNull() != null)) since(TORCH_LEVEL, call.pos)
                 if (call.name == "volume" && call.args.size == 2) {
                     (args[1].const as? Str)?.v?.let { if (it !in VOLUME_STREAMS) fail("volume's stream is ${VOLUME_STREAMS.joinToString()}", call.args[1].pos) }
                     since(VOLUME_STREAM, call.pos)

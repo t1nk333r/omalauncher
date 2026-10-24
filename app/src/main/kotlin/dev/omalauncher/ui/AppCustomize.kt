@@ -105,7 +105,7 @@ internal fun AppCustomizeDialog(
             GroupChips((groups.groups.map { it.name } + pageCategories()).distinctBy { it.lowercase() }, group, onPick = { group = it }, onNew = { naming = true })
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            BracketAction("cancel", Palette.muted, onDismiss)
+            BracketAction("cancel", Palette.muted, onClick = onDismiss)
             BracketAction("save", Palette.accent) {
                 customs.rename(hit.key, name)
                 if (!hit.isWork) group?.let { groups.put(listOf(hit.key), it) } ?: groups.ungroup(listOf(hit.key))
@@ -139,7 +139,7 @@ internal fun GroupPickDialog(
         BasicText("drawer group", style = Mono.copy(fontSize = TextSize.Title))
         BasicText("${keys.size} picked", style = Mono.copy(color = Palette.muted))
         GroupChips((groups.groups.map { it.name } + pageCategories()).distinctBy { it.lowercase() }, chosen = null, onPick = apply, onNew = { naming = true }, noneLabel = "no group")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { BracketAction("cancel", Palette.muted, onDismiss) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { BracketAction("cancel", Palette.muted, onClick = onDismiss) }
     }
     if (naming) TextDialog("new group", "", "add", onDismiss = { naming = false }) { new -> apply(new) }
 }

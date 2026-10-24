@@ -69,9 +69,26 @@ inside either side of the window (24–56 dp from the edge); swipe left for next
 or right for previous. The outer Android-back edges stay reserved. This uses
 Tern's default keyboard bindings; remapped shortcuts may change these actions.
 
-Hardware keyboard shortcuts: Super+Enter (terminal), Super+Space or
-Super+A (the bar), Super+1..9 (home pages) on the home screen; Super+Enter
-and Super+W (close) in Linux windows.
+Hardware keyboard shortcuts: Super+D (the drawer), Super+T (terminal),
+Super+Down (the swipe-down panel), Super+1..9 (home pages) on the home screen;
+Super+W (close) in Linux windows. Android keeps Super on its own, Super+Space,
+Super+A and Super+Enter for itself, so Omarchy's Super+Space and Super+Enter
+can't be used.
+Super+Esc leaves a Linux window or a terminal tile without closing it, since
+Esc itself is theirs; a gamepad's B (Back) does too, as its buttons stay the
+launcher's. On home, in the app drawer, panels and
+widgets, the arrows or Tab (a gamepad's D-pad) move between tiles and what
+takes taps, past the first or last tile to the next page; Enter (A) opens it
+and Menu or holding Enter long-presses it, which selects a home tile for
+editing. Right goes into a widget's own buttons, Left back out to its tile.
+Up from the bar goes back to the tiles, or into the open drawer.
+Enter on a terminal tile goes into it, and Enter there types into it, or
+restarts it once it has exited. Esc (B) closes the drawer, a panel or a
+widget's screen, like Back. Long text, like a license or a file being
+shared, takes the arrows until it has all been shown, Page Up and Page Down a
+screenful. On the pages screen, Enter picks a page up by its ≡ and the arrows
+move it, until Enter or Esc puts it down. Menu on a notification in the
+swipe-down panel dismisses it.
 
 The keys above the soft keyboard in terminals are the widgets folder's
 `keybar.owl`, which you or an agent can change (its `docs/keybar.md`).

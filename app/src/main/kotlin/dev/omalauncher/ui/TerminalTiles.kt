@@ -22,7 +22,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -32,6 +36,9 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.findViewTreeLifecycleOwner
 import dev.omalauncher.Runtime
 import dev.omalauncher.linux.TerminalFont
 import dev.omalauncher.linux.shellQuote
@@ -132,7 +139,11 @@ class TerminalTiles(
         sessions.lastOrNull { it.window != null && it.bounds.translate(0f, -lift).contains(p) }
 
     fun deactivate() {
-        if (active != null) wm.focus(null)
+        if (active != null) {
+            // Keys still down, like the Super of Super+Esc, would stay held for the terminal.
+            runtime.keyboard.releaseHeld()
+            wm.focus(null)
+        }
         tile = null
         keyboard?.hide()
         field?.release()
@@ -184,7 +195,12 @@ class TerminalTiles(
         if (keyboardButton?.contains(p) == true) return
         val local = term.viewPoint(p)
         val hit = window.renderer?.hitTest(local.x, local.y) ?: return
-        if (wm.onPress(window, hit)) wm.click(hit, BTN_LEFT)
+        if (wm.onPress(window, hit)) {
+            wm.click(hit, BTN_LEFT)
+            // Home takes the tile's presses, so its own linuxWindowInput never sees this one: as there, a tap on the
+            // prompt line brings the keyboard back.
+            if (wm.onTextCursorRow(hit)) keyboard?.takeUnless { it.showing }?.show()
+        }
     }
 
     /**
@@ -410,6 +426,16 @@ fun TerminalView(
     val window = term.window
     val active = tiles.active === term
     LaunchedEffect(term) { term.autoStart() }
+    // Keys that went into the terminal come back out to it as it lets the keyboard go, rather than to wherever
+    // Android gives the window's focus.
+    val back = remember { FocusRequester() }
+    var keysIn by remember { mutableStateOf(false) }
+    LaunchedEffect(active) {
+        if (active || !keysIn) return@LaunchedEffect
+        keysIn = false
+        withFrameNanos {}
+        back.requestFocus()
+    }
     Box(modifier.onGloballyPositioned { term.bounds = it.boundsInWindow().translate(0f, tiles.lift) }) {
         AndroidView(
             factory = { EmbeddedWindowView(it, tiles) },
@@ -417,11 +443,14 @@ fun TerminalView(
             onRelease = { it.window = null },
             modifier = Modifier.fillMaxSize(),
         )
+        // Keys reach the terminal inside its tile (Enter on the tile, or Right): Enter there types into it, as a tap
+        // does, or restarts it once it has exited.
         when {
             window == null ->
                 Box(
                     Modifier
                         .fillMaxSize()
+                        .keyActivated({ term.start() }, null, ring = true)
                         .pointerInput(term) { detectTapGestures { term.start() } },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -430,8 +459,9 @@ fun TerminalView(
             active -> {
                 DisposableEffect(term) { onDispose { tiles.keyboardButton = null } }
                 // Over the TextureView, which Compose's pointer input doesn't reach.
-                // Presses on the text are forwarded from the home screen instead.
-                Box(Modifier.fillMaxSize().linuxWindowInput(tiles.windowManager, window))
+                // Presses on the text are forwarded from the home screen instead. A tap on the prompt line brings the
+                // keyboard back, as the ⌨ button does.
+                Box(Modifier.fillMaxSize().linuxWindowInput(tiles.windowManager, window) { tiles.keyboard?.takeUnless { it.showing }?.show() })
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)
@@ -445,7 +475,17 @@ fun TerminalView(
                     BasicText("⌨", style = Mono.copy(color = Palette.foreground))
                 }
             }
-            interactive -> Box(Modifier.fillMaxSize().pointerInput(term) { detectTapGestures { tiles.activate(term) } })
+            interactive ->
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .focusRequester(back)
+                        .keyActivated({
+                            keysIn = true
+                            tiles.activate(term)
+                        }, null, ring = true)
+                        .pointerInput(term) { detectTapGestures { tiles.activate(term) } },
+                )
         }
     }
 }
@@ -464,6 +504,27 @@ private class EmbeddedWindowView(
     private var surfaceWidth = 0
     private var surfaceHeight = 0
     private var renderer: WindowRenderer? = null
+
+    /**
+     * Whether home is out of sight (its activity stopped): the renderer lets go of the surface, and with it the frames
+     * it tells the terminal are done, so a busy one (`yes`, btop) stops drawing until home shows again. Its surface
+     * stays meanwhile, and a busy tile kept the launcher drawing for it behind other apps.
+     */
+    private var stopped = false
+    private val lifecycle =
+        LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    stopped = true
+                    renderer?.detach()
+                }
+                Lifecycle.Event.ON_START -> {
+                    stopped = false
+                    surface?.let(::attachSurface)
+                }
+                else -> Unit
+            }
+        }
 
     var window: XdgToplevel? = null
         set(value) {
@@ -507,16 +568,18 @@ private class EmbeddedWindowView(
     }
 
     private fun attachSurface(s: Surface) {
-        renderer?.attach(s, surfaceWidth, surfaceHeight)
+        if (!stopped) renderer?.attach(s, surfaceWidth, surfaceHeight)
         window?.let { tiles.windowManager.applyAppLayout(it, surfaceWidth, surfaceHeight) }
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        findViewTreeLifecycleOwner()?.lifecycle?.let { stopped = !it.currentState.isAtLeast(Lifecycle.State.STARTED); it.addObserver(lifecycle) }
         bind()
     }
 
     override fun onDetachedFromWindow() {
+        findViewTreeLifecycleOwner()?.lifecycle?.removeObserver(lifecycle)
         unbind()
         super.onDetachedFromWindow()
     }

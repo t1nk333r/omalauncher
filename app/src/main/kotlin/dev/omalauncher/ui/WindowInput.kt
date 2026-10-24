@@ -45,11 +45,14 @@ private class GestureHolder {
  * right click and drag to scroll; clients with wl_touch get real touch.
  * Tern instead gets native tap/select/scroll/pinch/tab gestures.
  * With [touchpad] on, touch drives a cursor instead (see [TouchpadState]).
+ * A tap on the row of the window's text cursor (a terminal's prompt) also
+ * calls [onCursorTap], after the program gets it.
  */
 fun Modifier.linuxWindowInput(
     wm: WindowManager,
     window: XdgToplevel,
     touchpad: TouchpadState? = null,
+    onCursorTap: () -> Unit = {},
 ) = pointerInput(wm, window, touchpad) {
     coroutineScope {
         val holder = GestureHolder()
@@ -74,6 +77,7 @@ fun Modifier.linuxWindowInput(
                 viewConfiguration.longPressTimeoutMillis,
                 density,
                 holder,
+                onCursorTap,
             )
         } finally {
             watcher.cancel()
@@ -96,6 +100,7 @@ private suspend fun PointerInputScope.handlePointer(
     longPressMs: Long,
     density: Float,
     holder: GestureHolder,
+    onCursorTap: () -> Unit,
 ) = awaitPointerEventScope {
     var mouseButtons = 0
     while (true) {
@@ -132,16 +137,24 @@ private suspend fun PointerInputScope.handlePointer(
         if (wm.wantsTouch(hit.surface)) {
             val id = change.id.value.toInt()
             wm.touchDown(hit, id)
+            var moved = false
+            var tapped = false
             while (true) {
                 val next = awaitPointerEvent()
                 val c = next.changes.firstOrNull { it.id == change.id } ?: break
                 // Taken by the home screen (a long press lifts a tile): the touch ends here.
-                if (c.isConsumed || !c.pressed) break
+                if (c.isConsumed) break
+                if (!c.pressed) {
+                    tapped = !moved && c.uptimeMillis - change.uptimeMillis < longPressMs
+                    break
+                }
                 c.consume()
+                if ((c.position - start).getDistance() > touchSlop) moved = true
                 val d = (c.position - start) / wm.scale.toFloat()
                 wm.touchMotion(id, hit.x + d.x, hit.y + d.y)
             }
             wm.touchUp(id)
+            if (tapped && wm.onTextCursorRow(hit)) onCursorTap()
             continue
         }
 
@@ -167,7 +180,12 @@ private suspend fun PointerInputScope.handlePointer(
             }
             c.consume()
             if (!c.pressed) {
-                if (scrolling) wm.scrollStop() else if (!longPressed) wm.click(hit, BTN_LEFT)
+                if (scrolling) {
+                    wm.scrollStop()
+                } else if (!longPressed) {
+                    wm.click(hit, BTN_LEFT)
+                    if (wm.onTextCursorRow(hit)) onCursorTap()
+                }
                 break
             }
             if (!scrolling && !longPressed && (c.position - start).getDistance() > touchSlop) {

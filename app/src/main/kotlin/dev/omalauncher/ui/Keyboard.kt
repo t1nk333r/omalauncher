@@ -15,6 +15,8 @@ import android.view.inputmethod.InputMethodManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import dev.omalauncher.wayland.Keys
 import dev.omalauncher.widgets.lang.KeyNames
 
@@ -58,8 +60,9 @@ class KeyboardBridge(
 
     fun handle(event: KeyEvent): Boolean {
         if (event.isMetaPressed && event.action == KeyEvent.ACTION_DOWN && onShortcut(event.keyCode)) return true
-        // Volume buttons stay Android's; their scancodes would otherwise reach the window as KEY_VOLUMEUP/DOWN.
-        if (event.keyCode in volumeKeys) return false
+        // Volume buttons stay Android's; their scancodes would otherwise reach the window as KEY_VOLUMEUP/DOWN. So do
+        // Back and a gamepad's buttons: B is Back once nothing takes it, the way out of a window or a terminal tile.
+        if (event.keyCode in volumeKeys || event.keyCode == KeyEvent.KEYCODE_BACK || KeyEvent.isGamepadButton(event.keyCode)) return false
         val code = Keys.evdev(event) ?: event.scanCode.takeIf { it > 0 } ?: return false
         if (wm.focused == null) {
             // A focus switch can prevent the paired Android key-up reaching this bridge.
@@ -69,16 +72,34 @@ class KeyboardBridge(
         // Android's Caps Lock state rides on every key, also the ones that stop here.
         val capsLock = event.isCapsLockOn
         wm.server.postInput { syncCapsLock(capsLock) }
-        if (event.action == KeyEvent.ACTION_UP && swallowUps.remove(code)) return true
+        if (!Keys.isModifier(code)) {
+            holdImplied(event.metaState)
+        } else if (event.action == KeyEvent.ACTION_DOWN) {
+            // Its own press came after all, later than the key it modifies: from here on it's lifted by its release.
+            implied -= code
+        }
+        forward(event, code, capsLock)
+        if (event.action == KeyEvent.ACTION_UP) liftImplied()
+        return true
+    }
+
+    private fun forward(
+        event: KeyEvent,
+        code: Int,
+        capsLock: Boolean,
+    ) {
+        if (event.action == KeyEvent.ACTION_UP && swallowUps.remove(code)) return
         if (event.action == KeyEvent.ACTION_DOWN && code in swallowUps) {
             // The one-shot chord was sent completely. Ignore hardware auto-repeat:
             // after consuming Once, replaying it would type an unmodified character.
-            return true
+            return
         }
+        // One pressed before the window had the keys, like the Esc of Super+Esc in the window left: its lift is no key.
+        if (event.action == KeyEvent.ACTION_UP && code !in down) return
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 && latched() && !Keys.isModifier(code)) {
             tap(code)
             swallowUps += code
-            return true
+            return
         }
         // Key repeat is ours (clients get rate 0): replay Android's repeats as release + press.
         if (event.repeatCount > 0) {
@@ -86,18 +107,18 @@ class KeyboardBridge(
                 key(code, false, capsLock)
                 key(code, true, capsLock)
             }
-            return true
+            return
         }
         when (event.action) {
             KeyEvent.ACTION_DOWN -> key(code, true, capsLock)
             KeyEvent.ACTION_UP -> key(code, false, capsLock)
         }
-        return true
     }
 
     fun type(text: CharSequence) {
+        liftImplied()
         for (cp in text.codePoints().toArray()) {
-            val mapped = if (cp <= 0xffff) Keys.forChar(cp.toChar()) else null
+            val mapped = if (cp <= 0xffff) KeyNames.forChar(cp.toChar()) else null
             if (mapped == null) {
                 // Not on a US key, like æ, 你 or an emoji: the keymap grows a key for it.
                 if (!Character.isISOControl(cp)) wm.server.postInput { typeCodePoint(cp) }
@@ -172,11 +193,46 @@ class KeyboardBridge(
         held.filter { it.latch == Latch.Once }.forEach { it.latch = Latch.Off }
     }
 
+    /** Modifiers held for a key's meta state alone, their own press never seen. */
+    private val implied = mutableSetOf<Int>()
+
+    /**
+     * Holds the Shift, Ctrl and Alt that [metaState] says are down but whose press never came, until the key they
+     * modify is released. Some keyboard apps keep a hardware Shift for themselves, like FlorisBoard, which uses it for
+     * its own shift key: only the shifted letter comes through, and without this Shift+X typed x (#160). Others send
+     * a Ctrl+C as one key with Ctrl in its meta state.
+     */
+    private fun holdImplied(metaState: Int) {
+        for ((mask, left, right) in impliedModifiers) {
+            if (metaState and mask != 0 && left !in down && right !in down) {
+                key(left, true)
+                implied += left
+            }
+        }
+    }
+
+    /** Lifts the modifiers [holdImplied] pressed, so none stays held for the next key or the soft keyboard's text. */
+    private fun liftImplied() = implied.toList().forEach { key(it, false) }
+
+    /** Lifts every key the window was told is down, as it loses the keys with some still held. */
+    fun releaseHeld() = down.toList().forEach { key(it, false) }
+
+    /** The keys pressed and not released yet, as the window was told. */
+    private val down = mutableSetOf<Int>()
+
     private fun key(
         code: Int,
         pressed: Boolean,
         capsLock: Boolean? = null,
-    ) = wm.server.postInput { key(code, pressed, capsLock) }
+    ) {
+        if (pressed) {
+            down += code
+        } else {
+            down -= code
+            implied -= code
+        }
+        wm.server.postInput { key(code, pressed, capsLock) }
+    }
 }
 
 /** An invisible view that owns the soft keyboard and feeds it into [KeyboardBridge]. */
@@ -196,9 +252,13 @@ class KeyboardSink(
     /** Whether the soft keyboard is wanted: shown by us and not hidden by us since. */
     val wanted get() = softKeyboard
 
+    /** Whether a soft keyboard is on screen now; Back closes it without [hide], so [wanted] can say otherwise. */
+    val showing get() = ViewCompat.getRootWindowInsets(this)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+
+    // Focusable only while it has the keyboard: one that always is takes the window's focus on its own, and the keys'
+    // arrows then never reach home's tiles.
     init {
-        isFocusable = true
-        isFocusableInTouchMode = true
+        isFocusable = false
     }
 
     /** Whether the field was last offered as plain text, for a Chinese, Japanese or Korean keyboard. */
@@ -306,6 +366,8 @@ class KeyboardSink(
     fun show() {
         val imm = imm()
         softKeyboard = true
+        isFocusable = true
+        isFocusableInTouchMode = true
         requestFocus()
         imm.restartInput(this)
         imm.showSoftInput(this, InputMethodManager.SHOW_IMPLICIT)
@@ -318,9 +380,19 @@ class KeyboardSink(
         softKeyboard = false
         bridge.clearLatches()
         imm.restartInput(this)
+        clearFocus()
+        isFocusable = false
     }
 }
 
 private val cjkLanguages = setOf("zh", "ja", "ko")
+
+/** Each modifier's meta state bit with its left and right evdev codes. */
+private val impliedModifiers =
+    listOf(
+        Triple(KeyEvent.META_SHIFT_ON, Keys.KEY_LEFTSHIFT, 54),
+        Triple(KeyEvent.META_CTRL_ON, Keys.KEY_LEFTCTRL, 97),
+        Triple(KeyEvent.META_ALT_ON, Keys.KEY_LEFTALT, 100),
+    )
 
 private val volumeKeys = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)

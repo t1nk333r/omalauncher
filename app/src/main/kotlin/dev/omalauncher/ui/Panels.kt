@@ -95,8 +95,9 @@ internal fun PulledPanel(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer { alpha = state.pull.value }
-                .background(Palette.panel)
+                .background(Palette.background.copy(alpha = inst.panelOpacity()))
                 .pullSwipe(state)
+                .holdsKeys()
                 .safeDrawingPadding()
                 .graphicsLayer {
                     // Faded in as it comes, as the drawer's content: half down, it doesn't draw over home's tiles at full strength.

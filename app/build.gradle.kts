@@ -21,9 +21,9 @@ android {
         applicationId = "dev.omalauncher"
         minSdk = 29
         targetSdk = 37
-        // Phone build: upstream's versionCode × 100 + this build, so it stays above both Play's 20 and the earlier phone builds (14xx to 19xx).
-        versionCode = 2002
-        versionName = "0.11.0-phone.2"
+        // Phone build: upstream's versionCode × 100 + this build, so it stays above both Play's 22 and the earlier phone builds (14xx to 20xx).
+        versionCode = 2201
+        versionName = "0.12.1-phone.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
     }

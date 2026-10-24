@@ -36,6 +36,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
@@ -432,7 +434,10 @@ internal fun AppStrip(
     handlers: AppHandlers,
     modifier: Modifier = Modifier,
     vertical: Boolean = false,
-) = if (LauncherStyle.dock) DockStrip(runtime, state, handlers, modifier, vertical) else RecentStrip(runtime, handlers, modifier, vertical)
+    /** Where keys go from its apps toward the grid; see [RecentStrip]. */
+    home: FocusRequester? = null,
+    side: HomeSide? = null,
+) = if (LauncherStyle.dock) DockStrip(runtime, state, handlers, modifier, vertical, home, side) else RecentStrip(runtime, handlers, modifier, vertical, home, side)
 
 /**
  * The dock: up to [DOCK_SLOTS] apps you picked, each in its own slot spread across the strip (down it in landscape),
@@ -445,6 +450,8 @@ private fun DockStrip(
     handlers: AppHandlers,
     modifier: Modifier,
     vertical: Boolean,
+    home: FocusRequester?,
+    side: HomeSide?,
 ) {
     // Where the dock is in the window, for apps dropped on it (from the dock, or the drawer); none while it's gone.
     DisposableEffect(state) { onDispose { state.dockBounds = Rect.Zero } }
@@ -489,7 +496,8 @@ private fun DockStrip(
                         hit != null -> {
                             val (icon, mask) = hit.icons(runtime)
                             val dragged = state.dockDrag?.key == hit.key
-                            Box(Modifier.dragsApp(runtime, state, hit, fromDrawer = false)) {
+                            // Keys go from it toward the grid as from the recent apps.
+                            Box((if (home != null) Modifier.focusProperties { toHome(side, home) } else Modifier).dragsApp(runtime, state, hit, fromDrawer = false)) {
                                 StripCell(hit.name(runtime), icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers, inDock = from) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime) || dragged, bare = !LauncherStyle.dockBoxed, cell = cell, dragged = dragged)
                             }
                         }
@@ -518,8 +526,15 @@ internal fun RecentStrip(
     handlers: AppHandlers,
     modifier: Modifier = Modifier,
     vertical: Boolean = false,
+    /**
+     * Where keys go from its apps toward the grid: Up, or stood up on [side], across to it. On each, as the list's own
+     * focus group keeps it from reaching them from outside.
+     */
+    home: FocusRequester? = null,
+    side: HomeSide? = null,
 ) {
-    val apps = recentApps(runtime, 20)
+    // Not before every kind of app is listed: the ones missing would push in as their kind arrived.
+    val apps = if (runtime.appsListed) recentApps(runtime, 20) else emptyList()
     // Nothing opened yet: no strip, but its room stays, so home doesn't shift when the first app shows up.
     if (apps.isEmpty()) {
         Spacer(if (vertical) modifier.width(RecentStripHeight) else modifier.height(RecentStripHeight))
@@ -538,7 +553,9 @@ internal fun RecentStrip(
         val cells: LazyListScope.() -> Unit = {
             items(apps, key = { it.key }) { hit ->
                 val (icon, mask) = hit.icons(runtime)
-                StripCell(hit.name(runtime), icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
+                Box(if (home != null) Modifier.focusProperties { toHome(side, home) } else Modifier) {
+                    StripCell(hit.name(runtime), icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
+                }
             }
         }
         if (vertical) {
@@ -797,6 +814,7 @@ private fun StripCell(
             .size(cell)
             .alpha(if (paused) PausedAlpha else 1f)
             .clip(LauncherStyle.shape(12.dp))
+            .menuLongPresses { menuOpen = true }
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = {
@@ -862,7 +880,6 @@ internal fun SearchField(
     onChange: (String) -> Unit,
     onGo: () -> Unit,
     placeholder: String,
-    modifier: Modifier = Modifier,
 ) {
     val style = Mono.copy(fontSize = TextSize.Item)
     BasicTextField(
@@ -874,7 +891,8 @@ internal fun SearchField(
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
         keyboardActions = KeyboardActions(onGo = { onGo() }),
         modifier =
-            modifier
+            Modifier
+                .leavesUpDown()
                 .fillMaxWidth()
                 .clip(LauncherStyle.shape(24.dp))
                 .background(Palette.surface)
@@ -917,8 +935,10 @@ private fun AppActions(
             }
         }
     Popup(popupPositionProvider = position, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
-        MenuItems(actions, onDismiss, minWidth = 160.dp, itemPadding = 12.dp, fontSize = TextSize.Item) {
-            if (menu != null) ShortcutRows(offered, menu, onDismiss, TextSize.Item)
+        Box(Modifier.holdsKeys()) {
+            MenuItems(actions, onDismiss, minWidth = 160.dp, itemPadding = 12.dp) {
+                if (menu != null) ShortcutRows(offered, menu, onDismiss, TextSize.Item)
+            }
         }
     }
 }

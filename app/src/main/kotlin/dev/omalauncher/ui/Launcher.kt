@@ -41,6 +41,9 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.FilterQuality
@@ -84,12 +87,14 @@ fun LauncherRoot(
 ) {
     state.bindScope()
     val ready = runtime.launcherReady
-    // With Android drawing the wallpaper (ours active, or the user's own) the window is transparent and needs no background.
-    val showOwnBackground = !ready || !runtime.themes.wallpaperBehind
+    // With Android drawing the wallpaper (ours active, or the user's own) the window is transparent and needs no
+    // background. Home draws its own wallpaper over the whole window, so the color under it would only be drawn over.
+    val showOwnBackground = !ready || !runtime.themes.wallpaperBehind && runtime.themes.wallpaper == null
     Box(
         Modifier
             .fillMaxSize()
-            .then(if (showOwnBackground) Modifier.background(Palette.background) else Modifier),
+            .then(if (showOwnBackground) Modifier.background(Palette.background) else Modifier)
+            .keysRoot(),
     ) {
         if (ready) DesktopScreen(runtime, state) else SetupScreen(runtime)
     }
@@ -144,8 +149,8 @@ private fun DesktopScreen(
     }
     if (!runtime.themes.wallpaperBehind) {
         runtime.themes.wallpaper?.let { bmp ->
-            // Read while drawing, so swiping pages only redraws this.
-            Canvas(Modifier.fillMaxSize().blurUnderDrawer(state)) {
+            // Read while drawing, and in its own layer, so swiping pages only redraws this.
+            Canvas(Modifier.fillMaxSize().blurUnderDrawer(state).graphicsLayer()) {
                 Backdrop.screen = IntSize(size.width.toInt(), size.height.toInt())
                 val src = wallpaperCrop(bmp.width, bmp.height, size.width.toInt(), size.height.toInt(), state.wallpaperOffset)
                 drawImage(
@@ -266,7 +271,7 @@ private fun DesktopScreen(
     LaunchedEffect(shownPanels) { runtime.widgets.shownPanels = shownPanels }
     LaunchedEffect(state) {
         runtime.widgets.panelCloses.collect { name ->
-            if (name == state.pulled) state.closePull() else if (name == runtime.upPanel()) state.close()
+            if (name == state.pulled) state.closePull() else if (name == drawer) state.close()
         }
     }
 
@@ -279,6 +284,8 @@ private fun DesktopScreen(
                 // Gone while an app is carried out of the drawer, so home shows to drop it on.
                 .graphicsLayer { alpha = if (state.drawerDrag) 0f else state.drawer.value.coerceAtMost(1f) }
                 .background(Palette.panel)
+                // A tap on it closes the drawer; keys move between the drawer's apps, not to it.
+                .focusProperties { canFocus = false }
                 .clickable { state.close() }
                 .drawerSwipe(state),
         )
@@ -310,7 +317,8 @@ private fun DesktopScreen(
                 val release = remember(state) { { state.promptRequest = PromptRequest.Release } }
                 // Phone build: the drawer is drawer.owl, or the panel gestures › swipe up picks (owl panel).
                 if (panelShown && drawer != null) {
-                    CompositionLocalProvider(LocalMenuOpened provides release) { UpPanel(runtime, state, drawer, slide) }
+                    // An arrow with nothing focused, as after a tap in it, starts in the drawer.
+                    CompositionLocalProvider(LocalMenuOpened provides release) { UpPanel(runtime, state, drawer, slide.holdsKeys(enters = false, traps = false)) }
                 }
             }
             // Hidden while a tile types: it would sit on the keyboard, over the tile. They slide with the tile pages,
@@ -319,12 +327,15 @@ private fun DesktopScreen(
                 Column(Modifier.graphicsLayer { if (!panelShown) translationX = state.barShift() * size.width }) {
                     // Home only: the open app list has everything.
                     // Swiping up or down from any of them does what it does on home, as from the dock on stock launchers.
+                    // Keys go between the strip and home's tiles both ways, which Compose's search doesn't find (see PromptBar).
                     if (!panelShown) SettingsStrip(runtime, state)
                     if (LauncherStyle.homePill && !panelShown) {
                         HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
                         Spacer(Modifier.height(HomeGap))
                     }
-                    if (LauncherStyle.recentApps && !panelShown) AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state))
+                    if (LauncherStyle.recentApps && !panelShown) {
+                        AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state).focusRequester(state.stripEntry).focusGroup(), home = state.homeEntry)
+                    }
                     // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
                     // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
                     // Dictation stops as it goes: there'd be no mic to show it listening.

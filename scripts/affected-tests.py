@@ -499,10 +499,10 @@ def read(paths, ref):
 
 
 def version_bump(path, base, head):
-    """Whether the change to a build script only sets versionCode and versionName, as every release does."""
+    """Whether the change to a build script only sets versionCode and versionName, as every release does, and comments."""
     diff = git("diff", "-U0", base, *([head] if head else []), "--", path)
     lines = [l[1:] for l in diff.splitlines() if l[:1] in ("+", "-") and not l.startswith(("+++", "---"))]
-    return bool(lines) and all(re.match(r"\s*version(Code|Name)\s*=", l) for l in lines)
+    return bool(lines) and all(re.match(r"\s*(version(Code|Name)\s*=|//)", l) for l in lines)
 
 
 def main():

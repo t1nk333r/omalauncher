@@ -631,6 +631,16 @@ class LangTest {
         Compiler.compile("widget {\n meta { owl: 10 }\n component C(gapsOut) { Box { padding: gapsOut } }\n C { gapsOut: 2 } }")
     }
 
+    @Test fun tileGlassFollowsTheLauncherStyle() {
+        val style =
+            object : Host by TestHost(0) {
+                override fun tile(name: String): Value = mapOf("tileOpacity" to Num(0.5), "tileFrost" to Num(24.0))[name] ?: Null
+            }
+        val p = Compiler.compile("face \"f\" {\n meta { owl: 13 }\n Text { text: \"${'$'}{tileOpacity} ${'$'}{tileFrost}\" } }")
+        assertEquals("0.5 24", (p.root.single() as WNode.Element).props["text"]!!(Env.root(style)).text())
+        assertTrue(compileError("widget {\n meta { owl: 12 }\n Box { frost: tileFrost } }").contains("tileFrost needs owl 13"))
+    }
+
     @Test fun requiresDeclaresPackagesPerManager() {
         val p = Compiler.compile("widget {\n  requires { pacman: [\"jq\", \"curl\"] }\n  requires { pacman: \"jq\" }\n  Text { text: \"x\" }\n}")
         assertEquals(mapOf("pacman" to listOf("jq", "curl")), p.requires)
@@ -1056,6 +1066,18 @@ class LangTest {
         Compiler.compile("panel {\n meta { owl: 11 }\n state query = 1\n Text { text: query } }")
     }
 
+    @Test fun aPanelSaysHowMuchItCoversHome() {
+        assertNull(Compiler.compile("panel {\n meta { owl: 11 }\n Text { text: 1 } }").opacity)
+        assertNotNull(Compiler.compile("panel {\n meta { owl: 13 }\n opacity: 0.9\n Text { text: 1 } }").opacity)
+        // Worked out as it shows, like the rest of the panel.
+        assertNotNull(Compiler.compile("panel {\n meta { owl: 13 }\n state dim = true\n opacity: dim ? 0.8 : 1\n Text { text: 1 } }").opacity)
+        assertTrue(compileError("panel {\n meta { owl: 12 }\n opacity: 0.9\n Text { text: 1 } }").contains("needs owl 13"))
+        for (bad in listOf("1.5", "-0.1", "\"half\"")) {
+            assertTrue(compileError("panel {\n meta { owl: 13 }\n opacity: $bad\n Text { text: 1 } }").contains("from 0 (home shows through) to 1"))
+        }
+        assertTrue(compileError("widget {\n meta { owl: 13 }\n opacity: 0.9\n Text { text: 1 } }").isNotEmpty())
+    }
+
     @Test fun extraKeysAreAFileOfTheirOwn() {
         val p =
             Compiler.compile(
@@ -1344,6 +1366,22 @@ class LangTest {
         compileError("widget {\n meta { owl: 13 }\n Box { drag: vertical } }").let { assertTrue(it, it.contains("add onDrag")) }
         compileError("widget {\n meta { owl: 13 }\n state v = 0\n Box { onDragEnd: v = vx } }").let { assertTrue(it, it.contains("onDragEnd runs when an onDrag drag ends")) }
         compileError("widget {\n meta { owl: 13 }\n component C() { Box { } }\n C { drag: horizontal } }").let { assertTrue(it, it.contains("drag goes on the node inside C")) }
+    }
+
+    /** The SIM, Do Not Disturb switched, notifications snoozed, and offsets that ease back (owl 13). */
+    @Test fun simDndSnoozeAndSpringBack() {
+        Compiler.compile(
+            "widget {\n meta { owl: 13 }\n source s = android.sim\n state x = 0\n" +
+                " Box { offset: [x, 0]; animate offset: spring(0.8, 400); drag: horizontal; onDrag: x = x + dx; onDragEnd: x = 0\n" +
+                "  Text { text: s.carrier ?? \"no sim\"; onTap: { dnd(\"toggle\"); dnd(true); dnd(\"alarms\"); dnd(\"priority\"); dnd(\"none\"); dnd(\"all\"); torch(40); torch(\"60\"); notification(\"snoozeAll\", 3600); notification(\"snooze\", \"k\", 600); notification(\"unsnooze\", \"k\"); notification(\"unsnoozeAll\") } } } }",
+        )
+        for (old in listOf("source s = android.sim\n Text { text: 1 }", "Text { text: 1; onTap: dnd(\"on\") }", "Text { text: 1; onTap: notification(\"snoozeAll\", 60) }", "Text { text: 1; onTap: notification(\"snooze\", \"k\", 60) }", "Text { text: 1; onTap: notification(\"unsnoozeAll\") }", "Box { offset: [1, 0]; animate offset: spring() }", "Text { text: 1; onTap: torch(40) }")) {
+            compileError("widget {\n meta { owl: 12 }\n $old }").let { assertTrue(it, it.contains("needs owl 13")) }
+        }
+        assertTrue(compileError("widget {\n meta { owl: 13 }\n Text { text: 1; onTap: dnd(\"silence\") } }").contains("dnd takes"))
+        // A forgotten length is caught, not a snooze that silently does nothing.
+        compileError("widget {\n meta { owl: 13 }\n Text { text: 1; onTap: notification(\"snooze\", \"k\") } }").let { assertTrue(it, it.contains("notification(\"snooze\", key, seconds)")) }
+        compileError("widget {\n meta { owl: 13 }\n Text { text: 1; onTap: notification(\"snoozeAll\") } }").let { assertTrue(it, it.contains("notification(\"snoozeAll\", seconds)")) }
     }
 
     @Test fun sliderAndInput() {

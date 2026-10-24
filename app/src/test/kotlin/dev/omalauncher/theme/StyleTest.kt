@@ -172,8 +172,8 @@ class StyleTest {
         assertEquals(Style.GLASS, decoded.style[Style.STATUS_BAR.opacity], 0.0)
     }
 
-    @Test fun drawerOpacityCoversPanels() {
-        // Phone build: drawer.opacity is upstream's panels.opacity. A file without it: the drawer as it always was, near-opaque, whatever the widgets' glass is.
+    @Test fun drawerOpacity() {
+        // Phone build: the drawer's backdrop. A file without it: the drawer as it always was, near-opaque, whatever the widgets' glass is.
         assertEquals(0.97, StyleFile.decode(Toml.parse("[widgets]\nopacity = 0.3\n")).style[Style.DRAWER_OPACITY], 0.0)
         val t = Toml.parse("[drawer]\nopacity = 1\n")
         val decoded = StyleFile.decode(t)

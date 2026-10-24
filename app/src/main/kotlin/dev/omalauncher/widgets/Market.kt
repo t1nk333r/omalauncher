@@ -3,7 +3,6 @@ package dev.omalauncher.widgets
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
-import android.os.Build
 import android.graphics.Rect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -16,7 +15,7 @@ import dev.omalauncher.ui.decodeImageIcon
 import dev.omalauncher.ui.decodeSvgIcon
 import dev.omalauncher.upgrade.Versioned
 import dev.omalauncher.upgrade.mapEntries
-import dev.omalauncher.upgrade.writeAtomically
+import dev.omalauncher.upgrade.strings
 import dev.omalauncher.widgets.lang.OwlKind
 import dev.omalauncher.widgets.market.Catalog
 import dev.omalauncher.widgets.market.CatalogEntry
@@ -228,7 +227,7 @@ class Market(
     fun load() {
         if (loaded) return
         loaded = true
-        val data = Versioned.read(record.takeIf { it.exists() }?.readText(), VERSION) as? JSONObject ?: return
+        val data = Versioned.readFile(record, VERSION) ?: return
         installed.putAll(
             data.mapEntries { id, f ->
                 Installed(
@@ -242,8 +241,6 @@ class Market(
         )
     }
 
-    private fun JSONArray.strings() = (0 until length()).map { getString(it) }
-
     private fun save() {
         val data = JSONObject()
         for (i in installed.values) {
@@ -256,7 +253,7 @@ class Market(
                     .put("requires", JSONObject(i.requires.mapValues { JSONArray(it.value) } as Map<*, *>)),
             )
         }
-        runCatching { writeAtomically(record, Versioned.write(VERSION, data).toByteArray()) }
+        runCatching { Versioned.writeFile(record, VERSION, data) }
     }
 }
 
@@ -267,14 +264,9 @@ private fun decodeThumbnail(
     height: Int,
     top: Float?,
 ): Bitmap? {
-    // Phone build: newInstance(bytes, offset, length) is Android 12's; before it, the one with isShareable, ignored since 4.4.
-    val decoder =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            BitmapRegionDecoder.newInstance(bytes, 0, bytes.size)
-        } else {
-            @Suppress("DEPRECATION")
-            BitmapRegionDecoder.newInstance(bytes, 0, bytes.size, false)
-        } ?: return null
+    // The form without isShareable is API 31+; this one works from 29 (it's ignored either way).
+    @Suppress("DEPRECATION")
+    val decoder = BitmapRegionDecoder.newInstance(bytes, 0, bytes.size, false)
     try {
         val w = decoder.width
         val h = top?.let { minOf(decoder.height, (w * it).toInt().coerceAtLeast(1)) } ?: decoder.height
