@@ -158,7 +158,7 @@ class WidgetEngine(
         scope.launch { for (m in markets) m.refresh() }
     }
 
-    /** Installs every store update, on the engine's scope: leaving settings doesn't stop it. */
+    /** Installs every store update but edited ones, which only the store replaces, on the engine's scope: leaving settings doesn't stop it. */
     fun updateAll() {
         if (updating) return
         updating = true
@@ -166,7 +166,7 @@ class WidgetEngine(
         scope.launch {
             try {
                 for (m in markets) {
-                    for (e in m.updates) {
+                    for (e in m.updates.filterNot(m::edited)) {
                         m.install(e, page = 0)?.let { updateError = "${e.name}: $it" }
                     }
                 }
@@ -1071,7 +1071,9 @@ class WidgetEngine(
         const val GUEST_DIR = ".config/omalauncher/widgets"
 
         private const val AGENT_POINTER =
-            "# omalauncher\n\nThis Arch system runs inside an Android launcher. Home-screen widgets are `.owl` files in " +
+            "# omalauncher\n\nThis Arch system runs inside an Android launcher, omalauncher; its source is at " +
+                "https://github.com/SimonSchubert/omalauncher, should you need to understand how the launcher works. " +
+                "Home-screen widgets are `.owl` files in " +
                 "~/$GUEST_DIR, written in a small declarative language documented in README.md there (and docs/ next to it); so are apps for the " +
                 "app drawer (`app \"name\" { }`) and panels that swiping up or down on home opens (`panel \"name\" { }`, picked with " +
                 "gestures.swipe-up and gestures.swipe-down in ~/${StyleStore.GUEST_DIR}/style.toml, while the phone's settings › gestures " +
