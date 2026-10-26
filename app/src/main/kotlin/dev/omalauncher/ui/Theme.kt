@@ -184,6 +184,12 @@ object LauncherStyle {
     /** Rows of the home grid in portrait, or null for as many square cells as fit. */
     val homeRows: Int? get() = style[Style.HOME_ROWS].roundToInt().takeIf { it > 0 }
 
+    /** The empty page left of home's leftmost, for a new face. */
+    val emptyPageLeft get() = style[Style.EMPTY_PAGE_LEFT]
+
+    /** The empty page after home's last, always (true) or only while arranging, a tile selected or carried (false). */
+    val emptyPageRight get() = style[Style.EMPTY_PAGE_RIGHT]
+
     /** Forces one home page even on a screen [SideRail]'s auto-detect would otherwise split in two. */
     val forceSinglePage get() = style[Style.FORCE_SINGLE_PAGE]
 

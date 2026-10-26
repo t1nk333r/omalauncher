@@ -196,6 +196,13 @@ class Style(
                     "\"https://duckduckgo.com/?q=%s\". Unset: Google.",
             ) { require(isWebSearch(it)) { "takes a web address with %s where the words go" } }
         val HOME_ROWS = Setting.Number("home.rows", 9.0, 0.0..14.0, "Rows of the home grid in portrait: 0 as many square cells as fit, or a number to stretch or squeeze the cells to. Tiles below the last row move up, or to the next page with room.")
+        val EMPTY_PAGE_LEFT = Setting.Flag("home.empty-page-left", true, "The empty page left of home's leftmost, inviting a new face; false ends home at its own first page.")
+        val EMPTY_PAGE_RIGHT =
+            Setting.Flag(
+                "home.empty-page-right",
+                false,
+                "The empty page after home's last, for new tiles; false shows it only while a tile is selected or carried, to drop it on.",
+            )
         val COLUMNS = Setting.Count("home.columns", 6, 4..9, "Columns of home's grid. Fewer make bigger cells, and apps show their names under their icons once a cell is tall enough.")
         val FORCE_SINGLE_PAGE =
             Setting.Flag(
@@ -341,7 +348,7 @@ object StyleFile {
 
     val ALL: List<Setting<*>> =
         with(Style) {
-            listOf(THEME, BACKGROUND, FONT, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, WEB_SEARCH, HOME_ROWS, COLUMNS, FORCE_SINGLE_PAGE) +
+            listOf(THEME, BACKGROUND, FONT, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, WEB_SEARCH, HOME_ROWS, EMPTY_PAGE_LEFT, EMPTY_PAGE_RIGHT, COLUMNS, FORCE_SINGLE_PAGE) +
                 listOf(GAPS_IN, GAPS_OUT, TILE_OPACITY, WIDGET_BLUR, TILE_FROST, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, KEYBAR_GAPS_OUT, KEYBAR_BORDER_WIDTH, MONOCHROME_ICONS, ICON_PACK, CORNER_SCALE) +
                 listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_LAYOUT, DRAWER_CATEGORIES, DRAWER_EXTRAS, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +

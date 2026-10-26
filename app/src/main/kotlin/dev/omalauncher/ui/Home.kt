@@ -108,17 +108,21 @@ fun HomeScreen(
     // The dock frames the slot a carried app would take: cleared with the carry, however it ends.
     LaunchedEffect(arrange) { snapshotFlow { arrange.dockSlot }.collect { state.dockHover = it } }
     // An empty page waits after the last one only while arranging (a tile selected or carried, as in #156), to drop
-    // tiles on; otherwise home is just the pages that hold something. Pages only exist while they do, so a page a tile
-    // was dropped on stays.
-    // Left of page 1 an empty one always waits, for faces: like a stock launcher's feed, but the user's own. It's left
-    // of the leftmost, page 0 at first, then -1, -2, ... as they fill.
+    // tiles on; otherwise home is just the pages that hold something, unless home.empty-page-right is on. Pages only
+    // exist while they do, so a page a tile was dropped on stays.
+    // Left of page 1 an empty one waits, for faces: like a stock launcher's feed, but the user's own. It's left of the
+    // leftmost, page 0 at first, then -1, -2, ... as they fill. home.empty-page-left turns it off.
+    // Not the left one: adding a page before the one on screen would shift the pager under the finger.
     // Unfolded, tile pages show in pairs and a face across both halves: the pager counts slots (see slotsOf).
     val per = if (showsTwoPages(windowSize())) 2 else 1
     val arranging = state.editing != null || arrange.carry != null
     val pageNumbers =
-        engine.pages
-            .let { listOf(minOf(it.first(), FACE_PAGE + 1) - 1) + it }
-            .let { if (!arranging || engine.itemsOn(it.last()).isEmpty()) it else it + (it.last() + 1) }
+        pagerPages(
+            engine.pages,
+            lastEmpty = engine.itemsOn(engine.pages.last()).isEmpty(),
+            emptyPageLeft = LauncherStyle.emptyPageLeft,
+            emptyPageRight = LauncherStyle.emptyPageRight || arranging,
+        )
     // Only faces on screen, or the empty one waiting left of them: they get it whole, the bar's room too (see
     // LauncherState.faceShowing), and the status bar's while all of them say statusBar: false.
     fun faceOn(page: Int?) = page?.let { engine.layout.owner(engine.itemsOn(it)) as? WidgetItem }?.takeIf { it.isFace }
@@ -669,6 +673,21 @@ private fun FaceInvite(
             }
         }
     }
+}
+
+/**
+ * Home's page numbers as the pager has them: [pages], with the empty page waiting left of the leftmost for a new face
+ * when [emptyPageLeft], and one after the last when [emptyPageRight], for tiles, unless that one is empty already
+ * ([lastEmpty]). Neither (both settings off, no tile carried) leaves only [pages], so home ends at its own pages.
+ */
+internal fun pagerPages(
+    pages: List<Int>,
+    lastEmpty: Boolean,
+    emptyPageLeft: Boolean,
+    emptyPageRight: Boolean,
+): List<Int> {
+    val withFace = if (emptyPageLeft) listOf(minOf(pages.first(), FACE_PAGE + 1) - 1) + pages else pages
+    return if (!emptyPageRight || lastEmpty) withFace else withFace + (withFace.last() + 1)
 }
 
 /**

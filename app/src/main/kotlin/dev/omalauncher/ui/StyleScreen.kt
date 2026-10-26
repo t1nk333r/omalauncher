@@ -275,6 +275,8 @@ private fun StylePane(
             OptionHint("tiles below the last row move up at their size, or to a later page; more rows later won't move them back")
             CountOption("columns", Style.COLUMNS, style)
             Flag("pages", "one", "auto", style, Style.FORCE_SINGLE_PAGE)
+            Flag("empty page left", "shown", "hidden", style, Style.EMPTY_PAGE_LEFT)
+            Flag("empty page right", "shown", "hidden", style, Style.EMPTY_PAGE_RIGHT)
             NumberOption("corners", Corners.entries.map { it.label to it.scale.toDouble() }, Style.CORNER_SCALE, style)
             HomePreview(runtime)
         }
