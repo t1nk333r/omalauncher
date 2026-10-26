@@ -36,6 +36,10 @@ boxes inside it is fine.
 On this phone build the drawer's backdrop follows style.toml's `drawer.opacity` (Style › drawer › background)
 instead of `drawer.owl`'s `opacity`, so the drawer's stays the user's to set without editing the file.
 
+Opening the drawer brings up the keyboard, so search is ready. For a drawer that's more for scrolling, `keyboard: false`
+(owl 15) leaves it down: tap the prompt bar to search, and a hardware keyboard types into it as before. It's `true` or
+`false` in the file, not an expression; a panel from the top has no bar, so there it changes nothing.
+
 ```owl
 panel "my drawer" {
   meta { owl: 11 }

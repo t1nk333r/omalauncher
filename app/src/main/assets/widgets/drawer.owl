@@ -184,6 +184,9 @@ panel "app drawer" {
   // Carried out onto home, its menu gives way to the drag.
   on dragging { menu = "" }
 
+  // How much the drawer covers home: near-opaque, as home's widgets showing through make the icons hard to read.
+  // Phone build: the drawer's backdrop follows style.toml's drawer.opacity, so this stays a default for copies in panels/.
+  // keyboard: false (with owl: 15 in meta) leaves the keyboard down as the drawer opens, until the bar is tapped.
   enter: searching && !picking ? (chosen >= 0 ? "▸ open" : chosen == -2 ? "↗ search" : "⏎ ask") : ""
   // An empty bar's Enter does nothing, as on home; nor does one while apps are picked, so the picks stay.
   onSubmit: {

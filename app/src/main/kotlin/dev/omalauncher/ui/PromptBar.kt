@@ -263,12 +263,14 @@ internal fun PromptBar(
     }
     // Search opens focus the bar; drawer gestures leave the keyboard down. Keyed on what's wanted, not on focusSearch:
     // tapping the bar after a swipe up flips focusSearch before the panel shows, and must not hide the keyboard meanwhile.
+    // A drawer with keyboard: false (owl 15) keeps the soft one down even when search opens it: the bar still takes
+    // focus, for a hardware keyboard to type into, and focusing it can raise the soft one, so that's sent down again.
     val keyboardWanted = panelShown && state.focusSearch
     LaunchedEffect(panelShown, keyboardWanted) {
         // Opened to dictate, the keyboard stays down.
         if (keyboardWanted && !speech.listening) {
             focus.requestFocus()
-            keyboard?.show()
+            if (runtime.widgets.drawerPanel()?.let { runtime.widgets.panelInstance(it) }?.second?.program?.keyboard != false) keyboard?.show() else keyboard?.hide()
         } else if (!keyboardWanted && focused) {
             focusManager.clearFocus()
             keyboard?.hide()
