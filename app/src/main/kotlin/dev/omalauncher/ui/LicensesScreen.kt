@@ -42,6 +42,9 @@ private class Component(
 
 private const val APACHE = "apache-2.0"
 
+// Where this build's source is, for the GPL components above and anyone who wants to read or change the launcher.
+private const val REPO = "https://github.com/t1nk333r/omalauncher"
+
 // proot is built from Termux's source with our patches, if any (patches/proot), talloc and libandroid-shmem
 // are Termux's builds (scripts/fetch-proot.sh); libproot.so and libtalloc.so are patched to need
 // libtalloc.so instead of libtalloc.so.2, so the notice says so. The source links name the versions
@@ -151,14 +154,18 @@ private val COMPONENTS =
 @Composable
 fun LicensesScreen(onDismiss: () -> Unit) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
     OverlayPanel("licenses", onDismiss, contentWidth = ReadingWidth) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                BasicText(
-                    "Omalauncher ${BuildConfig.VERSION_NAME} · © 2026 Simon Schubert\n\nIt includes the open source software below.",
-                    style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-                )
+                Column {
+                    BasicText(
+                        "Omalauncher ${BuildConfig.VERSION_NAME} · © 2026 Simon Schubert\n\nIt includes the open source software below.",
+                        style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                    )
+                    BracketAction("source code", Palette.accent) { context.openUrl(REPO) }
+                }
             }
             items(COMPONENTS, key = { it.name }) { c ->
                 val expanded = open == c.name
