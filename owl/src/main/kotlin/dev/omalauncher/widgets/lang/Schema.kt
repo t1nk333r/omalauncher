@@ -160,7 +160,13 @@ internal val SINCE =
         // owl 14: no ripple under the finger, for a node that shows its press itself.
         mapOf("ripple" to 14) +
         // owl 15: a drawer that leaves the keyboard down as it opens.
-        mapOf(PANEL_KEYBOARD to 15)
+        mapOf(PANEL_KEYBOARD to 15) +
+        // owl 15: photos picked on Android pasted into the Linux window being typed in, as paths agents attach.
+        mapOf("pickImages" to 15) +
+        // owl 15: dictation, what the user says on a tap becoming text the widget reads.
+        listOf("android.speech", "speech").associateWith { 15 } +
+        // owl 15: the battery's current, charge and time to full, and the charger's, for a charging widget.
+        mapOf("android.power" to 15)
 
 /** `animate offset: ...`, named like this in [SINCE]. */
 internal const val ANIMATE_OFFSET = "animate offset"
@@ -268,8 +274,14 @@ internal val HANDLER_KINDS = mapOf("onChange" to setOf("Slider", "Input"), "onSu
 /** What triggers bind in their statements. */
 internal val TRIGGER_PARAMS = mapOf("on" to listOf("value", "old"))
 
-/** Data from the phone and the launcher; device is fixed, system and network are polled, the rest update as they change. */
-internal val ANDROID = setOf("battery", "device", "media", "notifications", "volume", "system", "network", "sim", "alarm", "modes", "apps", "agents", "recent", "drawer", "modifiers")
+/**
+ * speech(...)'s words that work from anywhere, a trigger or a press too: they only turn the microphone off. The others
+ * may turn it on, and with it ask for the microphone, so only from onTap; the compiler and WidgetInstance both check.
+ */
+val SPEECH_ANYWHERE = setOf("stop", "cancel")
+
+/** Data from the phone and the launcher; device is fixed, system, network and power are polled, the rest update as they change. */
+internal val ANDROID = setOf("battery", "device", "media", "notifications", "volume", "system", "network", "power", "sim", "alarm", "modes", "apps", "agents", "recent", "drawer", "modifiers", "speech")
 
 /**
  * The words an action's first value may be, when it's written out; [numbers] also allows a number. [forms] are the
@@ -321,6 +333,7 @@ internal val ACTION_WORDS =
                 .let { Words(it, "appAction takes ${it.joinToString()} and an app's key") },
         "drawerGroup" to setOf("rename", "ungroup").let { Words(it, "drawerGroup takes ${it.joinToString()} and a group's name") },
         "workApps" to setOf("pause", "resume", "toggle").let { Words(it, "workApps takes ${it.joinToString()}") },
+        "speech" to setOf("start", "stop", "toggle", "cancel").let { Words(it, "speech takes ${it.joinToString()}; what's heard is in source x = android.speech") },
         "latch" to KeyNames.latches.toSet().let { Words(it, "latch takes ${it.joinToString()}, and optionally once, locked or off") },
     )
 

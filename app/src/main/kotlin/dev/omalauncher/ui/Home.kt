@@ -191,6 +191,16 @@ fun HomeScreen(
                             if (!state.showHidden) state.selection = state.selection?.let { (it - runtime.hiddenApps.keys).ifEmpty { null } }
                         }
                     }
+                // "page:0": turns home to that page, a face left of page 1 too, as Super+1…9 does. What covers home
+                // closes first, as for Home pressed, so the page is seen: a widget's screen, the drawer, a panel.
+                else ->
+                    action.removePrefix("page:").takeIf { it != action }?.toIntOrNull()?.let {
+                        state.close()
+                        state.closePull()
+                        state.closeScreens()
+                        engine.openScreen = null
+                        state.requestedPage = it
+                    }
             }
         }
     }

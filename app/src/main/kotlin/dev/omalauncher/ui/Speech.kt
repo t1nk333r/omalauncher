@@ -19,14 +19,19 @@ import androidx.compose.runtime.setValue
 import java.util.Locale
 
 /**
- * Android speech recognition for the prompt bar. The guest has no microphone,
+ * Android speech recognition for the prompt bar and widgets' dictation (see
+ * [dev.omalauncher.widgets.runtime.Dictation]). The guest has no microphone,
  * so speech becomes text here and only text reaches Linux. Prefers the
- * on-device recognizer (offline, fast) and falls back to the regular one when
- * it has no model for the language. Phone build: or when it can't at all, as
- * on One UI 9, which names Android System Intelligence, not a recognition
- * service, so every try fails with 10. The regular one is asked for its
- * offline model too, and goes online only when it has none for the language.
- * Main thread only, like SpeechRecognizer.
+ * on-device recognizer (offline, fast, silent) and falls back to the regular
+ * one when there's none or it has no model for the language. Not the regular
+ * one first: Google's Speech Services beeps, and pauses what's playing, each
+ * time it starts and each time it stops hearing nothing, every few seconds
+ * while held. Phone build: or when it can't at all, as on One UI 9, which
+ * names Android System Intelligence, not a recognition service, so every try
+ * fails with 10. The regular one is asked for its offline model too, and goes
+ * online only when it has none for the language. Main thread only, like
+ * SpeechRecognizer.
+ * The prompt bar and widgets each have one; one starting cancels the other's.
  */
 class Speech(
     private val context: Context,
@@ -46,12 +51,7 @@ class Speech(
     var error by mutableStateOf<String?>(null)
 
     private var recognizer: SpeechRecognizer? = null
-
-    /** Phone build: whether [recognizer] is the on-device one. */
-    private var recognizerOnDevice = false
-
-    /** Phone build: whether the on-device recognizer is still to be tried, where there is one; off once it failed. */
-    private var onDevice = true
+    private var onDevice = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
 
     /**
      * Phone build: whether the regular recognizer is asked to stay offline. Each [start] asks, so a model downloaded
@@ -62,10 +62,16 @@ class Speech(
     /** Phone build: [stop] was asked for: whatever goes wrong then ends it, without trying another recognizer. */
     private var stopping = false
     private var finished = ""
+
+    /** The current segment's latest partial result, kept should the segment end without a final one. */
+    private var partial = ""
     private var onDone: ((String) -> Unit)? = null
 
     /** While held, pauses don't end recognition: a new segment starts until [stop]. */
     private var held = false
+
+    /** Whether this recognition has started over once already, after losing the recognizer; see [Listener.onError]. */
+    private var retried = false
 
     private val main = Handler(Looper.getMainLooper())
 
@@ -75,7 +81,7 @@ class Speech(
      */
     private val unanswered =
         Runnable {
-            if (recognizerOnDevice && !stopping) {
+            if (canUseRegular) {
                 useRegular("the on-device recognizer didn't answer")
             } else {
                 Log.w(TAG, "the speech recognizer didn't answer")
@@ -97,6 +103,8 @@ class Speech(
         onDone: (String) -> Unit,
     ) {
         cancel()
+        active?.takeIf { it !== this }?.cancel()
+        active = this
         error = null
         if (!available) {
             error = "no speech recognizer on this phone"
@@ -107,8 +115,10 @@ class Speech(
         offline = true
         this.onDone = onDone
         finished = ""
+        partial = ""
         text = ""
         listening = true
+        retried = false
         listen()
     }
 
@@ -116,16 +126,22 @@ class Speech(
     fun stop() {
         held = false
         stopping = true
-        recognizer?.stopListening() ?: finish()
+        // Not listening yet, still asking for the languages: there's nothing to wait for.
+        val r = recognizer?.takeIf { pending == null } ?: return finish()
+        r.stopListening()
     }
 
-    /** Ends recognition without calling onDone. */
+    /** Ends recognition without calling onDone, and forgets what it heard. */
     fun cancel() {
         held = false
         onDone = null
+        finished = ""
+        partial = ""
+        text = ""
         main.removeCallbacks(unanswered)
         recognizer?.destroy()
         recognizer = null
+        pending = null
         listening = false
         level = 0f
     }
@@ -133,41 +149,59 @@ class Speech(
     /**
      * The language to recognize: the phone's, or the closest one the recognizer
      * has a model for. Recognizers only know common language-region pairs, so a
-     * phone set to English (Germany) needs en-US or en-GB instead. Null until checked.
+     * phone set to English (Germany) needs en-US or en-GB instead. Null for the
+     * recognizer's default; asked once for each kind of recognizer, see [languages].
      */
-    private var language: String? = null
+    private var language: String?
+        get() = languages[onDevice]
+        set(value) {
+            languages[onDevice] = value
+        }
 
-    /**
-     * Starts a segment. Phone build: on the recognizer already bound when it's the kind wanted: one destroyed and made
-     * again at once binds to a service still being torn down, and its start is dropped without a word.
-     */
+    /** The recognizer that's being asked for its languages before it listens. */
+    private var pending: SpeechRecognizer? = null
+
     private fun listen() {
-        main.removeCallbacks(unanswered)
-        main.postDelayed(unanswered, ANSWER_MS)
-        val wanted = onDevice && onDeviceAvailable
-        val r = recognizer?.takeIf { recognizerOnDevice == wanted } ?: newRecognizer(wanted)
-        if (language != null || Build.VERSION.SDK_INT < 33) return begin(r)
+        recognizer?.destroy()
+        val r =
+            if (onDevice && onDeviceAvailable) {
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            } else {
+                SpeechRecognizer.createSpeechRecognizer(context)
+            }
+        recognizer = r
+        r.setRecognitionListener(Listener(r))
+        Log.i(TAG, "listening with the ${if (onDevice && onDeviceAvailable) "on-device" else "regular"} recognizer")
+        if (onDevice in languages || Build.VERSION.SDK_INT < 33) return begin(r)
+        pending = r
+        // A Pixel took 16 seconds to answer, with an error, the first time: the words said meanwhile were lost.
+        main.postDelayed({
+            if (pending !== r) return@postDelayed
+            pending = null
+            language = mainRegion()
+            Log.i(TAG, "no languages after ${SUPPORT_WAIT_MS}ms, recognizing $language")
+            begin(r)
+        }, SUPPORT_WAIT_MS)
         guarded {
             r.checkRecognitionSupport(
                 intent(),
                 context.mainExecutor,
                 object : RecognitionSupportCallback {
-                    // Speech Services by Google answers twice; listening starts once.
-                    private var started = false
-
                     override fun onSupportResult(support: RecognitionSupport) {
-                        if (r !== recognizer || started) return
+                        if (pending !== r) return
+                        pending = null
                         language = closestLanguage(support)
                         Log.i(TAG, "recognizing ${language ?: "the default language"}")
-                        start()
+                        begin(r)
                     }
 
+                    // Google's Speech Services can't say which languages it knows (error 14), and asked for the phone's
+                    // en-DE it fails, with a beep: the language's main region instead.
                     override fun onError(error: Int) {
-                        if (r === recognizer && !started) start()
-                    }
-
-                    private fun start() {
-                        started = true
+                        if (pending !== r) return
+                        pending = null
+                        language = mainRegion()
+                        Log.i(TAG, "no languages ($error), recognizing $language")
                         begin(r)
                     }
                 },
@@ -175,7 +209,27 @@ class Speech(
         }
     }
 
-    private fun begin(r: SpeechRecognizer) = guarded { r.startListening(intent()) }
+    /**
+     * The next segment while held, on the same recognizer: destroying it takes the connection to the service down,
+     * and a new one made right after loses it too (ERROR_SERVER_DISCONNECTED), on a Pixel at every pause.
+     */
+    private fun next() = recognizer?.let(::begin) ?: listen()
+
+    private fun begin(r: SpeechRecognizer) {
+        main.removeCallbacks(unanswered)
+        main.postDelayed(unanswered, ANSWER_MS)
+        guarded { r.startListening(intent()) }
+    }
+
+    /** Phone build: whether the on-device recognizer can still give way to a regular one. */
+    private val canUseRegular get() = onDevice && !stopping && SpeechRecognizer.isRecognitionAvailable(context)
+
+    /** Phone build: the regular recognizer from now on, the on-device one having failed ([why]). */
+    private fun useRegular(why: String) {
+        Log.i(TAG, "$why, using the regular recognizer")
+        onDevice = false
+        listen()
+    }
 
     /**
      * Runs [call] on the recognizer. The phone's default one can be another app's that won't let
@@ -186,32 +240,13 @@ class Speech(
             call()
         } catch (e: SecurityException) {
             Log.w(TAG, "the speech recognizer refused", e)
+            if (onDevice && SpeechRecognizer.isRecognitionAvailable(context)) {
+                onDevice = false
+                return listen()
+            }
             if (text.isBlank()) error = "the phone's speech recognizer doesn't let other apps use it"
             finish()
         }
-    }
-
-    /** The regular recognizer from now on, the on-device one having failed ([why]). */
-    private fun useRegular(why: String) {
-        Log.i(TAG, "$why, using the regular recognizer")
-        onDevice = false
-        // The regular recognizer may know other languages than the on-device one.
-        language = null
-        listen()
-    }
-
-    private fun newRecognizer(useOnDevice: Boolean): SpeechRecognizer {
-        recognizer?.destroy()
-        val r =
-            if (useOnDevice && Build.VERSION.SDK_INT >= 31) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(context)
-            }
-        recognizer = r
-        recognizerOnDevice = useOnDevice
-        r.setRecognitionListener(Listener(r))
-        return r
     }
 
     private fun intent() =
@@ -220,7 +255,19 @@ class Speech(
             .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, offline)
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            // Google's recognizers otherwise beep as they start and as they stop hearing anything, and take the audio
+            // focus to, pausing what plays: read by both the on-device one and Speech Services.
+            .putExtra(MUTE_BEEPS, true)
             .apply { language?.let { putExtra(RecognizerIntent.EXTRA_LANGUAGE, it) } }
+            .apply {
+                // Held, one session that hands over each phrase as it ends, rather than a new one after every pause,
+                // which loses what's said in between. One that doesn't do segments ignores it, and ends at a pause as
+                // before, for [next]. An Int: Google's recognizers ignore a Long, and with it the segments.
+                if (held && Build.VERSION.SDK_INT >= 33) {
+                    putExtra(RecognizerIntent.EXTRA_SEGMENTED_SESSION, RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS)
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, SESSION_MS)
+                }
+            }
 
     /**
      * The phone's language-region if supported, else the same language in another
@@ -232,7 +279,7 @@ class Speech(
         val locale = Locale.getDefault()
         val wanted = Locale(locale.language, locale.country).toLanguageTag()
         val pools =
-            if (recognizerOnDevice) {
+            if (onDevice) {
                 listOf(support.installedOnDeviceLanguages, support.supportedOnDeviceLanguages, support.onlineLanguages)
             } else {
                 listOf(support.onlineLanguages, support.installedOnDeviceLanguages, support.supportedOnDeviceLanguages)
@@ -253,10 +300,17 @@ class Speech(
         return null
     }
 
+    /** The phone's language in its main region: en-US, de-DE, fr-FR. */
+    private fun mainRegion(): String {
+        val l = Locale.getDefault().language
+        return if (l == "en") "en-US" else "$l-${l.uppercase(Locale.ROOT)}"
+    }
+
     private fun finish() {
         main.removeCallbacks(unanswered)
         recognizer?.destroy()
         recognizer = null
+        pending = null
         listening = false
         level = 0f
         val done = onDone
@@ -278,43 +332,79 @@ class Speech(
         private val current get() = r === recognizer
 
         override fun onPartialResults(partial: Bundle) {
-            if (current) text = join(finished, partial.best())
+            if (!current) return
+            this@Speech.partial = partial.best()
+            text = join(finished, this@Speech.partial)
         }
 
         override fun onResults(results: Bundle) {
             if (!current) return
             main.removeCallbacks(unanswered)
-            finished = join(finished, results.best())
+            finished = join(finished, results.best().ifEmpty { partial })
+            partial = ""
             text = finished
-            if (held) listen() else finish()
+            retried = false
+            if (held) next() else finish()
         }
 
         override fun onError(code: Int) {
             if (!current) return
             main.removeCallbacks(unanswered)
             when (code) {
-                // Silence or nothing understood: fine while the button is held.
-                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> if (held) listen() else finish()
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> fail("microphone permission needed")
-                // Phone build: anything else the on-device recognizer can't do, the regular one may, for as long as
-                // this lasts; and the regular one without an offline model may online. Not once stopped: it would
-                // start listening again.
-                else ->
-                    if (recognizerOnDevice && !stopping) {
-                        useRegular("on-device recognition failed ($code)")
-                    } else if (offline && !stopping && code in NO_OFFLINE_MODEL) {
-                        Log.i(TAG, "offline recognition failed ($code), recognizing online")
-                        offline = false
-                        listen()
+                // The other Speech's recognizer, just destroyed as this one started, can take the connection to the
+                // service down with it: once it's gone, this one starts over on a new one.
+                ERROR_SERVER_DISCONNECTED ->
+                    if (!retried && !stopping) {
+                        retried = true
+                        main.postDelayed({ if (r === recognizer) listen() }, RETRY_MS)
                     } else {
-                        fail(
-                            when (code) {
-                                SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "speech isn't available in this language"
-                                SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "speech recognition needs a network connection"
-                                else -> "speech recognition failed ($code)"
-                            },
-                        )
+                        otherwise(code)
                     }
+                // Silence or nothing understood: fine while the button is held.
+                // A segment can end so after partial results, the Pixel's recognizer for one: those words stay.
+                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                    finished = join(finished, partial)
+                    partial = ""
+                    text = finished
+                    if (held) next() else finish()
+                }
+                // The phone's language-region (en-DE) may be unknown to a recognizer that can't say which it knows: the
+                // language's main region next, kept for later, then the other recognizer, whose languages are its own.
+                SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> {
+                    val main = mainRegion()
+                    if (language != main && !stopping) {
+                        Log.i(TAG, "${language ?: "the default language"} isn't known, recognizing $main")
+                        language = main
+                        next()
+                    } else {
+                        otherwise(code)
+                    }
+                }
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> fail("microphone permission needed")
+                else -> otherwise(code)
+            }
+        }
+
+        /**
+         * Phone build: anything else the on-device recognizer can't do, the regular one may, for as long as this lasts;
+         * and the regular one without an offline model may online. Not once stopped: it would start listening again.
+         */
+        private fun otherwise(code: Int) {
+            when {
+                canUseRegular -> useRegular("on-device recognition failed ($code)")
+                !onDevice && offline && !stopping && code in NO_OFFLINE_MODEL -> {
+                    Log.i(TAG, "offline recognition failed ($code), recognizing online")
+                    offline = false
+                    next()
+                }
+                else ->
+                    fail(
+                        when (code) {
+                            SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "speech isn't available in this language"
+                            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "speech recognition needs a network connection"
+                            else -> "speech recognition failed ($code)"
+                        },
+                    )
             }
         }
 
@@ -327,6 +417,24 @@ class Speech(
 
         override fun onRmsChanged(rmsdB: Float) {
             if (current) level = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+        }
+
+        override fun onSegmentResults(segmentResults: Bundle) {
+            if (!current) return
+            main.removeCallbacks(unanswered)
+            finished = join(finished, segmentResults.best().ifEmpty { partial })
+            partial = ""
+            text = finished
+            retried = false
+        }
+
+        override fun onEndOfSegmentedSession() {
+            if (!current) return
+            main.removeCallbacks(unanswered)
+            finished = join(finished, partial)
+            partial = ""
+            text = finished
+            if (held) next() else finish()
         }
 
         override fun onReadyForSpeech(params: Bundle?) {
@@ -348,14 +456,37 @@ class Speech(
     companion object {
         private const val TAG = "speech"
 
-        /** How long a start may go unanswered: a cold Speech Services takes about 300 ms. */
+        /** SpeechRecognizer.ERROR_SERVER_DISCONNECTED, from API 31. */
+        private const val ERROR_SERVER_DISCONNECTED = 11
+
+        private const val RETRY_MS = 300L
+
+        /** Phone build: how long a start may go unanswered: a cold Speech Services takes about 300 ms. */
         private const val ANSWER_MS = 5000L
 
         /**
-         * What the regular recognizer says, asked to stay offline, when it has no model for the language: Speech
-         * Services by Google has said both 13 and 5 for a language pack it hasn't downloaded.
+         * Phone build: what the regular recognizer says, asked to stay offline, when it has no model for the language:
+         * Speech Services by Google has said both 13 and 5 for a language pack it hasn't downloaded.
          */
         private val NO_OFFLINE_MODEL =
             setOf(SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE)
+
+        /**
+         * How long one held session asks to last; [stop] ends it sooner, and [next] starts another after. Google's
+         * recognizers take at most 5 minutes, and ignore more, segments and all.
+         */
+        private const val SESSION_MS = 5 * 60 * 1000
+
+        /** Google's own extra, in both its recognizers, for no start and end beeps. */
+        private const val MUTE_BEEPS = "com.google.recognition.extra.MUTE_AUDIO_BEEPS"
+
+        /** How long a recognizer gets to say which languages it knows before it listens for the default one. */
+        private const val SUPPORT_WAIT_MS = 2000L
+
+        /** [language] for each kind of recognizer, on-device or not, once asked: the same for every Speech. */
+        private val languages = HashMap<Boolean, String?>()
+
+        /** The one started last: the phone has one microphone, and a second recognizer would get nothing. */
+        private var active: Speech? = null
     }
 }
