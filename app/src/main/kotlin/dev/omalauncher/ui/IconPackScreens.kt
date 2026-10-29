@@ -36,12 +36,15 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import dev.omalauncher.IconPack
 import dev.omalauncher.IconPackStore
+import dev.omalauncher.R
 import dev.omalauncher.Runtime
 import dev.omalauncher.searchPackIcons
 import dev.omalauncher.suggestPackIcons
@@ -61,12 +64,12 @@ fun IconPackScreen(
     val packs by installedPacks(runtime)
     val chosen = runtime.style.style[Style.ICON_PACK]
     val pick = { pack: String? -> runtime.style.update { it.with(Style.ICON_PACK, pack) } }
-    OverlayPanel("icon pack", onDismiss, contentWidth = ReadingWidth) {
+    OverlayPanel(stringResource(R.string.phone_icon_pack_title), onDismiss, contentWidth = ReadingWidth) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            item { PackRow(null, "each app's own", "the icons apps come with", chosen == null) { pick(null) } }
+            item { PackRow(null, stringResource(R.string.phone_style_icon_pack_none), stringResource(R.string.phone_icon_pack_own_hint), chosen == null) { pick(null) } }
             // Picked in style.toml, or since uninstalled: shown, so it's clear why the apps have their own icons.
             if (chosen != null && packs?.none { it.packageName == chosen } == true) {
-                item { PackRow(null, chosen, "not on the phone · apps show their own icons", picked = true) {} }
+                item { PackRow(null, chosen, stringResource(R.string.phone_icon_pack_missing), picked = true) {} }
             }
             items(packs.orEmpty(), key = { it.packageName }) { pack ->
                 PackRow(pack.packageName, pack.label, pack.packageName, chosen == pack.packageName) { pick(pack.packageName) }
@@ -74,8 +77,7 @@ fun IconPackScreen(
             item {
                 val none = packs?.isEmpty() == true
                 BasicText(
-                    (if (none) "no icon packs on the phone; packs made for Nova, ADW or Lawnchair work here. " else "") +
-                        "An app's customize can take any one of a pack's icons, and that one stays.",
+                    stringResource(if (none) R.string.phone_icon_pack_footer_none else R.string.phone_icon_pack_footer),
                     Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp),
                     style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
                 )
@@ -104,7 +106,7 @@ internal fun PackIconDialog(
     val back = if (opened != null && only == null) ({ opened = null }) else null
     Dialog(onDismissRequest = back ?: onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         OverlayPanel(
-            pack?.label?.lowercase() ?: "icon pack",
+            pack?.label?.lowercase() ?: stringResource(R.string.phone_icon_pack_title),
             onDismiss,
             contentWidth = ReadingWidth,
             onBack = back,
@@ -115,7 +117,7 @@ internal fun PackIconDialog(
                 pack != null -> PackIcons(runtime, pack.packageName, hit, onPick)
                 list.isEmpty() ->
                     BasicText(
-                        "no icon packs on the phone; packs made for Nova, ADW or Lawnchair work here",
+                        stringResource(R.string.phone_icon_pack_none_installed),
                         Modifier.padding(4.dp),
                         style = Mono.copy(color = Palette.muted),
                     )
@@ -144,7 +146,7 @@ private fun PackIcons(
     }
     val p = pack
     if (p == null) {
-        BasicText(if (unreadable) "this pack's icons couldn't be read" else "reading the pack…", Modifier.padding(4.dp), style = Mono.copy(color = Palette.muted))
+        BasicText(stringResource(if (unreadable) R.string.phone_icon_pack_unreadable else R.string.phone_icon_pack_reading), Modifier.padding(4.dp), style = Mono.copy(color = Palette.muted))
         return
     }
     var query by remember(packageName) { mutableStateOf("") }
@@ -168,14 +170,14 @@ private fun PackIcons(
                 ) = value.width * value.height * 4
             }
         }
-    SearchField(query, { query = it }, onGo = {}, placeholder = "search ${p.icons.size} icons by app")
+    SearchField(query, { query = it }, onGo = {}, placeholder = pluralStringResource(R.plurals.phone_icon_pack_search, p.icons.size, p.icons.size))
     Spacer(Modifier.height(8.dp))
-    if (shown.isEmpty()) BasicText(if (p.icons.isEmpty()) "this pack lists no icons" else "no icon for that", Modifier.padding(4.dp), style = Mono.copy(color = Palette.muted))
+    if (shown.isEmpty()) BasicText(stringResource(if (p.icons.isEmpty()) R.string.phone_icon_pack_empty else R.string.phone_icon_pack_no_match), Modifier.padding(4.dp), style = Mono.copy(color = Palette.muted))
     LazyVerticalGrid(GridCells.Adaptive(64.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (query.isBlank() && suggested.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel("for ${hit.label.lowercase()}") }
+            item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel(stringResource(R.string.phone_icon_pack_for, hit.label.lowercase())) }
             items(suggested, key = { "for:$it" }) { PackIconCell(p, it, cache, onPick) }
-            item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel("all") }
+            item(span = { GridItemSpan(maxLineSpan) }) { SectionLabel(stringResource(R.string.phone_icon_pack_all)) }
         }
         items(shown, key = { "all:$it" }) { PackIconCell(p, it, cache, onPick) }
     }

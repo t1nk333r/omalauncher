@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -76,6 +77,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.window.PopupPositionProvider
+import dev.omalauncher.R
 import dev.omalauncher.Runtime
 import dev.omalauncher.linux.LinuxState
 import dev.omalauncher.linux.agentInvocation
@@ -165,7 +167,7 @@ internal fun PromptBar(
         if (q.isEmpty()) return
         val url = webSearchUrl(LauncherStyle.style[Style.WEB_SEARCH], q)
         if (!context.openUrl(url)) {
-            Toast.makeText(context, "no browser opens ${webSearchName(LauncherStyle.style[Style.WEB_SEARCH])}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.phone_prompt_no_browser, webSearchName(LauncherStyle.style[Style.WEB_SEARCH])), Toast.LENGTH_SHORT).show()
             return
         }
         state.query = ""
@@ -389,9 +391,9 @@ internal fun PromptBar(
                         if (shown.isEmpty()) {
                             val hint =
                                 when {
-                                    listening -> "listening…"
-                                    !asks || agent == null -> "open an app or search the web…"
-                                    else -> "open an app or ask ${agent.bin}…"
+                                    listening -> stringResource(R.string.prompt_listening)
+                                    !asks || agent == null -> stringResource(R.string.phone_prompt_bar_hint_web)
+                                    else -> stringResource(R.string.prompt_hint_ask, agent.bin)
                                 }
                             BasicText(hint, style = Mono.copy(color = Palette.muted, fontSize = TextSize.Item), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -570,6 +572,9 @@ private fun DefaultAgentMenu(
     var open by remember { mutableStateOf(false) }
     // As far above the bar as the drawer's menus are above an app.
     val gap = with(LocalDensity.current) { 8.dp.roundToPx() }
+    // The choice popup's labels aren't composable: the web's are looked up here.
+    val web = stringResource(R.string.phone_prompt_web)
+    val searchWeb = stringResource(R.string.phone_prompt_search_web, webSearchName(LauncherStyle.style[Style.WEB_SEARCH]))
     Box {
         Row(
             Modifier
@@ -577,7 +582,7 @@ private fun DefaultAgentMenu(
                 .padding(start = 10.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BasicText(if (asks) agent?.bin.orEmpty() else "web", style = Mono.copy(color = Palette.accent))
+            BasicText(if (asks) agent?.bin.orEmpty() else web, style = Mono.copy(color = Palette.accent))
             Symbol(if (open) Glyph.ChevronUp else Glyph.ChevronDown, Palette.muted, Modifier.padding(start = 4.dp))
         }
         if (open) {
@@ -591,9 +596,9 @@ private fun DefaultAgentMenu(
                     if (picked != null) store.choose(picked)
                     runtime.sendBarToWeb(picked == null)
                 },
-                label = { it?.name ?: "web" },
+                label = { it?.name ?: web },
                 minWidth = 200.dp,
-                sublabel = { it?.bin ?: "search ${webSearchName(LauncherStyle.style[Style.WEB_SEARCH])}" },
+                sublabel = { it?.bin ?: searchWeb },
             ) {
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(Palette.border))
                 Box(
@@ -603,7 +608,7 @@ private fun DefaultAgentMenu(
                             open = false
                             onManage()
                         }.padding(horizontal = 10.dp, vertical = 10.dp),
-                ) { BasicText("  manage agents…", style = Mono.copy(color = Palette.muted)) }
+                ) { BasicText(stringResource(R.string.prompt_manage_agents), style = Mono.copy(color = Palette.muted)) }
             }
         }
     }

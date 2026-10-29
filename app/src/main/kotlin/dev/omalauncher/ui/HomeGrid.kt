@@ -73,6 +73,8 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import dev.omalauncher.R
 import androidx.compose.ui.unit.toOffset
 import kotlinx.coroutines.launch
 import kotlin.math.floor
@@ -373,6 +375,8 @@ internal fun HomeGrid(
     onLongPressEmpty: () -> Unit,
     /** What a page left of the first ([isFacePage]) shows while no face is there; it gets the page's number. */
     feed: @Composable (Int) -> Unit,
+    /** What an empty tile page shows while no tile is carried. */
+    invite: @Composable () -> Unit,
     onNoRoom: (HomeItem) -> Unit,
     onMove: (HomeItem, Int) -> Unit,
     /** Puts a tile on another page without turning to it, as fitting home into its rows does. */
@@ -915,7 +919,7 @@ internal fun HomeGrid(
                         Row(Modifier.fillMaxSize().focusProperties { onEnter = { if (slot != pager.currentPage) cancelFocusChange() } }.focusGroup()) {
                             for (page in shown) {
                                 Box(Modifier.width(with(density) { g.width.toDp() }).fillMaxHeight()) {
-                                    TiledPage(page, itemsOn(page), layout, g, arrange, selected, tile, actions, onNoRoom, feed)
+                                    TiledPage(page, itemsOn(page), layout, g, arrange, selected, tile, actions, onNoRoom, feed, invite)
                                 }
                             }
                         }
@@ -1016,6 +1020,7 @@ private fun TiledPage(
     actions: @Composable (HomeItem) -> Unit,
     onNoRoom: (HomeItem) -> Unit,
     feed: @Composable (Int) -> Unit,
+    invite: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
     val carried = arrange.carry?.item?.key
@@ -1048,7 +1053,7 @@ private fun TiledPage(
             // Only while a tile is carried: an empty tile page otherwise just shows the wallpaper.
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 BasicText(
-                    if (isFacePage(page) && arrange.carry?.item?.isFace != true) "only a face goes here" else "drop here",
+                    stringResource(if (isFacePage(page) && arrange.carry?.item?.isFace != true) R.string.home_drop_face_only else R.string.home_drop_here),
                     Modifier.background(Palette.background.copy(alpha = 0.8f)).padding(horizontal = 12.dp, vertical = 6.dp),
                     style = Mono,
                 )

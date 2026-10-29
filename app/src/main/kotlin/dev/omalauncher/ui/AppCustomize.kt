@@ -31,7 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import dev.omalauncher.R
 import dev.omalauncher.Runtime
 import kotlinx.coroutines.launch
 
@@ -59,9 +61,9 @@ internal fun AppCustomizeDialog(
             if (uri != null) scope.launch { unreadable = !customs.setIcon(hit.key, uri) }
         }
     DialogFrame(onDismiss) {
-        BasicText("customize", style = Mono.copy(fontSize = TextSize.Title))
+        BasicText(stringResource(R.string.phone_customize_title), style = Mono.copy(fontSize = TextSize.Title))
         BasicText(hit.label, style = Mono.copy(color = Palette.muted))
-        FieldLabel("name")
+        FieldLabel(stringResource(R.string.phone_customize_name))
         BasicTextField(
             value = name,
             onValueChange = { name = it },
@@ -81,39 +83,39 @@ internal fun AppCustomizeDialog(
                 }
             },
         )
-        FieldLabel("icon")
+        FieldLabel(stringResource(R.string.phone_customize_icon))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val (icon, _) = hit.icons(runtime)
             if (icon != null) Image(icon, null, Modifier.size(44.dp))
             // Wraps: all three don't fit beside the icon across a phone's dialog.
             FlowRow(Modifier.weight(1f)) {
-                BracketAction("pick image", Palette.accent) {
+                BracketAction(stringResource(R.string.phone_customize_pick_image), Palette.accent) {
                     unreadable = false
                     pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
-                BracketAction("icon pack", Palette.accent) {
+                BracketAction(stringResource(R.string.phone_customize_icon_pack), Palette.accent) {
                     unreadable = false
                     packPicking = true
                 }
-                if (hit.key in customs.icons) BracketAction("reset", Palette.muted) { customs.resetIcon(hit.key) }
+                if (hit.key in customs.icons) BracketAction(stringResource(R.string.phone_customize_reset), Palette.muted) { customs.resetIcon(hit.key) }
             }
         }
-        if (unreadable) BasicText("that image couldn't be read", style = Mono.copy(color = Palette.red, fontSize = TextSize.Small))
+        if (unreadable) BasicText(stringResource(R.string.phone_customize_unreadable), style = Mono.copy(color = Palette.red, fontSize = TextSize.Small))
         // Groups are the personal tab's: a work app stays on the work tab.
         if (!hit.isWork) {
-            FieldLabel("drawer group")
+            FieldLabel(stringResource(R.string.phone_customize_drawer_group))
             GroupChips((groups.groups.map { it.name } + pageCategories()).distinctBy { it.lowercase() }, group, onPick = { group = it }, onNew = { naming = true })
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            BracketAction("cancel", Palette.muted, onClick = onDismiss)
-            BracketAction("save", Palette.accent) {
+            BracketAction(stringResource(R.string.phone_customize_cancel), Palette.muted, onClick = onDismiss)
+            BracketAction(stringResource(R.string.phone_customize_save), Palette.accent) {
                 customs.rename(hit.key, name)
                 if (!hit.isWork) group?.let { groups.put(listOf(hit.key), it) } ?: groups.ungroup(listOf(hit.key))
                 onDismiss()
             }
         }
     }
-    if (naming) TextDialog("new group", "", "add", onDismiss = { naming = false }) { new -> group = new; naming = false }
+    if (naming) TextDialog(stringResource(R.string.phone_customize_new_group), "", stringResource(R.string.phone_customize_add), onDismiss = { naming = false }) { new -> group = new; naming = false }
     if (packPicking) {
         PackIconDialog(runtime, hit, onDismiss = { packPicking = false }) { drawable ->
             packPicking = false
@@ -136,12 +138,12 @@ internal fun GroupPickDialog(
         onDismiss()
     }
     DialogFrame(onDismiss) {
-        BasicText("drawer group", style = Mono.copy(fontSize = TextSize.Title))
-        BasicText("${keys.size} picked", style = Mono.copy(color = Palette.muted))
-        GroupChips((groups.groups.map { it.name } + pageCategories()).distinctBy { it.lowercase() }, chosen = null, onPick = apply, onNew = { naming = true }, noneLabel = "no group")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { BracketAction("cancel", Palette.muted, onClick = onDismiss) }
+        BasicText(stringResource(R.string.phone_customize_drawer_group), style = Mono.copy(fontSize = TextSize.Title))
+        BasicText(stringResource(R.string.phone_customize_picked, keys.size), style = Mono.copy(color = Palette.muted))
+        GroupChips((groups.groups.map { it.name } + pageCategories()).distinctBy { it.lowercase() }, chosen = null, onPick = apply, onNew = { naming = true }, noneLabel = stringResource(R.string.phone_customize_no_group))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { BracketAction(stringResource(R.string.phone_customize_cancel), Palette.muted, onClick = onDismiss) }
     }
-    if (naming) TextDialog("new group", "", "add", onDismiss = { naming = false }) { new -> apply(new) }
+    if (naming) TextDialog(stringResource(R.string.phone_customize_new_group), "", stringResource(R.string.phone_customize_add), onDismiss = { naming = false }) { new -> apply(new) }
 }
 
 /** The drawer's groups to pick from, [chosen] marked, with one to leave a group and one to make a new one. */
@@ -151,7 +153,7 @@ private fun GroupChips(
     chosen: String?,
     onPick: (String?) -> Unit,
     onNew: () -> Unit,
-    noneLabel: String = "none",
+    noneLabel: String = stringResource(R.string.phone_customize_none),
 ) {
     // A new name just typed shows among them before it's saved.
     val shown = if (chosen != null && chosen !in names) names + chosen else names

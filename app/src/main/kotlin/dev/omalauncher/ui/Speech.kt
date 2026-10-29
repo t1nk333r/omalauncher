@@ -12,10 +12,12 @@ import android.speech.RecognitionSupportCallback
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.omalauncher.R
 import java.util.Locale
 
 /**
@@ -85,7 +87,7 @@ class Speech(
                 useRegular("the on-device recognizer didn't answer")
             } else {
                 Log.w(TAG, "the speech recognizer didn't answer")
-                if (text.isBlank()) error = "the speech recognizer didn't answer"
+                if (text.isBlank()) error = context.getString(R.string.phone_speech_no_answer)
                 finish()
             }
         }
@@ -107,7 +109,7 @@ class Speech(
         active = this
         error = null
         if (!available) {
-            error = "no speech recognizer on this phone"
+            error = context.getString(R.string.prompt_speech_no_recognizer)
             return
         }
         held = hold
@@ -244,7 +246,7 @@ class Speech(
                 onDevice = false
                 return listen()
             }
-            if (text.isBlank()) error = "the phone's speech recognizer doesn't let other apps use it"
+            if (text.isBlank()) error = context.getString(R.string.prompt_speech_refused)
             finish()
         }
     }
@@ -380,7 +382,7 @@ class Speech(
                         otherwise(code)
                     }
                 }
-                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> fail("microphone permission needed")
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> fail(code, R.string.prompt_speech_mic_permission)
                 else -> otherwise(code)
             }
         }
@@ -399,19 +401,24 @@ class Speech(
                 }
                 else ->
                     fail(
+                        code,
                         when (code) {
-                            SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> "speech isn't available in this language"
-                            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "speech recognition needs a network connection"
-                            else -> "speech recognition failed ($code)"
+                            SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> R.string.prompt_speech_language
+                            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> R.string.prompt_speech_network
+                            else -> R.string.prompt_speech_failed
                         },
                     )
             }
         }
 
-        private fun fail(message: String) {
-            Log.w(TAG, message)
+        /** [message] may show the recognizer's error [code]. */
+        private fun fail(
+            code: Int,
+            @StringRes message: Int,
+        ) {
+            Log.w(TAG, "speech recognition failed ($code)")
             // Keep what was already recognized; the error is only worth showing when there's nothing.
-            if (text.isBlank()) error = message
+            if (text.isBlank()) error = context.getString(message, code)
             finish()
         }
 

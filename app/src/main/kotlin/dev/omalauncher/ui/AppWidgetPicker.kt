@@ -30,8 +30,11 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.omalauncher.AppWidgetSetupActivity
+import dev.omalauncher.R
 import dev.omalauncher.widgets.AppWidgets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -68,15 +71,15 @@ fun AppWidgetPicker(
     val before = remember { widgets.items.size }
     LaunchedEffect(widgets.items.size) { if (widgets.items.size > before) onDismiss() }
 
-    OverlayPanel("android widgets", onDismiss, contentWidth = ReadingWidth) {
-        SearchField(query, onChange = { query = it }, onGo = {}, placeholder = "search widgets")
+    OverlayPanel(stringResource(R.string.phone_widgets_title), onDismiss, contentWidth = ReadingWidth) {
+        SearchField(query, onChange = { query = it }, onGo = {}, placeholder = stringResource(R.string.phone_widgets_search))
         val q = query.trim()
         val shown = offers.orEmpty().filter { q.isEmpty() || it.app.contains(q, ignoreCase = true) || it.label.contains(q, ignoreCase = true) }
         val status =
             when {
-                offers == null -> "loading…"
-                shown.isEmpty() -> if (q.isEmpty()) "no app offers widgets" else "no widgets match"
-                else -> "${shown.size} widgets"
+                offers == null -> stringResource(R.string.phone_widgets_loading)
+                shown.isEmpty() -> stringResource(if (q.isEmpty()) R.string.phone_widgets_none_offered else R.string.phone_widgets_no_match)
+                else -> pluralStringResource(R.plurals.phone_widgets_count, shown.size, shown.size)
             }
         BasicText(status, Modifier.padding(vertical = 8.dp), style = Mono.copy(color = Palette.muted))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The phone build's own text: what it adds to settings, gestures, style, the prompt bar and the voice input. English
+  only for now, so an Indonesian phone shows these in English.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- Settings: Linux's row while it's installed, and the Feather backup row. -->
+    <string name="phone_settings_linux_running">installed · running</string>
+    <string name="phone_settings_linux_stopped">installed · stopped</string>
+    <string name="phone_settings_backup">backup</string>
+    <string name="phone_settings_backup_subtitle">keep home, widgets and style on feather; restore them on any phone</string>
+    <!-- After Linux's size in the Linux screen while it isn't running. -->
+    <string name="phone_linux_stopped_suffix">" · stopped"</string>
+
+    <!-- What a swipe on home can do, in settings › gestures. -->
+    <string name="phone_gesture_drawer">app drawer</string>
+    <string name="phone_gesture_search">search / agent prompt</string>
+    <string name="phone_gesture_notifications">notifications</string>
+    <string name="phone_gesture_panel">owl panel</string>
+    <!-- Settings' gestures row, a swipe that opens an owl panel: the panel's name. -->
+    <string name="phone_gesture_panel_named">panel: %1$s</string>
+    <!-- The row that picks which owl panel a swipe opens. -->
+    <string name="phone_gestures_panel">panel</string>
+    <string name="phone_gestures_swipe_up_shows">swiping up shows %1$s</string>
+    <string name="phone_gestures_hint">owl panels are owl files, drawer.owl among them: edit them like widgets, or create one with your agent from home\'s menu</string>
+
+    <!-- An Android widget's edit bar: opens the widget's own settings. -->
+    <string name="phone_home_widget_settings">settings</string>
+    <!-- The files screen's place for the phone's shared storage. -->
+    <string name="phone_files_place_phone">phone</string>
+    <plurals name="phone_pages_android_widgets">
+        <item quantity="one">%1$d android widget</item>
+        <item quantity="other">%1$d android widgets</item>
+    </plurals>
+    <string name="phone_licenses_use_bouncycastle">verifies Linux download signatures</string>
+
+    <!-- The prompt bar and its agent menu, where the web is a place to send the bar's text too. -->
+    <string name="phone_prompt_hint_web">open an app or search the web</string>
+    <string name="phone_prompt_bar_hint_web">open an app or search the web…</string>
+    <string name="phone_prompt_web">web</string>
+    <!-- Under "web" in the agent menu: the search engine style picks. -->
+    <string name="phone_prompt_search_web">search %1$s</string>
+    <string name="phone_speech_no_answer">the speech recognizer didn\'t answer</string>
+
+    <!-- Style's tabs. -->
+    <string name="phone_style_tab_theme">theme</string>
+    <string name="phone_style_tab_home">home</string>
+    <string name="phone_style_tab_drawer">drawer</string>
+    <string name="phone_style_tab_widgets">widgets</string>
+    <string name="phone_style_tab_bars">bars</string>
+    <string name="phone_style_tab_terminal">terminal</string>
+    <string name="phone_style_corners_sleek">sleek</string>
+    <string name="phone_style_wallpaper">wallpaper</string>
+    <string name="phone_style_wallpaper_android">android\'s</string>
+    <string name="phone_style_wallpaper_theme">the theme\'s</string>
+    <string name="phone_style_wallpaper_hint">the launcher draws nothing over it; Linux apps keep the theme\'s background</string>
+    <string name="phone_style_icon_pack">icon pack</string>
+    <string name="phone_style_icon_pack_none">each app\'s own</string>
+    <string name="phone_style_terminal_opacity_hint">see-through also needs foot\'s alpha, under [colors] in ~/.config/foot/foot.ini</string>
+    <string name="phone_style_keyboard">keyboard</string>
+    <string name="phone_style_keyboard_voice">voice + clipboard</string>
+    <string name="phone_style_keyboard_plain">plain keys</string>
+    <string name="phone_style_keyboard_hint">voice + clipboard shows the keyboard\'s mic and clipboard; it may autocorrect commands · from the next time the keyboard opens</string>
+
+    <!-- Style's phone-only options, in its tabs. -->
+    <string name="phone_style_launcher_widgets_font">launcher &amp; widgets font</string>
+    <string name="phone_style_app_names">app names</string>
+    <string name="phone_style_dock">dock</string>
+    <string name="phone_style_bare">bare</string>
+    <string name="phone_style_pill">pill</string>
+    <string name="phone_style_prompt_bar">prompt bar</string>
+    <string name="phone_style_always">always</string>
+    <string name="phone_style_with_apps">with apps</string>
+    <string name="phone_style_letter_rail">letter rail</string>
+    <string name="phone_style_most_used_row">most used row</string>
+    <string name="phone_style_new_apps">new apps</string>
+    <string name="phone_style_dot">dot</string>
+    <string name="phone_style_no_dot">no dot</string>
+    <string name="phone_style_list">list</string>
+    <string name="phone_style_sections">sections</string>
+    <string name="phone_style_one_list">one list</string>
+    <string name="phone_style_blur">blur</string>
+    <string name="phone_style_strip">strip</string>
+    <string name="phone_style_web_search">web search</string>
+    <string name="phone_style_sort">sort</string>
+    <string name="phone_style_layout">layout</string>
+    <string name="phone_style_categories">categories</string>
+    <string name="phone_style_hidden_apps">hidden apps</string>
+    <string name="phone_style_dock_size">dock size</string>
+    <string name="phone_style_small">small</string>
+    <string name="phone_style_large">large</string>
+    <string name="phone_style_settings_strip">settings strip</string>
+    <string name="phone_style_rows">rows</string>
+    <string name="phone_style_normal">normal</string>
+    <string name="phone_style_solid">solid</string>
+    <string name="phone_style_dim">dim</string>
+    <string name="phone_style_see_through">see-through</string>
+    <string name="phone_style_strong">strong</string>
+    <string name="phone_style_a_z">a–z</string>
+    <string name="phone_style_most_used">most used</string>
+    <string name="phone_style_newest">newest</string>
+    <string name="phone_style_smart_launcher">smart launcher</string>
+    <string name="phone_style_android">android</string>
+    <string name="phone_style_locked">locked</string>
+    <!-- Hidden apps without the lock, as an adjective. -->
+    <string name="phone_style_open">open</string>
+    <string name="phone_style_long_press_the_space_between_home">long-press the space between home\'s apps and the dock for settings</string>
+    <string name="phone_style_tiles_below_the_last_row_move">tiles below the last row move up at their size, or to a later page; more rows later won\'t move them back</string>
+    <string name="phone_style_pages_swipe_sideways_between_categories_or">pages: swipe sideways between categories, or tap one in the bar under them; your groups get pages too</string>
+    <string name="phone_style_style_toml_s_terminal_extra_keys">style.toml\'s terminal.extra-keys sets the keys</string>
+    <string name="phone_style_turn_off_the_lock_on_hidden">turn off the lock on hidden apps</string>
+
+    <!-- The picker of Android apps' widgets, from home's menu. -->
+    <string name="phone_widgets_title">android widgets</string>
+    <string name="phone_widgets_search">search widgets</string>
+    <string name="phone_widgets_loading">loading…</string>
+    <string name="phone_widgets_none_offered">no app offers widgets</string>
+    <string name="phone_widgets_no_match">no widgets match</string>
+    <plurals name="phone_widgets_count">
+        <item quantity="one">%1$d widget</item>
+        <item quantity="other">%1$d widgets</item>
+    </plurals>
+
+    <!-- An Android widget on home whose app was uninstalled. -->
+    <string name="phone_widget_gone">widget gone · its app was removed</string>
+
+    <!-- The icon pack screen, from style, and an app's customize picking one icon. -->
+    <string name="phone_icon_pack_title">icon pack</string>
+
+    <!-- Under "each app's own", the choice of no icon pack. -->
+    <string name="phone_icon_pack_own_hint">the icons apps come with</string>
+
+    <!-- Under a pack style.toml names that isn't installed. -->
+    <string name="phone_icon_pack_missing">not on the phone · apps show their own icons</string>
+    <string name="phone_icon_pack_none_installed">no icon packs on the phone; packs made for Nova, ADW or Lawnchair work here</string>
+    <string name="phone_icon_pack_footer">An app\'s customize can take any one of a pack\'s icons, and that one stays.</string>
+    <string name="phone_icon_pack_footer_none">no icon packs on the phone; packs made for Nova, ADW or Lawnchair work here. An app\'s customize can take any one of a pack\'s icons, and that one stays.</string>
+    <string name="phone_icon_pack_unreadable">this pack\'s icons couldn\'t be read</string>
+    <string name="phone_icon_pack_reading">reading the pack…</string>
+    <plurals name="phone_icon_pack_search">
+        <item quantity="one">search %1$d icon by app</item>
+        <item quantity="other">search %1$d icons by app</item>
+    </plurals>
+    <string name="phone_icon_pack_empty">this pack lists no icons</string>
+    <string name="phone_icon_pack_no_match">no icon for that</string>
+
+    <!-- Over the pack's icons meant for the app being customized: its name. -->
+    <string name="phone_icon_pack_for">for %1$s</string>
+    <string name="phone_icon_pack_all">all</string>
+
+    <!-- An app's customize dialog, from its long-press menu: its name, icon and drawer group. -->
+    <string name="phone_customize_title">customize</string>
+    <string name="phone_customize_name">name</string>
+    <string name="phone_customize_icon">icon</string>
+    <string name="phone_customize_pick_image">pick image</string>
+    <string name="phone_customize_icon_pack">icon pack</string>
+    <string name="phone_customize_reset">reset</string>
+    <string name="phone_customize_unreadable">that image couldn\'t be read</string>
+    <string name="phone_customize_drawer_group">drawer group</string>
+    <string name="phone_customize_cancel">cancel</string>
+    <string name="phone_customize_save">save</string>
+    <string name="phone_customize_new_group">new group</string>
+    <string name="phone_customize_add">add</string>
+
+    <!-- The drawer group picker for the apps picked in the drawer: how many. -->
+    <string name="phone_customize_picked">%1$d picked</string>
+    <string name="phone_customize_no_group">no group</string>
+    <string name="phone_customize_none">none</string>
+
+    <!-- Settings › backup: backing up to Feather and restoring from it. -->
+    <string name="phone_backup_title">backup</string>
+    <string name="phone_backup_about">home and its pages, widgets, the dock, drawer groups, hidden apps, app names and icons, gestures, style, your themes and backgrounds. not linux, and no api keys: a widget\'s secrets need entering again after a restore, and android widgets adding again.</string>
+    <string name="phone_backup_local_network">local network</string>
+    <string name="phone_backup_local_network_subtitle">feather is on your home network: let the launcher reach it</string>
+    <string name="phone_backup_server">server</string>
+    <string name="phone_backup_token">token</string>
+    <string name="phone_backup_token_saved">saved · tap to replace</string>
+    <string name="phone_backup_token_missing">paste a device backups token from feather</string>
+    <string name="phone_backup_forget">forget the token</string>
+    <string name="phone_backup_forget_subtitle">stops backups from this phone; feather keeps the ones it has</string>
+    <string name="phone_backup_this_phone">this phone</string>
+
+    <!-- After the name of the device that is this phone, in the list to restore from. -->
+    <string name="phone_backup_this_phone_suffix">" · this phone"</string>
+    <string name="phone_backup_daily">daily backup</string>
+    <string name="phone_backup_daily_on">on · once a day on wi-fi, when something changed</string>
+    <string name="phone_backup_daily_off">off</string>
+    <string name="phone_backup_not_yet">not backed up yet</string>
+    <string name="phone_backup_now">back up now</string>
+    <string name="phone_backup_restore">restore</string>
+    <string name="phone_backup_refresh">refresh</string>
+    <string name="phone_backup_loading">loading…</string>
+    <string name="phone_backup_none">no backups on feather yet</string>
+
+    <!-- A device's backups on Feather: how many, their size, and when the last one was. -->
+    <plurals name="phone_backup_device">
+        <item quantity="one">%1$d backup · %2$s · last %3$s</item>
+        <item quantity="other">%1$d backups · %2$s · last %3$s</item>
+    </plurals>
+    <string name="phone_backup_never">never</string>
+    <string name="phone_backup_server_title">feather server</string>
+    <string name="phone_backup_server_hint">the address of your Feather</string>
+    <string name="phone_backup_save">save</string>
+    <string name="phone_backup_token_title">device backups token</string>
+    <string name="phone_backup_token_hint">in feather: source tab → api tokens → kind: device backups only, limit to apps: %1$s</string>
+    <string name="phone_backup_token_failed">couldn\'t save it: %1$s</string>
+    <string name="phone_backup_label_title">this phone\'s name</string>
+    <string name="phone_backup_label_hint">how feather lists this phone</string>
+
+    <!-- When backing this phone up before a restore failed: the reason, then the backup chosen. -->
+    <string name="phone_backup_unsafe_title">restore without a safety copy?</string>
+    <string name="phone_backup_unsafe_message">%1$s. restore %2$s\'s backup from %3$s anyway? this phone\'s current setup won\'t be kept anywhere.</string>
+    <string name="phone_backup_unsafe_confirm">restore anyway</string>
+    <string name="phone_backup_restore_title">restore %1$s?</string>
+    <string name="phone_backup_restore_message">its backup from %1$s replaces this phone\'s home, widgets, dock, drawer, icons, gestures, style and themes. this phone is backed up to feather first. the launcher restarts, and linux sessions close.</string>
+
+    <!-- How long ago the last backup was. -->
+    <string name="phone_backup_just_now">just now</string>
+    <string name="phone_backup_minutes_ago">%1$dm ago</string>
+    <string name="phone_backup_hours_ago">%1$dh ago</string>
+    <string name="phone_backup_days_ago">%1$dd ago</string>
+
+    <!-- A dock app that isn't installed, for screen readers. -->
+    <string name="phone_drawer_missing_app">missing app</string>
+
+    <!-- The unseen strip under home's grid, for screen readers: long-pressed, it opens settings. -->
+    <string name="phone_settings_strip">settings</string>
+    <string name="phone_settings_strip_action">open settings</string>
+
+    <!-- Home's menu: Linux apps' windows already open. -->
+    <string name="phone_home_menu_windows">running windows</string>
+    <string name="phone_home_menu_windows_hint">Return to an existing window, not a new app launch.</string>
+
+    <!-- For screen readers: an app and its window number. -->
+    <string name="phone_home_menu_window_action">Return to %1$s, window %2$s</string>
+
+    <!-- For screen readers: an app, its window title and number. -->
+    <string name="phone_home_menu_window_titled_action">Return to %1$s, %2$s, window %3$s</string>
+
+    <!-- The drawer's group menu: renaming a group. -->
+    <string name="phone_drawer_rename_group">rename group</string>
+    <string name="phone_drawer_rename">rename</string>
+
+    <!-- The Linux screen: stopping and starting Linux, and the phone's storage in it. -->
+    <string name="phone_linux_stop">stop</string>
+    <string name="phone_linux_start">start</string>
+    <string name="phone_linux_storage">phone storage</string>
+    <string name="phone_linux_storage_on">on · /sdcard in Linux is the phone\'s storage; Linux apps and agents can read and change every file there</string>
+    <string name="phone_linux_storage_off">off · lets Linux see the phone\'s files at /sdcard; asks Android for all-files access</string>
+    <string name="phone_linux_storage_turn_off">turn off</string>
+    <string name="phone_linux_storage_turn_on">turn on</string>
+
+    <!-- A web search when no browser is installed: the search engine. -->
+    <string name="phone_prompt_no_browser">no browser opens %1$s</string>
+</resources>

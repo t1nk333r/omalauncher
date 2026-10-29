@@ -13,8 +13,10 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import dev.omalauncher.R
 import dev.omalauncher.widgets.AppWidgetItem
 import dev.omalauncher.widgets.AppWidgets
 import android.view.View
@@ -59,7 +61,7 @@ internal fun AppWidgetTile(
     ) {
         if (info == null) {
             Box(Modifier.fillMaxSize().tile(focused).padding(8.dp), contentAlignment = Alignment.Center) {
-                BasicText("widget gone · its app was removed", style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+                BasicText(stringResource(R.string.phone_widget_gone), style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
             }
         } else {
             // The size in dp the app lays the widget out for. Sent only when it changes: each one reaches the app as a broadcast.

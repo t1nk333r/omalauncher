@@ -21,14 +21,18 @@ android {
         applicationId = "dev.omalauncher"
         minSdk = 29
         targetSdk = 37
-        // Phone build: upstream's versionCode × 100 + this build, so it stays above both Play's 25 and the earlier phone builds (14xx to 24xx).
-        versionCode = 2501
-        versionName = "0.14.0-phone.1"
+        // Phone build: upstream's versionCode × 100 + this build, so it stays above both Play's 26 and the earlier phone builds (14xx to 25xx).
+        versionCode = 2601
+        versionName = "0.15.0-phone.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
     }
 
     buildFeatures { buildConfig = true }
+
+    // Phone build: upstream 0.15.0 reads strings with LocalContext's getString in tap handlers, which this check
+    // fails (the tag itself does too). A tap reads the current configuration anyway, so a warning is enough.
+    lint { warning += "LocalContextGetResourceValueCall" }
 
     externalNativeBuild {
         cmake { path = file("src/main/cpp/CMakeLists.txt") }
@@ -58,6 +62,8 @@ android {
     }
 
     buildTypes {
+        // en-XA and ar-XB: text that stays plain English or left-to-right there isn't in res/ yet.
+        debug { isPseudoLocalesEnabled = true }
         release {
             // Shrinks the APK and drops what the app doesn't use, like the owl module's unused parts.
             isMinifyEnabled = true

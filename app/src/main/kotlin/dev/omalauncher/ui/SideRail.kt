@@ -42,6 +42,8 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import dev.omalauncher.R
 import dev.omalauncher.Runtime
 import dev.omalauncher.linux.LinuxState
 
@@ -205,7 +207,12 @@ private fun PromptRail(
     val agent = runtime.agents.default
     // The longest that fits the rail: a letter takes a whole line.
     val hints =
-        listOfNotNull(agent?.takeIf { barAsksAgent(runtime, linuxState) }?.let { "open an app or ask ${it.bin}" } ?: "open an app or search the web", "open an app", "apps")
+        listOfNotNull(
+            agent?.takeIf { barAsksAgent(runtime, linuxState) }?.let { stringResource(R.string.home_prompt_hint_agent, it.bin) }
+                ?: stringResource(R.string.phone_prompt_hint_web),
+            stringResource(R.string.home_prompt_hint),
+            stringResource(R.string.home_prompt_hint_short),
+        )
     val style = Mono.copy(fontSize = TextSize.Item, color = Palette.muted)
     Column(
         Modifier

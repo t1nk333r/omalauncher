@@ -25,9 +25,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.omalauncher.LocalNetwork
+import dev.omalauncher.R
 import dev.omalauncher.backup.Backups
 import dev.omalauncher.backup.FeatherBackups
 import kotlinx.coroutines.launch
@@ -101,81 +104,86 @@ fun BackupScreen(
     // Again after each backup, so this phone's new one shows.
     LaunchedEffect(hasToken, server, last?.at) { if (hasToken) refresh() }
 
-    OverlayPanel("backup", onDismiss, contentWidth = ReadingWidth) {
+    OverlayPanel(stringResource(R.string.phone_backup_title), onDismiss, contentWidth = ReadingWidth) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item(key = "about") {
                 BasicText(
-                    "home and its pages, widgets, the dock, drawer groups, hidden apps, app names and icons, gestures, style, your themes and backgrounds. " +
-                        "not linux, and no api keys: a widget's secrets need entering again after a restore, and android widgets adding again.",
+                    stringResource(R.string.phone_backup_about),
                     style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
                 )
             }
             if (localNetworkMissing) {
                 item(key = "local") {
-                    SettingRow("local network", "feather is on your home network: let the launcher reach it") { askLocalNetwork.launch(LocalNetwork.PERMISSION) }
+                    SettingRow(stringResource(R.string.phone_backup_local_network), stringResource(R.string.phone_backup_local_network_subtitle)) { askLocalNetwork.launch(LocalNetwork.PERMISSION) }
                 }
             }
-            item(key = "server") { SettingRow("server", server) { editing = "server" } }
+            item(key = "server") { SettingRow(stringResource(R.string.phone_backup_server), server) { editing = "server" } }
             item(key = "token") {
-                SettingRow("token", tokenError ?: if (hasToken) "saved · tap to replace" else "paste a device backups token from feather") { editing = "token" }
+                SettingRow(stringResource(R.string.phone_backup_token), tokenError ?: stringResource(if (hasToken) R.string.phone_backup_token_saved else R.string.phone_backup_token_missing)) { editing = "token" }
             }
             if (hasToken) {
                 item(key = "forget") {
-                    SettingRow("forget the token", "stops backups from this phone; feather keeps the ones it has") {
+                    SettingRow(stringResource(R.string.phone_backup_forget), stringResource(R.string.phone_backup_forget_subtitle)) {
                         backups.setToken("")
                         hasToken = backups.hasToken
                         tokenError = null
                     }
                 }
             }
-            item(key = "label") { SettingRow("this phone", label) { editing = "label" } }
+            item(key = "label") { SettingRow(stringResource(R.string.phone_backup_this_phone), label) { editing = "label" } }
             item(key = "daily") {
-                SettingRow("daily backup", if (daily) "on · once a day on wi-fi, when something changed" else "off") {
+                SettingRow(stringResource(R.string.phone_backup_daily), stringResource(if (daily) R.string.phone_backup_daily_on else R.string.phone_backup_daily_off)) {
                     daily = !daily
                     backups.daily = daily
                 }
             }
             item(key = "now") {
                 Row(Modifier.card(), verticalAlignment = Alignment.CenterVertically) {
-                    val status = busy ?: last?.let { "${it.message} · ${ago(it.at)}" } ?: "not backed up yet"
+                    val status = busy ?: last?.let { "${it.message} · ${ago(it.at)}" } ?: stringResource(R.string.phone_backup_not_yet)
                     BasicText(
                         status,
                         Modifier.weight(1f),
                         style = Mono.copy(color = if (busy == null && last?.ok == false) Palette.red else Palette.muted, fontSize = TextSize.Small),
                     )
                     if (busy == null && hasToken) {
-                        BracketAction("back up now", Palette.accent) { backups.scope.launch { backups.backUp() } }
+                        BracketAction(stringResource(R.string.phone_backup_now), Palette.accent) { backups.scope.launch { backups.backUp() } }
                     }
                 }
             }
             if (hasToken) {
                 item(key = "restore-label") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        SectionLabel("restore", Modifier.weight(1f))
-                        BracketAction("refresh", Palette.muted, onClick = ::refresh)
+                        SectionLabel(stringResource(R.string.phone_backup_restore), Modifier.weight(1f))
+                        BracketAction(stringResource(R.string.phone_backup_refresh), Palette.muted, onClick = ::refresh)
                     }
                 }
                 val list = devices
                 when {
-                    list == null -> item(key = "loading") { Muted("loading…") }
+                    list == null -> item(key = "loading") { Muted(stringResource(R.string.phone_backup_loading)) }
                     listError != null -> item(key = "error") { Muted(listError.orEmpty(), Palette.red) }
-                    list.isEmpty() -> item(key = "none") { Muted("no backups on feather yet") }
+                    list.isEmpty() -> item(key = "none") { Muted(stringResource(R.string.phone_backup_none)) }
                     else ->
                         items(list, key = { "device:" + it.id }) { d ->
                             Column(Modifier.card(onClick = { open(d) })) {
                                 val mine = d.id == backups.deviceId
-                                BasicText(d.label + if (mine) " · this phone" else "", style = Mono.copy(fontSize = TextSize.Item))
+                                BasicText(d.label + if (mine) stringResource(R.string.phone_backup_this_phone_suffix) else "", style = Mono.copy(fontSize = TextSize.Item))
                                 BasicText(
-                                    "${d.snapshots} backup${if (d.snapshots == 1) "" else "s"} · ${mb(d.size)} · last ${d.lastBackup?.let(::local) ?: "never"}",
+                                    pluralStringResource(
+                                        R.plurals.phone_backup_device,
+                                        d.snapshots,
+                                        d.snapshots,
+                                        mb(d.size),
+                                        d.lastBackup?.let(::local) ?: stringResource(R.string.phone_backup_never),
+                                    ),
                                     style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
                                 )
                                 if (opened == d.id) {
                                     val shots = snapshots[d.id]
-                                    if (shots == null) Muted("loading…")
+                                    if (shots == null) Muted(stringResource(R.string.phone_backup_loading))
                                     for (s in shots.orEmpty()) {
                                         Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                                             BasicText("${local(s.created)} · ${mb(s.size)}", Modifier.weight(1f), style = Mono.copy(fontSize = TextSize.Small))
-                                            if (busy == null) BracketAction("restore", Palette.accent) { confirm = d to s }
+                                            if (busy == null) BracketAction(stringResource(R.string.phone_backup_restore), Palette.accent) { confirm = d to s }
                                         }
                                     }
                                 }
@@ -188,25 +196,25 @@ fun BackupScreen(
 
     when (editing) {
         "server" ->
-            TextDialog("feather server", server, "save", hint = "the address of your Feather", onDismiss = { editing = null }) {
+            TextDialog(stringResource(R.string.phone_backup_server_title), server, stringResource(R.string.phone_backup_save), hint = stringResource(R.string.phone_backup_server_hint), onDismiss = { editing = null }) {
                 backups.server = it
                 server = backups.server
                 editing = null
             }
         "token" ->
             TextDialog(
-                "device backups token",
+                stringResource(R.string.phone_backup_token_title),
                 "",
-                "save",
-                hint = "in feather: source tab → api tokens → kind: device backups only, limit to apps: ${context.packageName}",
+                stringResource(R.string.phone_backup_save),
+                hint = stringResource(R.string.phone_backup_token_hint, context.packageName),
                 onDismiss = { editing = null },
             ) {
-                tokenError = runCatching { backups.setToken(it) }.exceptionOrNull()?.let { e -> "couldn't save it: ${e.message}" }
+                tokenError = runCatching { backups.setToken(it) }.exceptionOrNull()?.let { e -> context.getString(R.string.phone_backup_token_failed, e.message) }
                 hasToken = backups.hasToken
                 editing = null
             }
         "label" ->
-            TextDialog("this phone's name", label, "save", hint = "how feather lists this phone", onDismiss = { editing = null }) {
+            TextDialog(stringResource(R.string.phone_backup_label_title), label, stringResource(R.string.phone_backup_save), hint = stringResource(R.string.phone_backup_label_hint), onDismiss = { editing = null }) {
                 backups.label = it
                 label = backups.label
                 editing = null
@@ -215,11 +223,9 @@ fun BackupScreen(
 
     unsafe?.let { (device, snapshot) ->
         ConfirmDialog(
-            title = "restore without a safety copy?",
-            message =
-                "${last?.message.orEmpty()}. restore ${device.label}'s backup from ${local(snapshot.created)} anyway? " +
-                    "this phone's current setup won't be kept anywhere.",
-            confirm = "restore anyway",
+            title = stringResource(R.string.phone_backup_unsafe_title),
+            message = stringResource(R.string.phone_backup_unsafe_message, last?.message.orEmpty(), device.label, local(snapshot.created)),
+            confirm = stringResource(R.string.phone_backup_unsafe_confirm),
             onDismiss = backups::dismissUnsafe,
         ) {
             backups.dismissUnsafe()
@@ -229,11 +235,9 @@ fun BackupScreen(
 
     confirm?.let { (device, snapshot) ->
         ConfirmDialog(
-            title = "restore ${device.label}?",
-            message =
-                "its backup from ${local(snapshot.created)} replaces this phone's home, widgets, dock, drawer, icons, gestures, style and themes. " +
-                    "this phone is backed up to feather first. the launcher restarts, and linux sessions close.",
-            confirm = "restore",
+            title = stringResource(R.string.phone_backup_restore_title, device.label),
+            message = stringResource(R.string.phone_backup_restore_message, local(snapshot.created)),
+            confirm = stringResource(R.string.phone_backup_restore),
             onDismiss = { confirm = null },
         ) {
             confirm = null
@@ -268,12 +272,13 @@ private fun mb(bytes: Long) = "%.1f MB".format(bytes / 1048576.0)
 
 private fun local(iso: String) = Backups.localTime(iso)
 
+@Composable
 private fun ago(millis: Long): String {
     val minutes = (System.currentTimeMillis() - millis) / 60_000
     return when {
-        minutes < 1 -> "just now"
-        minutes < 60 -> "${minutes}m ago"
-        minutes < 48 * 60 -> "${minutes / 60}h ago"
-        else -> "${minutes / (24 * 60)}d ago"
+        minutes < 1 -> stringResource(R.string.phone_backup_just_now)
+        minutes < 60 -> stringResource(R.string.phone_backup_minutes_ago, minutes)
+        minutes < 48 * 60 -> stringResource(R.string.phone_backup_hours_ago, minutes / 60)
+        else -> stringResource(R.string.phone_backup_days_ago, minutes / (24 * 60))
     }
 }

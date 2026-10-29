@@ -43,6 +43,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import dev.omalauncher.R
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -769,12 +771,13 @@ internal fun DockDragIcon(
 @Composable
 private fun MissingDockCell(onRemove: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
+    val missing = stringResource(R.string.phone_drawer_missing_app)
     Box(
         Modifier
             .size(48.dp)
             .clip(LauncherStyle.shape(12.dp))
             .combinedClickable(onClick = { menuOpen = true }, onLongClick = { menuOpen = true })
-            .semantics { contentDescription = "missing app" },
+            .semantics { contentDescription = missing },
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.size(28.dp).alpha(PausedAlpha).frame(1.dp, Palette.border, radius = 14.dp))
@@ -790,7 +793,7 @@ private fun StripCell(
     mask: ImageBitmap?,
     onClick: () -> Unit,
     /** Built when the menu opens: a fresh list of lambdas would keep the cell from skipping recomposition. */
-    actions: () -> List<Pair<String, () -> Unit>>,
+    actions: @Composable () -> List<Pair<String, () -> Unit>>,
     /** Also built when the menu opens. */
     shortcuts: () -> ShortcutMenu? = { null },
     /** As in [AppHit.spoken]. */
@@ -957,7 +960,7 @@ internal fun SettingsButton(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Image(Icons.Gear, "settings", Modifier.size(22.dp), colorFilter = ColorFilter.tint(Palette.accent))
+        Image(Icons.Gear, stringResource(R.string.home_settings), Modifier.size(22.dp), colorFilter = ColorFilter.tint(Palette.accent))
         // Updates are waiting: settings › system updates lists them.
         if ((runtime.updates.pending?.count ?: 0) > 0) {
             Box(
