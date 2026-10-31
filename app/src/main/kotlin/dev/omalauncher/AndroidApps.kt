@@ -1,6 +1,5 @@
 package dev.omalauncher
 
-import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -128,6 +127,24 @@ fun androidShortcutKey(
     ref: ShortcutRef,
     profile: Long?,
 ) = "${ref.packageName}/#${profile ?: ""}#${ref.id}"
+
+/**
+ * App labels by package, looked up once each: the lookup is a binder call. A package that isn't installed (any more)
+ * is called by its name. Not thread-safe; each owner reads it from one thread at a time.
+ */
+class AppLabels(
+    private val context: Context,
+) {
+    private val labels = HashMap<String, String>()
+
+    operator fun get(pkg: String): String =
+        labels.getOrPut(pkg) {
+            runCatching {
+                val pm = context.packageManager
+                pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+            }.getOrDefault(pkg)
+        }
+}
 
 /** What a shortcut is called on home and in the drawer. */
 fun shortcutLabel(info: ShortcutInfo) = (info.shortLabel ?: info.longLabel)?.toString()?.takeIf { it.isNotBlank() } ?: info.id
@@ -296,14 +313,7 @@ class AndroidAppCatalog(
                     addAction(Intent.ACTION_PROFILE_UNAVAILABLE)
                 }
             }
-        val receiver =
-            object : BroadcastReceiver() {
-                override fun onReceive(
-                    context: Context,
-                    intent: Intent,
-                ) = reload()
-            }
-        if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(receiver, changed, Context.RECEIVER_NOT_EXPORTED) else context.registerReceiver(receiver, changed)
+        context.registerNotExported(changed) { reload() }
         reload()
     }
 

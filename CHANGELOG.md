@@ -4,7 +4,42 @@ The most important changes in each release. The Play Store notes for a release
 are in `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
 Dates are when the build was uploaded to Play.
 
-## 0.15.0 (versionCode 26) – unreleased
+## 0.17.0 (versionCode 28) – 2026-10-31
+
+- Voice: a spoken conversation with Claude Code, Grok or OpenCode as a launcher screen of its
+  own, opened from the drawer, the AI bar's mic (holding it still dictates) or `omarchy-voice`.
+  Each open starts a new conversation and the last one can be resumed; a type button switches
+  to typing and reading, with nothing said aloud. It speaks and understands the launcher's six
+  languages.
+- The launcher comes in German and Simplified Chinese.
+- Settings offers to make Omalauncher the default home app while it isn't one.
+- today and fetch shrink to 2x2, and on a short or squeezed tile today's date takes one line so
+  the forecast isn't cut off.
+- On a slow tablet the drawer opens without a pause and swiping past a face with shaders runs
+  smoothly.
+- The store side by side opens on the grid's first entry rather than an empty pane.
+
+## 0.16.0 (versionCode 27) – 2026-10-29
+
+- Settings has a language: the phone's, or one the launcher has its text in. A pick brings
+  every open screen back in it, and widgets' `strings { }` and `lang()` follow it too.
+- The launcher comes in Spanish and Brazilian Portuguese (also for phones set to Portugal's),
+  with the drawer, today, fetch, owl and key bar widgets translated. Play installs carry every
+  language, not just the phone's. Indonesian uses the words Android itself does.
+- A Linux job's log keeps up with progress bars instead of piling them up, holds 200 lines,
+  and opens whole when tapped, red only where something went wrong, with [ copy ] for a bug
+  report (#240).
+- pacman installs bubblewrap again, so glycin and the GTK apps needing it upgrade (#243).
+- With frosted glass, the recent apps and the prompt bar frost too, on home, in the landscape
+  rail and over the open drawer.
+- Owl 17: `ws(url)` listens to a WebSocket server, `send()` talks back and `on x each { }`
+  runs for every message; `pin:` on `http`, `post` and `ws` trusts a LAN server's own
+  certificate by its SHA-256; a scrolling Column or Grid takes `onPull` for pull to refresh.
+- Fixes: picking a language no longer opens a terminal; home's long-press menu wraps its
+  buttons instead of cutting the last one off; rendering a theme no longer empties a folder
+  Omarchy's `current/theme` links to.
+
+## 0.15.0 (versionCode 26) – 2026-10-28
 
 - The launcher speaks Indonesian: with the phone set to Indonesian, all of its text, the
   drawer, the today, fetch and owl widgets and the terminal key bar's spoken key names are

@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.UserHandle
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationCompat
+import dev.omalauncher.AppLabels
 import dev.omalauncher.widgets.lang.Lst
 import dev.omalauncher.widgets.lang.Null
 import dev.omalauncher.widgets.lang.Num
@@ -40,8 +41,7 @@ class Notifications(
     /** Where [value] runs: reading the shade is a binder call with every notification's extras; one at a time, for [labels]. */
     private val worker = Dispatchers.Default.limitedParallelism(1)
 
-    /** App labels by package; the lookup is a binder call. */
-    private val labels = HashMap<String, String>()
+    private val labels = AppLabels(context)
 
     /** What a widget lists: not ongoing ones (music, downloads, the launcher's own service) or group headers. */
     private fun shown(): List<StatusBarNotification> {
@@ -72,14 +72,6 @@ class Notifications(
         }
     }
 
-    private fun label(pkg: String) =
-        labels.getOrPut(pkg) {
-            runCatching {
-                val pm = context.packageManager
-                pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
-            }.getOrDefault(pkg)
-        }
-
     fun value(): Value {
         val available = media.granted && MediaListener.connected != null
         val shown = if (available) shown() else emptyList()
@@ -89,7 +81,7 @@ class Notifications(
                 Obj(
                     mapOf(
                         "key" to Str(sbn.key),
-                        "app" to Str(label(sbn.packageName)),
+                        "app" to Str(labels[sbn.packageName]),
                         "package" to Str(sbn.packageName),
                         // From a work profile or a cloned app; icon is the app's icon from that profile, badge included.
                         "profile" to (kind?.let(::Str) ?: Null),

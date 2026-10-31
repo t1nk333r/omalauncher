@@ -9,6 +9,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.graphicsLayer
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
@@ -285,7 +290,12 @@ private fun DesktopScreen(
             Modifier
                 .fillMaxSize()
                 // Gone while an app is carried out of the drawer, so home shows to drop it on.
-                .graphicsLayer { alpha = if (state.drawerDrag) 0f else state.drawer.value.coerceAtMost(1f) }
+                .graphicsLayer {
+                    alpha = if (state.drawerDrag) 0f else state.drawer.value.coerceAtMost(1f)
+                    // Faded as it draws rather than drawn into a buffer of its own first: one color either way, and a
+                    // full-screen buffer each frame of the slide was most of a slow tablet's GPU time.
+                    compositingStrategy = CompositingStrategy.ModulateAlpha
+                }
                 .background(Palette.panel)
                 // A tap on it closes the drawer; keys move between the drawer's apps, not to it.
                 .focusProperties { canFocus = false }
@@ -298,7 +308,9 @@ private fun DesktopScreen(
     val side = homeSide()
     if (side != null && !panelShown) {
         if (!runtime.terminals.typing) {
-            SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().graphicsLayer { translationX = state.barShift() * size.width }.safePadding())
+            CompositionLocalProvider(LocalBackdrop provides backdrop) {
+                SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().graphicsLayer { translationX = state.barShift() * size.width }.safePadding())
+            }
         }
     } else {
         Column(
@@ -314,51 +326,67 @@ private fun DesktopScreen(
                         val progress = state.drawer.value
                         // Gone while an app is carried out of it, so home shows to drop it on.
                         alpha = if (state.drawerDrag) 0f else progress.coerceAtMost(1f)
+                        // As the backdrop: what overlaps in the panel shows through itself for the moment it fades,
+                        // instead of a full-screen buffer each frame (a Galaxy Tab A8's slide went from 40 ms a frame to 21).
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
                         translationY = (1f - progress) * size.height * 0.6f
                     }
                 // Long-pressing an app opens its menu: the keyboard goes then, once, and stays down.
                 val release = remember(state) { { state.promptRequest = PromptRequest.Release } }
+                // Composed from its first opening on and kept while closed, measured but not placed: it neither draws nor
+                // takes touches then, and opening it again only places and draws it. Composing and measuring its list on
+                // each opening held a Galaxy Tab A8's first frame for 120-220 ms.
                 // Phone build: the drawer is drawer.owl, or the panel gestures › swipe up picks (owl panel).
-                if (panelShown && drawer != null) {
+                var drawerKept by remember(drawer) { mutableStateOf(false) }
+                LaunchedEffect(drawer, panelShown) { if (panelShown) drawerKept = true }
+                if ((panelShown || drawerKept) && drawer != null) {
+                    // It holds keys only while it shows, as when closing it disposed of it.
+                    val keys = if (panelShown) Modifier.holdsKeys(enters = false, traps = false) else Modifier
+                    val hidden = remember(state) { { state.drawer.value <= 0.01f } }
                     // An arrow with nothing focused, as after a tap in it, starts in the drawer.
-                    CompositionLocalProvider(LocalMenuOpened provides release) { UpPanel(runtime, state, drawer, slide.holdsKeys(enters = false, traps = false)) }
+                    CompositionLocalProvider(LocalMenuOpened provides release) {
+                        UpPanel(runtime, state, drawer, hidden, Modifier.placedWhile { panelShown }.then(slide).then(keys))
+                    }
                 }
             }
             // Hidden while a tile types: it would sit on the keyboard, over the tile. They slide with the tile pages,
             // out past a face; swiping up there opens the drawer, which brings them back.
             if (!runtime.terminals.typing || runtime.terminals.keyboardLeaving) {
                 Column(Modifier.graphicsLayer { if (!panelShown) translationX = state.barShift() * size.width }) {
-                    // Home only: the open app list has everything.
-                    // Swiping up or down from any of them does what it does on home, as from the dock on stock launchers.
-                    // Keys go between the strip and home's tiles both ways, which Compose's search doesn't find (see PromptBar).
-                    if (!panelShown) SettingsStrip(runtime, state)
-                    if (LauncherStyle.homePill && !panelShown) {
-                        HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
-                        Spacer(Modifier.height(HomeGap))
+                    // They frost over the wallpaper as home's tiles do, over the open drawer too.
+                    CompositionLocalProvider(LocalBackdrop provides backdrop) {
+                        // Home only: the open app list has everything.
+                        // Swiping up or down from any of them does what it does on home, as from the dock on stock launchers.
+                        // Keys go between the strip and home's tiles both ways, which Compose's search doesn't find (see PromptBar).
+                        if (!panelShown) SettingsStrip(runtime, state)
+                        if (LauncherStyle.homePill && !panelShown) {
+                            HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
+                            Spacer(Modifier.height(HomeGap))
+                        }
+                        if (LauncherStyle.recentApps && !panelShown) {
+                            AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state).focusRequester(state.stripEntry).focusGroup(), home = state.homeEntry)
+                        }
+                        // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
+                        // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
+                        // Dictation stops as it goes: there'd be no mic to show it listening.
+                        val barShown = barOnHome(runtime) || panelShown
+                        if (!barShown) Spacer(Modifier.height(EdgeGap))
+                        // Insets itself by the grid gap, so it lines up with the tiles and the gap still takes taps.
+                        PromptBar(
+                            runtime,
+                            state,
+                            search = search,
+                            highlighted = highlighted,
+                            onLaunch = handlers.launch,
+                            shown = barShown,
+                            modifier =
+                                Modifier
+                                    .homeSwipe(runtime, state)
+                                    .then(if (barShown) Modifier else Modifier.collapsed())
+                                    // Unseen while an app is carried out of the drawer, keeping its room so the drawer stays put.
+                                    .graphicsLayer { alpha = if (state.drawerDrag) 0f else 1f },
+                        )
                     }
-                    if (LauncherStyle.recentApps && !panelShown) {
-                        AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state).focusRequester(state.stripEntry).focusGroup(), home = state.homeEntry)
-                    }
-                    // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
-                    // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
-                    // Dictation stops as it goes: there'd be no mic to show it listening.
-                    val barShown = barOnHome(runtime) || panelShown
-                    if (!barShown) Spacer(Modifier.height(EdgeGap))
-                    // Insets itself by the grid gap, so it lines up with the tiles and the gap still takes taps.
-                    PromptBar(
-                        runtime,
-                        state,
-                        search = search,
-                        highlighted = highlighted,
-                        onLaunch = handlers.launch,
-                        shown = barShown,
-                        modifier =
-                            Modifier
-                                .homeSwipe(runtime, state)
-                                .then(if (barShown) Modifier else Modifier.collapsed())
-                                // Unseen while an app is carried out of the drawer, keeping its room so the drawer stays put.
-                                .graphicsLayer { alpha = if (state.drawerDrag) 0f else 1f },
-                    )
                 }
             }
         }
@@ -383,19 +411,22 @@ private fun DesktopScreen(
     // where it'll be to drop on. An overlay, so the drawer under it keeps its size and the carried app's row its place.
     // Only while the drawer is open: closed mid-drag (Back), home's own dock is back and the overlay mustn't linger.
     if (state.drawerDrag && panelShown) {
-        if (side != null) {
-            SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().safePadding())
-        } else {
-            Column(Modifier.fillMaxSize().safePadding().imePadding(), verticalArrangement = Arrangement.Bottom) {
-                if (LauncherStyle.homePill) {
-                    HomePill(runtime, state)
-                    Spacer(Modifier.height(HomeGap))
+        // The dock frosts here as it does on home.
+        CompositionLocalProvider(LocalBackdrop provides backdrop) {
+            if (side != null) {
+                SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().safePadding())
+            } else {
+                Column(Modifier.fillMaxSize().safePadding().imePadding(), verticalArrangement = Arrangement.Bottom) {
+                    if (LauncherStyle.homePill) {
+                        HomePill(runtime, state)
+                        Spacer(Modifier.height(HomeGap))
+                    }
+                    if (LauncherStyle.dockShown) AppStrip(runtime, state, handlers)
+                    // Where the bar is on home, or the gap to the edge when it isn't there.
+                    val density = LocalDensity.current
+                    val barRoom = state.barHeight.takeIf { it > 0 }?.let { with(density) { it.toDp() } } ?: (PromptBarHeight + HomeGap + EdgeGap)
+                    Spacer(Modifier.height(if (barOnHome(runtime)) barRoom else EdgeGap))
                 }
-                if (LauncherStyle.dockShown) AppStrip(runtime, state, handlers)
-                // Where the bar is on home, or the gap to the edge when it isn't there.
-                val density = LocalDensity.current
-                val barRoom = state.barHeight.takeIf { it > 0 }?.let { with(density) { it.toDp() } } ?: (PromptBarHeight + HomeGap + EdgeGap)
-                Spacer(Modifier.height(if (barOnHome(runtime)) barRoom else EdgeGap))
             }
         }
     }
@@ -570,4 +601,21 @@ private fun Band(
             drawRect(border, r.topLeft, r.size)
         },
     )
+}
+
+/**
+ * Placed only while [shown]; measured all the same, so it's ready to show. Hidden, it keeps the size it last had showing:
+ * the keyboard coming up for a tile doesn't measure it again every frame.
+ */
+@Composable
+private fun Modifier.placedWhile(shown: () -> Boolean): Modifier {
+    val kept = remember { arrayOfNulls<Constraints>(1) }
+    return layout { measurable, constraints ->
+        val show = shown()
+        if (show || kept[0] == null) kept[0] = constraints
+        val placeable = measurable.measure(kept[0]!!)
+        layout(constraints.constrainWidth(placeable.width), constraints.constrainHeight(placeable.height)) {
+            if (show) placeable.place(0, 0)
+        }
+    }
 }
