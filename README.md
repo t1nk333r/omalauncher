@@ -148,6 +148,33 @@ Linux, a widget's secrets or Android widget IDs: enter secrets and add Android
 widgets again after a restore. A restore backs the phone up first, then
 restarts the launcher and puts the backup in place as it starts.
 
+This phone build also lets a coding agent on your computer make widgets and apps:
+settings › pc agent. Turned on, the launcher serves MCP on port 8765, behind a token, to
+the phone itself, private networks (your Wi-Fi, or any other one the phone joins: a
+café's too, so the token matters) and Tailscale; not to mobile data. Android may hold
+its connections while the screen is off. Tap an address there to copy the command that
+adds the phone to Claude Code:
+
+```sh
+ claude mcp add --scope user --transport http omalauncher http://<phone>:8765/mcp --header "Authorization: Bearer <token>"
+```
+
+(The leading space keeps the token out of the shell's history: fish, bash with
+`ignorespace`, zsh with `hist_ignore_space`. "other agents" copies the same as MCP JSON
+config.) The agent can list and read the files in the widgets folder (your widgets' too,
+and the docs), write and delete `.owl` files there, and check one: the launcher loads it
+and sends back its errors and pictures of it with live data, as `owl-check` does in
+Linux. Overwritten and deleted files are kept in the folder's `.pc-agent-history`.
+
+Until you allow commands there, a widget from the computer may only show things, keep its
+own values and use servers on the internet: one that would run Linux commands, read files,
+notifications or your apps, act as you (open apps or links, copy, notify, reply, type), or
+reach the phone itself or your home network is refused, since it could show what's in
+Linux, your coding agents' keys too. Then the agent checks only the files it wrote, and one
+it puts in place of yours starts without your widget's saved values (they're set aside in
+the launcher's own files), since its pictures would show them. `drawer.owl` and
+`keybar.owl` act as you, so editing them needs commands allowed.
+
 ## Building
 
 ```sh

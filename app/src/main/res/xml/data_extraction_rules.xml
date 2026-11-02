@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Cloud backup and device transfer (Android 12+) leave out Linux and Omarchy's release, and (phone build) Feather backups' own settings; see backup_rules.xml. -->
+<!-- Cloud backup and device transfer (Android 12+) leave out Linux and Omarchy's release, and (phone build) Feather backups' and the PC agent's own settings; see backup_rules.xml. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="arch" />
@@ -18,6 +18,10 @@
         <exclude domain="file" path=".restore" />
         <exclude domain="file" path=".restore-kept" />
         <exclude domain="sharedpref" path="backup.xml" />
+        <exclude domain="file" path="pc-agent-token" />
+        <exclude domain="sharedpref" path="pc_agent.xml" />
+        <exclude domain="file" path="pc-agent" />
+        <exclude domain="file" path="widgets/.pc-agent-history" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="arch" />
@@ -36,5 +40,9 @@
         <exclude domain="file" path=".restore" />
         <exclude domain="file" path=".restore-kept" />
         <exclude domain="sharedpref" path="backup.xml" />
+        <exclude domain="file" path="pc-agent-token" />
+        <exclude domain="sharedpref" path="pc_agent.xml" />
+        <exclude domain="file" path="pc-agent" />
+        <exclude domain="file" path="widgets/.pc-agent-history" />
     </device-transfer>
 </data-extraction-rules>

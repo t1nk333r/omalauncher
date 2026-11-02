@@ -48,6 +48,9 @@ enum class SettingsPage {
 
     /** Phone build: settings kept on Feather, and restoring them. */
     Backup,
+
+    /** Phone build: a coding agent on a computer editing widgets and apps (remote/PcAgent.kt). */
+    PcAgent,
 }
 
 /** Opens [page] over the ones in [stack]; one that's already open comes back to the top, closing what's over it. */
@@ -122,6 +125,7 @@ private fun SettingsPage(
                 onLicenses = { stack.push(SettingsPage.Licenses) },
                 onGestures = { stack.push(SettingsPage.Gestures) },
                 onBackup = { stack.push(SettingsPage.Backup) },
+                onPcAgent = { stack.push(SettingsPage.PcAgent) },
             )
         SettingsPage.Style ->
             StyleScreen(runtime, onDismiss = close, onBrowse = { stack.push(SettingsPage.Themes) }, onIconPacks = { stack.push(SettingsPage.IconPacks) }, onAgent = ::agent)
@@ -172,5 +176,6 @@ private fun SettingsPage(
         SettingsPage.Gestures -> GesturesScreen(runtime, onDismiss = close, onAgent = ::agent)
         SettingsPage.IconPacks -> IconPackScreen(runtime, onDismiss = close)
         SettingsPage.Backup -> BackupScreen(runtime.backups, onDismiss = close)
+        SettingsPage.PcAgent -> PcAgentScreen(runtime.pcAgent, onDismiss = close)
     }
 }

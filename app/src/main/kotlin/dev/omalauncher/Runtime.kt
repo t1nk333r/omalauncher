@@ -39,6 +39,7 @@ import dev.omalauncher.linux.defaultApps
 import dev.omalauncher.linux.matches
 import dev.omalauncher.linux.run
 import dev.omalauncher.linux.shellQuote
+import dev.omalauncher.remote.PcAgent
 import dev.omalauncher.theme.Style
 import dev.omalauncher.theme.StyleStore
 import dev.omalauncher.theme.ThemeStore
@@ -116,6 +117,9 @@ class Runtime(
     private val agentDaemon = AgentDaemon(proot, agents)
     val pacman = Pacman(context, proot)
     val widgets = WidgetEngine(context, proot, this)
+
+    /** Phone build: a coding agent on a computer editing widgets and apps, once turned on in settings. */
+    val pcAgent = PcAgent(context, widgets.dir)
 
     /** Widgets' speech(...) and android.speech. */
     val dictation = Dictation(context)
@@ -257,6 +261,7 @@ class Runtime(
             // Widgets don't wait for the theme: they draw with the palette, which is already loaded, and the
             // wallpaper decode is the slow part of themes.load().
             widgets.start()
+            pcAgent.start()
             themes.load()
             style.start()
             // On the first-run screen the download is the screen's job, with progress.

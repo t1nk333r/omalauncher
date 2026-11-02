@@ -252,4 +252,38 @@
 
     <!-- A web search when no browser is installed: the search engine. -->
     <string name="phone_prompt_no_browser">no browser opens %1$s</string>
+
+    <!-- Settings › PC agent: a coding agent on a computer editing widgets and apps over Wi-Fi or Tailscale. -->
+    <string name="phone_settings_pc_agent">pc agent</string>
+    <string name="phone_settings_pc_agent_off">let a coding agent on your computer make widgets and apps</string>
+    <string name="phone_settings_pc_agent_on">on · port %1$d</string>
+    <string name="phone_settings_pc_agent_stuck">on, but not listening · open it to see why</string>
+    <string name="phone_pc_agent_title">pc agent</string>
+    <string name="phone_pc_agent_about">a coding agent on your computer (claude code, omp) can read the widgets folder (your widgets\' files and the docs), write, delete and check widgets and apps there, and see its own as the phone draws them. it reaches the phone from your wi-fi or another private network, or tailscale, and needs the token below. while the screen is off, android may hold its connections. unless you allow commands, the rest of the phone stays closed to it.</string>
+    <string name="phone_pc_agent_access">access</string>
+    <string name="phone_pc_agent_access_off">off · tap to turn on</string>
+    <string name="phone_pc_agent_access_on">on · listening on port %1$d</string>
+    <string name="phone_pc_agent_access_failed">can\'t use port %1$d: %2$s</string>
+    <string name="phone_pc_agent_access_no_token">no token: the phone can\'t make one, or open the one it has · try a new token</string>
+    <string name="phone_pc_agent_commands">widgets that run commands</string>
+    <string name="phone_pc_agent_commands_off">refused · its widgets can show things and use servers on the internet, but not run linux commands, read files, notifications or apps, act as you, or reach the phone or your home network. it checks only widgets it wrote, and one it puts in place of yours starts without your widget\'s saved values</string>
+    <string name="phone_pc_agent_commands_on">allowed · its widgets may run linux commands, read files, notifications and apps, and act as you</string>
+    <string name="phone_pc_agent_commands_confirm_title">allow commands?</string>
+    <string name="phone_pc_agent_commands_confirm_message">a widget can run any linux command and show what it prints, so the agent could read what\'s in linux, your coding agents\' keys too. allow it only for an agent you trust, and keep the token as safe as a password.</string>
+    <string name="phone_pc_agent_commands_confirm">allow</string>
+    <string name="phone_pc_agent_add">add it on your computer</string>
+    <string name="phone_pc_agent_tailscale">tailscale · %1$s</string>
+    <string name="phone_pc_agent_wifi">wi-fi · %1$s</string>
+    <string name="phone_pc_agent_local">network · %1$s</string>
+    <string name="phone_pc_agent_copy_command">tap to copy the claude code command</string>
+    <string name="phone_pc_agent_no_address">no wi-fi or tailscale address right now</string>
+    <string name="phone_pc_agent_other">other agents</string>
+    <string name="phone_pc_agent_other_subtitle">tap to copy the mcp config as json</string>
+    <string name="phone_pc_agent_token">token</string>
+    <string name="phone_pc_agent_token_subtitle">tap to copy it on its own</string>
+    <string name="phone_pc_agent_new_token">new token</string>
+    <string name="phone_pc_agent_new_token_subtitle">the old one stops working; add the phone again on the computer</string>
+    <string name="phone_pc_agent_copied">copied</string>
+    <string name="phone_pc_agent_local_network">local network</string>
+    <string name="phone_pc_agent_local_network_subtitle">let your computer reach the launcher over wi-fi</string>
 </resources>

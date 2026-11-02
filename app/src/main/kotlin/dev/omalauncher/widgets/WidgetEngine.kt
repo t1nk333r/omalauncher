@@ -27,6 +27,7 @@ import dev.omalauncher.ui.Palette
 import dev.omalauncher.theme.Style
 import dev.omalauncher.theme.StyleStore
 import dev.omalauncher.ui.LauncherStyle
+import dev.omalauncher.remote.AgentLedger
 import dev.omalauncher.upgrade.Managed
 import dev.omalauncher.upgrade.Policy
 import dev.omalauncher.upgrade.writeAtomically
@@ -110,6 +111,9 @@ class WidgetEngine(
 
     /** `persist` values, launcher-side like the grid layout, so widget files stay the agent's. */
     private val stateDir = File(context.filesDir, "widget-state")
+
+    /** Phone build: what a PC agent wrote (settings › PC agent), and which of its files start fresh. */
+    private val pcAgent = AgentLedger.of(context.filesDir)
     val specs = mutableStateListOf<WidgetSpec>()
     /**
      * Observed: Linux coming up after the first load recomposes a tile that needs it before the reload starts its
@@ -494,6 +498,18 @@ class WidgetEngine(
         forget(spec.file.name)
     }
 
+    /**
+     * Phone build: [fileName]'s saved values, moved where nothing loads them (the last of each, in case they're
+     * wanted back), for a version a PC agent put in place of one it didn't write.
+     */
+    private fun setStateAside(fileName: String) {
+        val aside = File(stateDir, ".replaced").apply { mkdirs() }
+        for (ext in listOf("json", "secret")) {
+            val f = File(stateDir, "$fileName.$ext")
+            if (f.isFile && !f.renameTo(File(aside, f.name))) f.delete()
+        }
+    }
+
     /** A widget file that's gone takes its place, page and saved values along, so a new file of that name starts fresh. */
     private fun forget(fileName: String) {
         layout.remove(fileName)
@@ -650,6 +666,9 @@ class WidgetEngine(
             }
             prev?.stop()
             val name = spec.file.name
+            // Phone build: a file a PC agent put in place of one it didn't write starts without the values that one kept.
+            val fresh = hashes[name]?.let { pcAgent.takeFresh(name, it) } == true
+            if (fresh) setStateAside(name)
             val inst =
                 WidgetInstance(
                     program,
@@ -668,7 +687,7 @@ class WidgetEngine(
                     linux = { linux },
                     foreground = { (shownApps[name] ?: 0) > 0 || openScreen == name || name in shownPanels },
                 )
-            prev?.let(inst::adopt)
+            if (!fresh) prev?.let(inst::adopt)
             instances[spec.file.name] = inst
             // The spec as it is now, not as loaded: a move to another page (placeOnPage) replaces it without a reload.
             inst.start(scope) { isLive(specs.firstOrNull { it.file.name == name } ?: spec) }

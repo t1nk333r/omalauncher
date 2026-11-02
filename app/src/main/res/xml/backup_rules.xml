@@ -9,7 +9,10 @@
 
   Phone build: nor Feather backups' own settings (backup.xml), its sealed token and a
   staged restore: another install must get its own device ID, and the token only
-  opens with this install's key anyway.
+  opens with this install's key anyway. The same for the PC agent's settings, token and
+  record of what it wrote (pc_agent.xml, pc-agent-token, pc-agent/): a restored phone
+  starts with it off. And the copies of widgets it replaced (widgets/.pc-agent-history),
+  which could pass the quota on their own.
 -->
 <full-backup-content>
     <exclude domain="file" path="arch" />
@@ -28,4 +31,8 @@
     <exclude domain="file" path=".restore" />
     <exclude domain="file" path=".restore-kept" />
     <exclude domain="sharedpref" path="backup.xml" />
+    <exclude domain="file" path="pc-agent-token" />
+    <exclude domain="sharedpref" path="pc_agent.xml" />
+    <exclude domain="file" path="pc-agent" />
+    <exclude domain="file" path="widgets/.pc-agent-history" />
 </full-backup-content>

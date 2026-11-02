@@ -41,6 +41,7 @@ import dev.omalauncher.R
 import dev.omalauncher.Runtime
 import dev.omalauncher.linux.JobState
 import dev.omalauncher.linux.LinuxState
+import dev.omalauncher.remote.PcAgent
 import dev.omalauncher.widgets.Market
 import dev.omalauncher.widgets.WidgetEngine
 import dev.omalauncher.widgets.market.CatalogEntry
@@ -60,11 +61,13 @@ fun SettingsScreen(
     onLicenses: () -> Unit,
     onGestures: () -> Unit,
     onBackup: () -> Unit,
+    onPcAgent: () -> Unit,
 ) {
     val context = LocalContext.current
     val linux by runtime.bootstrap.state.collectAsState()
     val installed = linux == LinuxState.Installed
     val backup by runtime.backups.last.collectAsState()
+    val pcAgent by runtime.pcAgent.status.collectAsState()
     var localNetworkMissing by remember { mutableStateOf(LocalNetwork.missing(context)) }
     val askLocalNetwork =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -140,6 +143,16 @@ fun SettingsScreen(
                 },
                 // Phone build: settings kept on Feather.
                 SettingsRow(R.string.phone_settings_backup, backup?.message ?: stringResource(R.string.phone_settings_backup_subtitle), onBackup),
+                // Phone build: a coding agent on a computer editing widgets and apps.
+                SettingsRow(
+                    R.string.phone_settings_pc_agent,
+                    when (val s = pcAgent) {
+                        is PcAgent.Status.Listening -> stringResource(R.string.phone_settings_pc_agent_on, s.port)
+                        PcAgent.Status.Off -> stringResource(R.string.phone_settings_pc_agent_off)
+                        else -> stringResource(R.string.phone_settings_pc_agent_stuck)
+                    },
+                    onPcAgent,
+                ),
                 SettingsRow(R.string.settings_android, stringResource(R.string.settings_android_subtitle)) {
                     context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 },
