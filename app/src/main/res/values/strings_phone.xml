@@ -279,6 +279,8 @@
     <string name="phone_pc_agent_no_address">no wi-fi or tailscale address right now</string>
     <string name="phone_pc_agent_other">other agents</string>
     <string name="phone_pc_agent_other_subtitle">tap to copy the mcp config as json</string>
+    <string name="phone_pc_agent_notes">notes from the phone</string>
+    <string name="phone_pc_agent_notes_subtitle">tap to copy how to start claude code so it hears when a widget it wrote is changed here or starts failing</string>
     <string name="phone_pc_agent_token">token</string>
     <string name="phone_pc_agent_token_subtitle">tap to copy it on its own</string>
     <string name="phone_pc_agent_new_token">new token</string>

@@ -20,6 +20,9 @@ class AgentLedger(
     /** The hash of [name] as the agent last saved it; null when it didn't, or not since it was deleted. */
     fun written(name: String): String? = read(File(written, name))
 
+    /** Every file the agent has a saved hash for. */
+    fun names(): List<String> = written.list { _, n -> !n.startsWith(".") }.orEmpty().sorted()
+
     fun recordWritten(
         name: String,
         hash: String,

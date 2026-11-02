@@ -209,6 +209,12 @@ class PcAgent(
         private const val ALLOW_COMMANDS = "allow_commands"
         private const val PORT = "port"
 
+        /**
+         * Starts Claude Code so the phone's notes on its event stream reach the model as channel messages (McpServer):
+         * the server it added as "omalauncher" isn't on Anthropic's channel allowlist, so it asks once at startup.
+         */
+        const val CHANNEL_COMMAND = "claude --dangerously-load-development-channels server:omalauncher"
+
         /** A picture's largest size as sent; Claude takes up to 5 MB, and base64 makes it a third larger. */
         private const val MAX_IMAGE = 3_500_000
     }

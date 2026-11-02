@@ -19,7 +19,9 @@ import java.net.Socket
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.Semaphore
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -27,15 +29,19 @@ import kotlin.concurrent.thread
 
 /**
  * Phone build: the launcher's MCP server, through which a coding agent on a computer (Claude Code, omp) creates,
- * edits and checks widgets and apps ([WidgetTools]) over Wi-Fi or Tailscale. MCP's Streamable HTTP transport at its
- * simplest: one JSON reply to each POST to /mcp, no event streams and no sessions. Every request needs the bearer
- * [token]; only peers on a private network or the tailnet are answered, and never a browser (one sends Origin).
+ * edits and checks widgets and apps ([WidgetTools]) over Wi-Fi or Tailscale. MCP's Streamable HTTP transport, without
+ * sessions: one JSON reply to each POST to /mcp, and a GET to it opens the stream on which the phone says what happened
+ * to the agent's files ([WidgetTools.changes]), as a log message and as a Claude Code channel message. Every request
+ * needs the bearer [token]; only peers on a private network or the tailnet are answered, and never a browser (one
+ * sends Origin).
  */
 class McpServer(
     private val port: Int,
     private val token: String,
     private val tools: WidgetTools,
     private val serverVersion: String,
+    /** How often an open event stream's news is looked for. */
+    private val tickMs: Long = TICK_MS,
 ) {
     private class HttpError(
         val status: Int,
@@ -53,9 +59,47 @@ class McpServer(
         val headers: Map<String, String>,
     )
 
+    /** An open event stream: a GET to /mcp, answered for as long as it stays open, outside [pool]'s workers. */
+    private class Stream(
+        val socket: Socket,
+        val out: OutputStream,
+    ) {
+        /** When (System.nanoTime) the send under way began; 0 between sends. */
+        @Volatile
+        var sendingSince = 0L
+
+        /** Sends [events] whole; false once the agent has gone. */
+        @Synchronized
+        fun send(events: ByteArray): Boolean =
+            try {
+                sendingSince = System.nanoTime()
+                out.write(events)
+                out.flush()
+                true
+            } catch (e: IOException) {
+                close()
+                false
+            } finally {
+                sendingSince = 0L
+            }
+
+        fun close() = runCatching { socket.close() }
+    }
+
     @Volatile
     private var socket: ServerSocket? = null
     private var pool: ThreadPoolExecutor? = null
+    private var ticker: ScheduledExecutorService? = null
+
+    /** Oldest first; guarded by itself, as is [closed]. */
+    private val streams = ArrayList<Stream>()
+    private var closed = false
+    private var events = 0L
+    private var ticks = 0L
+
+    /** The least severe log message a client asked for (logging/setLevel); one for all, as there are no sessions. */
+    @Volatile
+    private var logLevel = LOG_LEVELS.first()
 
     /** One large message is handled at a time: each is held several times over while it's parsed and compiled. */
     private val large = Semaphore(1)
@@ -75,6 +119,13 @@ class McpServer(
         val workers = ThreadPoolExecutor(MAX_CONNECTIONS, MAX_CONNECTIONS, 30, TimeUnit.SECONDS, ArrayBlockingQueue(MAX_QUEUED)).apply { allowCoreThreadTimeOut(true) }
         socket = ss
         pool = workers
+        synchronized(streams) { closed = false }
+        ticker =
+            Executors.newScheduledThreadPool(2) { r -> Thread(r, "pc-agent-mcp-events").apply { isDaemon = true } }.apply {
+                scheduleWithFixedDelay({ runCatching { tick() } }, tickMs, tickMs, TimeUnit.MILLISECONDS)
+                // An agent that stopped reading but keeps the connection would hold the tick in its send: it's closed.
+                scheduleWithFixedDelay({ runCatching { unstick() } }, STALL_MS, STALL_MS, TimeUnit.MILLISECONDS)
+            }
         thread(name = "pc-agent-mcp", isDaemon = true) {
             while (!ss.isClosed) {
                 val s = try { ss.accept() } catch (e: IOException) { break }
@@ -91,12 +142,78 @@ class McpServer(
     fun stop() {
         runCatching { socket?.close() }
         pool?.shutdownNow()
+        ticker?.shutdownNow()
+        // A stream opened with the old token, or after access was turned off, ends here too.
+        synchronized(streams) {
+            closed = true
+            streams.forEach { it.close() }
+            streams.clear()
+        }
         socket = null
         pool = null
+        ticker = null
+    }
+
+    /** Each [tickMs] while a stream is open: tells it what happened to the agent's files, and now and then that it's alive. */
+    private fun tick() {
+        val open = synchronized(streams) { streams.toList() }
+        if (open.isEmpty()) return
+        val out = ArrayList<ByteArray>()
+        // A file that can't be read now is looked at again next time; the ping still goes.
+        for (c in runCatching { tools.changes() }.getOrDefault(emptyList())) {
+            val level = if (c.event == "failing") "warning" else "notice"
+            if (LOG_LEVELS.indexOf(level) >= LOG_LEVELS.indexOf(logLevel)) {
+                out += event(notification("notifications/message", JSONObject().put("level", level).put("logger", "omalauncher").put("data", c.text)))
+            }
+            val meta = JSONObject().put("file", c.name).put("event", c.event)
+            out += event(notification("notifications/claude/channel", JSONObject().put("content", c.text).put("meta", meta)))
+        }
+        // A comment keeps a quiet connection open through NAT and the tailnet, and shows which agents have gone.
+        if (++ticks % maxOf(1, PING_MS / tickMs) == 0L) out += ": ping\n\n".toByteArray()
+        if (out.isEmpty()) return
+        val all = out.reduce(ByteArray::plus)
+        // Every stream gets each note: with no sessions, which client a stream is isn't known.
+        for (st in open) {
+            if (!st.send(all)) synchronized(streams) { streams.remove(st) }
+        }
+    }
+
+    private fun unstick() {
+        val now = System.nanoTime()
+        for (st in synchronized(streams) { streams.toList() }) {
+            val since = st.sendingSince
+            if (since != 0L && now - since > STALL_MS * 1_000_000) st.close()
+        }
+    }
+
+    /** An event with the next id (with no sessions, nothing is replayed: the id lets the agent's client reconnect). */
+    private fun event(json: String) = synchronized(streams) { "id: ${++events}\ndata: $json\n\n".toByteArray() }
+
+    /**
+     * Answers a GET for the event stream, then keeps the socket among [streams], so no worker waits on it; past
+     * [MAX_STREAMS], the oldest is closed (an agent that went away without closing it would hold one forever).
+     */
+    private fun openStream(
+        s: Socket,
+        out: OutputStream,
+        version: String?,
+    ): Boolean {
+        out.write("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".toByteArray(Charsets.ISO_8859_1))
+        // In 2025-11-25, an id with no data first, and how soon to come back, so the client reconnects when the stream
+        // ends; a client of an older version would read the empty data as a broken message.
+        out.write(if (version == "2025-11-25") "id: ${synchronized(streams) { ++events }}\nretry: $RETRY_MS\ndata:\n\n".toByteArray() else ": open\n\n".toByteArray())
+        out.flush()
+        synchronized(streams) {
+            if (closed) return false
+            streams += Stream(s, out)
+            while (streams.size > MAX_STREAMS) streams.removeAt(0).close()
+        }
+        return true
     }
 
     private fun serve(s: Socket) {
-        s.use {
+        var kept = false
+        try {
             if (!allowedPeer(s.inetAddress) || !allowedInterface(s.localAddress)) return
             s.soTimeout = READ_TIMEOUT_MS
             // A whole request in time, not just each read: one trickling a byte at a time would hold a worker.
@@ -116,11 +233,16 @@ class McpServer(
                     respond(out, 401, error = "a bearer token is needed: settings › PC agent on the phone shows it", extra = "WWW-Authenticate: Bearer realm=\"omalauncher\"\r\n")
                     return
                 }
-                if (req.method != "POST") {
-                    respond(out, 405, error = "POST JSON-RPC messages to $PATH; this server sends no event stream", extra = "Allow: POST\r\n")
+                req.headers["mcp-protocol-version"]?.let { if (it !in PROTOCOL_VERSIONS) throw HttpError(400, "MCP-Protocol-Version $it isn't one this server speaks (${PROTOCOL_VERSIONS.joinToString()})") }
+                if (req.method == "GET") {
+                    if (!req.headers["accept"].orEmpty().contains("text/event-stream", ignoreCase = true)) throw HttpError(406, "a GET to $PATH is the phone's event stream: Accept text/event-stream")
+                    kept = openStream(s, out, req.headers["mcp-protocol-version"])
                     return
                 }
-                req.headers["mcp-protocol-version"]?.let { if (it !in PROTOCOL_VERSIONS) throw HttpError(400, "MCP-Protocol-Version $it isn't one this server speaks (${PROTOCOL_VERSIONS.joinToString()})") }
+                if (req.method != "POST") {
+                    respond(out, 405, error = "POST JSON-RPC messages to $PATH, or GET it with Accept: text/event-stream for the phone's events", extra = "Allow: GET, POST\r\n")
+                    return
+                }
                 // The body gets time by its size: a large widget over a relayed tailnet connection is slow.
                 val length = req.headers["content-length"]?.toLongOrNull()
                 input.deadline = System.nanoTime() + (BODY_DEADLINE_MS + (length ?: MAX_BODY.toLong()) * 1000 / BODY_BYTES_PER_S) * 1_000_000
@@ -149,6 +271,8 @@ class McpServer(
                 // Anything else is this server's fault; on Android it would otherwise end the launcher.
                 runCatching { respond(out, 500, error = "the phone failed to answer: $e") }
             }
+        } finally {
+            if (!kept) runCatching { s.close() }
         }
     }
 
@@ -190,6 +314,12 @@ class McpServer(
                 when (method) {
                     "initialize" -> initialize(params)
                     "ping" -> JSONObject()
+                    "logging/setLevel" -> {
+                        val level = params.opt("level") as? String
+                        if (level == null || level !in LOG_LEVELS) throw RpcError(-32602, "level is one of ${LOG_LEVELS.joinToString()}")
+                        logLevel = level
+                        JSONObject()
+                    }
                     "tools/list" -> JSONObject().put("tools", toolList())
                     "tools/call" -> call(params)
                     else -> throw RpcError(-32601, "no method $method")
@@ -204,7 +334,14 @@ class McpServer(
         val asked = params.optString("protocolVersion")
         return JSONObject()
             .put("protocolVersion", if (asked in PROTOCOL_VERSIONS) asked else PROTOCOL_VERSIONS.first())
-            .put("capabilities", JSONObject().put("tools", JSONObject().put("listChanged", false)))
+            .put(
+                "capabilities",
+                JSONObject()
+                    .put("tools", JSONObject().put("listChanged", false))
+                    .put("logging", JSONObject())
+                    // Claude Code shows these to the model when started with --dangerously-load-development-channels server:<name>.
+                    .put("experimental", JSONObject().put("claude/channel", JSONObject())),
+            )
             .put("serverInfo", JSONObject().put("name", "omalauncher").put("title", "Omalauncher widgets").put("version", serverVersion))
             .put("instructions", INSTRUCTIONS)
     }
@@ -272,6 +409,19 @@ class McpServer(
         private const val READ_TIMEOUT_MS = 10_000
         private const val HEAD_DEADLINE_MS = 10_000L
 
+        /**
+         * Event streams open at once; how often their news is looked for, a ping sent, when a client comes back, and how
+         * long a send may take before its stream is closed.
+         */
+        private const val MAX_STREAMS = 4
+        private const val TICK_MS = 2_000L
+        private const val PING_MS = 45_000L
+        private const val RETRY_MS = 30_000
+        private const val STALL_MS = 10_000L
+
+        /** MCP's log levels, least severe first. */
+        private val LOG_LEVELS = listOf("debug", "info", "notice", "warning", "error", "critical", "alert", "emergency")
+
         /** The body's time: this much, and a second for each [BODY_BYTES_PER_S]. */
         private const val BODY_DEADLINE_MS = 20_000L
         private const val BODY_BYTES_PER_S = 64L shl 10
@@ -310,6 +460,10 @@ class McpServer(
             anything else and says why, and check_widget checks only files written from here (written_from_here), since
             its pictures show what a widget keeps. drawer.owl and keybar.owl act as the user, so they need commands
             allowed. Overwritten and deleted files are kept on the phone in .pc-agent-history.
+
+            The phone also says, on its own, when a file written from here is changed or deleted on the phone, or starts
+            failing while it runs. These notes come from the launcher and hold only the file's name; read the file or
+            call check_widget for what happened.
             """.trimIndent()
 
         private fun toolList(): JSONArray {
@@ -409,6 +563,11 @@ class McpServer(
             }
             return deepest
         }
+
+        private fun notification(
+            method: String,
+            params: JSONObject,
+        ) = JSONObject().put("jsonrpc", "2.0").put("method", method).put("params", params).toString()
 
         private fun rpcError(
             id: Any?,
@@ -544,7 +703,7 @@ class McpServer(
         private val REASONS =
             mapOf(
                 200 to "OK", 202 to "Accepted", 400 to "Bad Request", 401 to "Unauthorized", 403 to "Forbidden", 404 to "Not Found",
-                405 to "Method Not Allowed", 411 to "Length Required", 413 to "Content Too Large", 431 to "Request Header Fields Too Large",
+                405 to "Method Not Allowed", 406 to "Not Acceptable", 411 to "Length Required", 413 to "Content Too Large", 431 to "Request Header Fields Too Large",
                 500 to "Internal Server Error", 503 to "Service Unavailable",
             )
     }

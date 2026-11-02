@@ -22,10 +22,11 @@ class McpServerTest {
     @get:Rule
     val app = TemporaryFolder()
 
-    private val server by lazy {
-        val tools = WidgetTools(tmp.root, allowCommands = { false }, AgentLedger(app.root), Guard { emptyList() }, loadWaitMs = 200, previewWaitMs = 200, pollMs = 10)
-        McpServer(0, token, tools, "test")
+    private val tools by lazy {
+        WidgetTools(tmp.root, allowCommands = { false }, AgentLedger(app.root), Guard { emptyList() }, loadWaitMs = 200, previewWaitMs = 200, pollMs = 10)
     }
+
+    private val server by lazy { McpServer(0, token, tools, "test", tickMs = 50) }
 
     @After
     fun stop() = server.stop()
@@ -48,6 +49,8 @@ class McpServerTest {
         val known = result(server.handle(rpc("initialize", JSONObject().put("protocolVersion", "2025-06-18"))))
         assertEquals("2025-06-18", known.getString("protocolVersion"))
         assertTrue(known.getJSONObject("capabilities").has("tools"))
+        assertTrue(known.getJSONObject("capabilities").has("logging"))
+        assertTrue(known.getJSONObject("capabilities").getJSONObject("experimental").has("claude/channel"))
         assertTrue(known.getString("instructions").contains("check_widget"))
         val unknown = result(server.handle(rpc("initialize", JSONObject().put("protocolVersion", "1999-01-01"))))
         assertEquals("2025-11-25", unknown.getString("protocolVersion"))
@@ -137,7 +140,15 @@ class McpServerTest {
         assertEquals(401, post(rpc("ping"), headers = "Authorization: Bearer wrong\r\n").first)
         assertEquals(401, post(rpc("ping"), headers = "").first)
         assertEquals(403, post(rpc("ping"), headers = "Authorization: Bearer $token\r\nOrigin: http://evil.example\r\n").first)
-        assertEquals(405, http("GET /mcp HTTP/1.1\r\nAuthorization: Bearer $token\r\n\r\n").first)
+        // A GET is the event stream only; nothing else but POST is served.
+        assertEquals(406, http("GET /mcp HTTP/1.1\r\nAuthorization: Bearer $token\r\n\r\n").first)
+        assertEquals(405, http("DELETE /mcp HTTP/1.1\r\nAuthorization: Bearer $token\r\n\r\n").first)
+        // The stream is behind the same checks as a request.
+        val accept = "Accept: text/event-stream\r\n"
+        assertEquals(401, http("GET /mcp HTTP/1.1\r\n$accept\r\n").first)
+        assertEquals(401, http("GET /mcp HTTP/1.1\r\nAuthorization: Bearer wrong\r\n$accept\r\n").first)
+        assertEquals(403, http("GET /mcp HTTP/1.1\r\nAuthorization: Bearer $token\r\nOrigin: http://evil.example\r\n$accept\r\n").first)
+        assertEquals(400, http("GET /mcp HTTP/1.1\r\nAuthorization: Bearer $token\r\nMCP-Protocol-Version: 1999-01-01\r\n$accept\r\n").first)
         assertEquals(404, http("POST /other HTTP/1.1\r\nAuthorization: Bearer $token\r\nContent-Length: 0\r\n\r\n").first)
         // Before the token: a client looking for OAuth learns there's none, rather than being asked to sign in.
         assertEquals(404, http("GET /.well-known/oauth-protected-resource HTTP/1.1\r\n\r\n").first)
@@ -193,6 +204,78 @@ class McpServerTest {
             assertEquals(emptyList<Throwable>(), uncaught.toList())
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(before)
+        }
+    }
+
+    @Test
+    fun setsTheLogLevel() {
+        assertEquals(0, result(server.handle(rpc("logging/setLevel", JSONObject().put("level", "warning")))).length())
+        assertEquals(-32602, JSONObject(server.handle(rpc("logging/setLevel", JSONObject().put("level", "loud")))!!).getJSONObject("error").getInt("code"))
+    }
+
+    /** A GET for the event stream, its head read: the socket stays open for the events. */
+    private fun stream(version: String = "2025-11-25"): Socket {
+        val s = Socket("127.0.0.1", server.localPort!!)
+        s.soTimeout = 5_000
+        s.getOutputStream().write("GET /mcp HTTP/1.1\r\nAuthorization: Bearer $token\r\nAccept: text/event-stream\r\nMCP-Protocol-Version: $version\r\n\r\n".toByteArray())
+        val head = readUntil(s, "\r\n\r\n")
+        assertTrue(head, head.startsWith("HTTP/1.1 200") && head.contains("Content-Type: text/event-stream"))
+        val primer = readUntil(s, "\n\n")
+        if (version == "2025-11-25") {
+            // The first event has an id and no data, and says when to come back.
+            assertTrue(primer, primer.contains("retry: ") && primer.contains("id: ") && primer.contains("data:\n"))
+        } else {
+            // An older client would read empty data as a broken message.
+            assertEquals(": open\n\n", primer)
+        }
+        return s
+    }
+
+    private fun readUntil(
+        s: Socket,
+        end: String,
+    ): String {
+        val got = StringBuilder()
+        while (!got.endsWith(end)) {
+            val c = s.getInputStream().read()
+            if (c < 0) return got.toString()
+            got.append(c.toChar())
+        }
+        return got.toString()
+    }
+
+    @Test
+    fun streamsWhatHappensOnThePhoneToTheAgentsFiles() {
+        server.start()
+        tools.write("a.owl", "widget \"a\" {\n  Text { text: \"hi\" }\n}\n")
+        // The first look, so the phone's change is news.
+        tools.changes()
+        stream().use { s ->
+            File(tmp.root, "a.owl").writeText("widget \"a\" {\n  Text { text: \"yo\" }\n}\n")
+            val events = generateSequence { readUntil(s, "\n\n").takeIf { it.isNotEmpty() } }.take(2).toList()
+            val log = JSONObject(events[0].substringAfter("data: "))
+            assertEquals("notifications/message", log.getString("method"))
+            assertEquals("notice", log.getJSONObject("params").getString("level"))
+            val channel = JSONObject(events[1].substringAfter("data: "))
+            assertEquals("notifications/claude/channel", channel.getString("method"))
+            assertTrue(channel.getJSONObject("params").getString("content").contains("was changed on the phone"))
+            assertEquals("changed", channel.getJSONObject("params").getJSONObject("meta").getString("event"))
+        }
+    }
+
+    @Test
+    fun streamsHoldNoWorkerAndTheOldestGoes() {
+        server.start()
+        val open = (1..5).map { stream(if (it == 5) "2025-06-18" else "2025-11-25") }
+        try {
+            // Five streams, more than the four workers: a request is still answered.
+            assertEquals(200, post(rpc("ping")).first)
+            // The fifth closed the first.
+            assertEquals(-1, open[0].getInputStream().read())
+            server.stop()
+            assertEquals(-1, open[4].getInputStream().read())
+        } finally {
+            open.forEach { it.close() }
         }
     }
 

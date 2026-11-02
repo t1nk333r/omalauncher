@@ -169,6 +169,11 @@ fun PcAgentScreen(
                             }
                         }
                     }
+                    item(key = "notes") {
+                        PcRow(stringResource(R.string.phone_pc_agent_notes), if (copied == "notes") copiedText else stringResource(R.string.phone_pc_agent_notes_subtitle)) {
+                            copy("notes", PcAgent.CHANNEL_COMMAND)
+                        }
+                    }
                     item(key = "token") {
                         PcRow(stringResource(R.string.phone_pc_agent_token), if (copied == "token") copiedText else stringResource(R.string.phone_pc_agent_token_subtitle)) {
                             copy("token", t)

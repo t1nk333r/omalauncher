@@ -37,6 +37,9 @@ class WidgetTools(
     private val loadWaitMs: Long = 10_000,
     private val previewWaitMs: Long = 25_000,
     private val pollMs: Long = 100,
+    /** How long after a write its problems are left to check_widget, and how often one file's are told at most ([changes]). */
+    private val quietMs: Long = 30_000,
+    private val failingEveryMs: Long = 600_000,
 ) {
     class ToolError(
         message: String,
@@ -45,6 +48,16 @@ class WidgetTools(
     class Image(
         val bytes: ByteArray,
         val mimeType: String,
+    )
+
+    /**
+     * Something that happened on the phone to a file written from here, for [McpServer]'s event stream: [event] is
+     * "changed", "deleted" or "failing", and [text] says so in the launcher's own words.
+     */
+    class Change(
+        val name: String,
+        val event: String,
+        val text: String,
     )
 
     /** A tool's answer: its text, and the pictures to show with it. */
@@ -58,6 +71,34 @@ class WidgetTools(
     private val errorDir get() = File(dir, ".errors")
     private val previewDir get() = File(dir, ".preview")
     private val historyDir get() = File(dir, HISTORY)
+
+    /** Writes and deletes, and what [changes] keeps, one at a time: it compares a file with the ledger's hash. */
+    private val lock = Any()
+
+    /** Writes and deletes so far: a look by [changes] that a write or delete overtook is dropped. */
+    private var generation = 0L
+
+    /**
+     * What [changes] last saw of a file written from here: [last] as seen by the call before, [told] as last said; the
+     * problems already said ([toldFailing]), whether new ones were there the call before ([newFailing]), and when
+     * ([failingAt], System.nanoTime) some were last said.
+     */
+    private class Seen(
+        var last: String,
+        var told: String,
+        var toldFailing: Set<String>,
+        var newFailing: Boolean = false,
+        var failingAt: Long? = null,
+    )
+
+    private val seen = HashMap<String, Seen>()
+    private var watching = false
+
+    /** Until when (System.nanoTime) a file's problems are left to check_widget, since it was just written. */
+    private val quiet = HashMap<String, Long>()
+
+    /** The problems check_widget last returned for each file, which needn't be told again. */
+    private val reported = HashMap<String, Set<String>>()
 
     /** Every file the launcher loads, with what it is and whether its current version compiled. */
     fun list(): Result {
@@ -135,21 +176,27 @@ class WidgetTools(
         val before = target.readBytesOrNull()?.let(::sha256Hex)
         // Its own file keeps its values; the user's, and anything that was there before, doesn't hand them over.
         val fresh = restricted && (before == null || before != ledger.written(name))
-        if (fresh) ledger.markFresh(name, hash)
-        val kept = keep(target)
-        val tmp = File(dir, ".pc-agent-${UUID.randomUUID()}.tmp")
-        try {
-            tmp.outputStream().use {
-                it.write(bytes)
-                it.fd.sync()
+        val kept =
+            synchronized(lock) {
+                if (fresh) ledger.markFresh(name, hash)
+                val kept = keep(target)
+                val tmp = File(dir, ".pc-agent-${UUID.randomUUID()}.tmp")
+                try {
+                    tmp.outputStream().use {
+                        it.write(bytes)
+                        it.fd.sync()
+                    }
+                    // Replaces a link in the file's place rather than writing through it.
+                    Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                } finally {
+                    tmp.delete()
+                }
+                // Only what it wrote while held to the guard is its own: what it wrote while trusted may hold command output.
+                if (restricted) ledger.recordWritten(name, hash) else ledger.forget(name)
+                quiet[name] = System.nanoTime() + quietMs * 1_000_000
+                generation++
+                kept
             }
-            // Replaces a link in the file's place rather than writing through it.
-            Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-        } finally {
-            tmp.delete()
-        }
-        // Only what it wrote while held to the guard is its own: what it wrote while trusted may hold command output.
-        if (restricted) ledger.recordWritten(name, hash) else ledger.forget(name)
         val kind = OwlKind.of(content).word
         val notes =
             listOfNotNull(
@@ -173,9 +220,14 @@ class WidgetTools(
         // A link goes, not what it points to.
         if (!Files.isRegularFile(target.toPath(), LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(target.toPath())) throw ToolError("$name: no such file")
         val link = Files.isSymbolicLink(target.toPath())
-        val kept = keep(target)
-        if (!target.delete()) throw ToolError("can't delete $name")
-        ledger.forget(name)
+        val kept =
+            synchronized(lock) {
+                val kept = keep(target)
+                if (!target.delete()) throw ToolError("can't delete $name")
+                ledger.forget(name)
+                generation++
+                kept
+            }
         return Result(
             when {
                 link -> "deleted $name, which was a link (what it pointed to is still there)"
@@ -239,8 +291,85 @@ class WidgetTools(
         // Problems while running: values that failed to evaluate, commands that failed.
         val problems = File(errorDir, "$name.txt").readTextOrEmpty().trimEnd()
         if (problems.isNotEmpty()) out.append(problems.lines().joinToString("\n") { "  $it" }).append('\n')
+        synchronized(lock) { reported[name] = failingOf(problems) }
         val failing = problems.lines().any { it.isNotBlank() && !it.startsWith("runtime: warning:") }
         return Result(out.toString().trimEnd(), images, isError = failing)
+    }
+
+    /** What [changes] reads of a file written from here: its state ([GONE], [UNREADABLE] or its hash) and its problems. */
+    private class Look(
+        val name: String,
+        val ours: String,
+        val state: String,
+        val failing: Set<String>,
+    )
+
+    /**
+     * What happened on the phone, since the call before, to the files written from here: one changed or deleted
+     * there, or one with a problem while it runs that wasn't there before (unless check_widget has shown it, or the
+     * file was just written). Each is told once it has held for two calls, and in the launcher's own words with only
+     * the file's name: what a widget prints can come from any server, and is no message to pass on. The first call
+     * only looks.
+     */
+    fun changes(): List<Change> {
+        // The files are read outside the lock: the guest can put a FIFO where one was, and reading it waits for ever.
+        // Then only this waits, not every tool.
+        val (since, mine) =
+            synchronized(lock) {
+                generation to ledger.names().filter { isLoadable(it) && NAME.matches(it) }.mapNotNull { n -> ledger.written(n)?.let { n to it } }
+            }
+        val looks =
+            mine.map { (name, ours) ->
+                val file = File(dir, name)
+                val state = if (!Files.exists(file.toPath(), LinkOption.NOFOLLOW_LINKS)) GONE else file.readBytesOrNull()?.let(::sha256Hex) ?: UNREADABLE
+                // Its problems count only while its version from here is the one the launcher has loaded.
+                val loaded = state == ours && field(File(checkDir, "$name.txt"), "sha256") == ours
+                Look(name, ours, state, if (loaded) failingOf(File(errorDir, "$name.txt").readTextOrEmpty()) else emptySet())
+            }
+        return synchronized(lock) {
+            if (generation != since) return@synchronized emptyList()
+            val now = System.nanoTime()
+            val names = looks.map { it.name }.toSet()
+            for (m in listOf(seen, quiet, reported)) m.keys.retainAll(names)
+            val out = ArrayList<Change>()
+            for (look in looks) {
+                val name = look.name
+                val s = seen[name]
+                if (s == null) {
+                    // What was failing before anyone listened isn't news; a file written since is.
+                    seen[name] = Seen(look.state, look.state, if (watching) emptySet() else look.failing)
+                    continue
+                }
+                if (look.state != s.last) {
+                    s.last = look.state
+                } else if (look.state != s.told) {
+                    s.told = look.state
+                    when (look.state) {
+                        look.ours -> {}
+                        GONE -> out += Change(name, "deleted", "$name (on the phone, written through these tools) was deleted on the phone.")
+                        else -> out += Change(name, "changed", "$name (on the phone, written through these tools) was changed on the phone since. $ON_PHONE read_file tool.")
+                    }
+                }
+                if (look.failing.isEmpty()) {
+                    // Gone: when they come back, they're news again.
+                    s.toldFailing = emptySet()
+                    reported.remove(name)
+                }
+                val new = look.failing - s.toldFailing - reported[name].orEmpty()
+                when {
+                    new.isEmpty() -> s.newFailing = false
+                    !s.newFailing -> s.newFailing = true
+                    now >= (quiet[name] ?: now) && s.failingAt.let { it == null || now - it >= failingEveryMs * 1_000_000 } -> {
+                        s.toldFailing = s.toldFailing + look.failing
+                        s.newFailing = false
+                        s.failingAt = now
+                        out += Change(name, "failing", "$name (on the phone, written through these tools) has new problems while running there. $ON_PHONE check_widget tool.")
+                    }
+                }
+            }
+            watching = true
+            out
+        }
     }
 
     /**
@@ -410,6 +539,24 @@ class WidgetTools(
         private val PNG = byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10)
         private val NAME = Regex("""[A-Za-z0-9_][A-Za-z0-9._-]{0,119}""")
         private val STOCK = Regex("""\.stock-[a-z]+\.owl""")
+
+        /** [changes]' states of a file besides its hash: not there, or not a plain file it can read. */
+        private const val GONE = ""
+        private const val UNREADABLE = "?"
+
+        /** An agent told of a change set off to find the file on its own computer. */
+        private const val ON_PHONE = "It's not on this computer: to see it, use this server's"
+
+        /**
+         * The problems in a file's .errors text that fail, by where they happened ("runtime: post", "runtime: source
+         * w"): what follows quotes a server's reply or a command's output, which can differ each time. Not warnings,
+         * nor that it draws slowly.
+         */
+        private fun failingOf(problems: String): Set<String> =
+            problems.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("runtime: warning:") && !it.startsWith("runtime: drawing takes") }.map { line ->
+                val second = line.indexOf(": ", line.indexOf(": ") + 2)
+                if (line.indexOf(": ") >= 0 && second > 0) line.substring(0, second) else line
+            }.toSet()
 
         /** What the launcher loads: a *.owl file directly in the folder, not hidden (WidgetEngine's widget files). */
         fun isLoadable(name: String) = name.endsWith(".owl") && !name.startsWith(".") && '/' !in name
