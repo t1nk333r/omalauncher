@@ -7,6 +7,10 @@ import android.os.PowerManager
 import android.system.Os
 import android.system.OsConstants
 import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import dev.omalauncher.LauncherData
 import dev.omalauncher.registerNotExported
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +27,7 @@ private const val TAG = "guest-sleep"
  * of the launcher's runs ([Proot.jobs]), [keepAwake] says so (sound playing), or the guest used more than
  * [BUSY_TICKS] of CPU in that minute, as an agent at work or a build does. Busy, it looks again each minute.
  * The screen coming on wakes it (SIGCONT), and so does the launcher asking Linux for something ([needed]), which
- * sleeps again a minute later if the screen is still off.
+ * sleeps again a minute later if the screen is still off. The Linux screen can turn it off ([enabled]).
  */
 class GuestSleep(
     private val context: Context,
@@ -44,6 +48,25 @@ class GuestSleep(
 
     private var registered = false
 
+    private val prefs = LauncherData.prefs(context)
+
+    /** On unless the user turned it off on the Linux screen, for an agent that should go on overnight. */
+    var enabled by mutableStateOf(prefs.getBoolean(ENABLED, true))
+        private set
+
+    fun changeEnabled(on: Boolean) {
+        synchronized(lock) {
+            enabled = on
+            prefs.edit().putBoolean(ENABLED, on).apply()
+            if (on && running && !screenOn) {
+                schedule()
+            } else if (!on) {
+                cancel()
+                wake()
+            }
+        }
+    }
+
     /** Linux started or stopped: it may only sleep while it runs. */
     fun linux(on: Boolean) {
         synchronized(lock) {
@@ -54,7 +77,7 @@ class GuestSleep(
                 context.registerNotExported(filter) { screen(it.action == Intent.ACTION_SCREEN_ON) }
             }
             running = on
-            if (on && !screenOn) {
+            if (on && !screenOn && enabled) {
                 schedule()
             } else if (!on) {
                 cancel()
@@ -69,7 +92,7 @@ class GuestSleep(
             if (on) {
                 cancel()
                 wake()
-            } else if (running) {
+            } else if (running && enabled) {
                 schedule()
             }
         }
@@ -80,7 +103,7 @@ class GuestSleep(
         synchronized(lock) {
             if (!asleep) return
             wake()
-            if (running && !screenOn) schedule()
+            if (running && !screenOn && enabled) schedule()
         }
     }
 
@@ -101,7 +124,7 @@ class GuestSleep(
                     before = now
                     val slept =
                         synchronized(lock) {
-                            if (!running || screenOn || asleep) return@launch
+                            if (!running || screenOn || asleep || !enabled) return@launch
                             val busy = proot.jobs.get() > 0 || keepAwake() || used > BUSY_TICKS
                             if (!busy) sleep()
                             !busy
@@ -174,6 +197,7 @@ class GuestSleep(
         }
 
     private companion object {
+        const val ENABLED = "guest_sleep"
         const val CHECK_MS = 60_000L
 
         /** 2 s of CPU in a minute. Idle, the guest used about 0.6 s; an agent at work uses far more. */

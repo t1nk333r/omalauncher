@@ -300,4 +300,8 @@
     <string name="phone_gallery_remove_confirm">remove %1$s from your gallery?</string>
     <string name="phone_gallery_remove_message">your other phones can\'t install it from there anymore. a copy on this phone\'s home stays.</string>
     <string name="phone_gallery_remove_failed">couldn\'t remove it from your gallery: %1$s</string>
+    <!-- Linux screen: the switch for Linux pausing a minute after the screen goes off (GuestSleep). -->
+    <string name="phone_linux_sleep_title">sleep with the screen off</string>
+    <string name="phone_linux_sleep_on">on · Linux pauses a minute after the screen goes off, unless it\'s busy · saves battery</string>
+    <string name="phone_linux_sleep_off">off · Linux keeps running with the screen off, for overnight agents</string>
 </resources>

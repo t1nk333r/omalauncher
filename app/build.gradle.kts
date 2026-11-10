@@ -22,8 +22,8 @@ android {
         minSdk = 29
         targetSdk = 37
         // Phone build: upstream's versionCode × 100 + this build, so it stays above both Play's 34 and the earlier phone builds (14xx to 29xx).
-        versionCode = 3403
-        versionName = "1.1.0-phone.3"
+        versionCode = 3404
+        versionName = "1.1.0-phone.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += providers.gradleProperty("keyboardTestAbi").getOrElse("arm64-v8a") }
     }

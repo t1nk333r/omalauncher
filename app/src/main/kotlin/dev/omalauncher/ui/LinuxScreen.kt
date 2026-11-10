@@ -153,6 +153,8 @@ private fun Installed(runtime: Runtime) {
     }
     Spacer(Modifier.height(8.dp))
     CpuPinningRow(runtime)
+    Spacer(Modifier.height(8.dp))
+    GuestSleepRow(runtime)
     if (SharedStorage.supported) {
         Spacer(Modifier.height(8.dp))
         SharedStorageRow()
@@ -273,6 +275,28 @@ private fun CpuPinningRow(runtime: Runtime) {
             BracketAction(stringResource(R.string.linux_gpu_turn_off), Palette.red, passed) { proot.changeCpuPinning(false) }
         } else {
             BracketAction(stringResource(R.string.linux_gpu_turn_on), Palette.accent, passed) { proot.changeCpuPinning(true) }
+        }
+    }
+}
+
+/** Phone build: the switch for Linux sleeping while the screen is off; see [dev.omalauncher.linux.GuestSleep]. */
+@Composable
+private fun GuestSleepRow(runtime: Runtime) {
+    val sleep = runtime.guestSleep
+    val on = sleep.enabled
+    Row(Modifier.card(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            BasicText(stringResource(R.string.phone_linux_sleep_title), style = Mono.copy(fontSize = TextSize.Item))
+            BasicText(
+                stringResource(if (on) R.string.phone_linux_sleep_on else R.string.phone_linux_sleep_off),
+                style = Mono.copy(color = if (on) Palette.green else Palette.muted, fontSize = TextSize.Small),
+            )
+        }
+        val passed = Modifier.takesPassedKeys().passesKeys()
+        if (on) {
+            BracketAction(stringResource(R.string.linux_gpu_turn_off), Palette.red, passed) { sleep.changeEnabled(false) }
+        } else {
+            BracketAction(stringResource(R.string.linux_gpu_turn_on), Palette.accent, passed) { sleep.changeEnabled(true) }
         }
     }
 }

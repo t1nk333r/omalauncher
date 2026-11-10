@@ -198,7 +198,8 @@ class Runtime(
     val customs = AppCustoms(context, scope)
 
     /** Phone build: Linux sleeps while the screen is off and nothing keeps it busy; after [scope]. */
-    private val guestSleep = GuestSleep(context, proot, scope) { audio.sounding }.also { proot.onUse = it::needed }
+    /** Phone build: Linux pausing while the screen is off; the Linux screen has its switch. */
+    val guestSleep = GuestSleep(context, proot, scope) { audio.sounding }.also { proot.onUse = it::needed }
 
     private val prefs = LauncherData.prefs(context)
 
