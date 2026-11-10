@@ -1,7 +1,7 @@
 #!/bin/bash
 # omalauncher: the phone's location, calendar, AirPods and battery as JSON,
-# notifications and Android's share sheet, and the phone folders the user let
-# Linux reach, for agents and scripts (see PhoneBridge.kt). Only what the launcher was already allowed; nothing here
+# notifications and Android's share sheet, the phone folders the user let
+# Linux reach, and Android's media controls for Linux players (LinuxMedia.kt), for agents and scripts (see PhoneBridge.kt). Only what the launcher was already allowed; nothing here
 # asks. Drops a request into the launcher's inbox and waits.
 # /usr/local/bin/phone, its name until 0.20, runs this too.
 set -u
@@ -47,6 +47,19 @@ usage: omalauncher location       {lat, lon, accuracy (metres), time}, approxima
                                   files from anywhere on the phone (Download
                                   too); copies them into dir (~/Downloads) and
                                   prints their paths
+       omalauncher media set '<json>'
+                                  show what a Linux player plays in Android's
+                                  media controls (lock screen, notification,
+                                  car over Bluetooth, headset buttons):
+                                  {title, artist, album, art (https URL or file),
+                                  duration, position (seconds), playing, speed,
+                                  command, actions}; without a title it changes
+                                  only the fields given. A press runs
+                                  "<command> play|pause|next|previous|stop" or
+                                  "<command> seek <seconds>" in Linux; actions
+                                  limits them (default all but stop)
+       omalauncher media clear    take it away again
+       omalauncher media          what's set
        omalauncher version        {version, versionCode, commands}
 
 Words that start with - are kept for options; put -- before one meant as
@@ -103,6 +116,7 @@ case $1 in
   ls) [ $# -le 2 ] || usage ;;
   calendar) [ $# -le 2 ] || usage ;;
   airpods) [ $# -le 3 ] || usage ;;
+  media) [ $# -le 3 ] || usage ;;
   notify) [ $# -ge 2 ] && [ $# -le 3 ] && [ -n "$2" ] || usage ;;
   share)
     [ $# -ge 2 ] || usage
