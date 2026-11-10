@@ -305,11 +305,13 @@ private fun DesktopScreen(
     }
     // The bar and the panel above it; the keyboard lifts both. Nothing here takes touches while the panel is closed,
     // except the bar. A phone's landscape folds them into a rail beside the grid, and unfolds them over it, centered.
+    // A widget holding the screen still leaves the bar and the strip drawn and unopenable: they aren't the surface in use.
+    val locked = runtime.terminals.locked
     val side = homeSide()
     if (side != null && !panelShown) {
         if (!runtime.terminals.typing) {
             CompositionLocalProvider(LocalBackdrop provides backdrop) {
-                SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().graphicsLayer { translationX = state.barShift() * size.width }.safePadding())
+                SideRail(runtime, state, handlers, side, Modifier.fillMaxSize().graphicsLayer { translationX = state.barShift() * size.width }.safePadding().lockedTaps(locked))
             }
         }
     } else {
@@ -358,13 +360,14 @@ private fun DesktopScreen(
                         // Home only: the open app list has everything.
                         // Swiping up or down from any of them does what it does on home, as from the dock on stock launchers.
                         // Keys go between the strip and home's tiles both ways, which Compose's search doesn't find (see PromptBar).
-                        if (!panelShown) SettingsStrip(runtime, state)
+                        // While a widget locks home (lock:), they take no taps or swipes, as its tiles don't.
+                        if (!panelShown) Box(Modifier.lockedTaps(locked)) { SettingsStrip(runtime, state) }
                         if (LauncherStyle.homePill && !panelShown) {
-                            HomePill(runtime, state, Modifier.homeSwipe(runtime, state))
+                            HomePill(runtime, state, Modifier.homeSwipe(runtime, state, enabled = !locked).lockedTaps(locked))
                             Spacer(Modifier.height(HomeGap))
                         }
                         if (LauncherStyle.recentApps && !panelShown) {
-                            AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state).focusRequester(state.stripEntry).focusGroup(), home = state.homeEntry)
+                            AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state, enabled = !locked).lockedTaps(locked).focusRequester(state.stripEntry).focusGroup(), home = state.homeEntry)
                         }
                         // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
                         // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
@@ -381,7 +384,8 @@ private fun DesktopScreen(
                             shown = barShown,
                             modifier =
                                 Modifier
-                                    .homeSwipe(runtime, state)
+                                    .homeSwipe(runtime, state, enabled = !locked)
+                                    .lockedTaps(locked)
                                     .then(if (barShown) Modifier else Modifier.collapsed())
                                     // Unseen while an app is carried out of the drawer, keeping its room so the drawer stays put.
                                     .graphicsLayer { alpha = if (state.drawerDrag) 0f else 1f },

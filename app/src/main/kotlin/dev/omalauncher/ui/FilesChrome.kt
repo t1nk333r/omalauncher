@@ -38,18 +38,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import dev.omalauncher.PhoneStorage
 import dev.omalauncher.R
 import dev.omalauncher.linux.GuestEntry
-import dev.omalauncher.linux.SharedStorage
 
-/** The path as tappable segments: / › root › .config. */
+/** The path as tappable segments: / › root › .config, or phone folders › Camera › 2026. */
 @Composable
 internal fun Breadcrumbs(
     path: String,
     onNavigate: (String) -> Unit,
 ) {
-    val parts = path.split('/').filter { it.isNotEmpty() }
-    val crumbs = listOf("/" to "/") + parts.indices.map { i -> parts[i] to "/" + parts.take(i + 1).joinToString("/") }
+    val phone = path.startsWith(FilesFs.PHONE)
+    val root = if (phone) FilesFs.PHONE + "/" else "/"
+    val parts = path.removePrefix(FilesFs.PHONE).split('/').filter { it.isNotEmpty() }
+    val crumbs = listOf((if (phone) stringResource(R.string.files_place_phone_folders) else "/") to root) + parts.indices.map { i -> parts[i] to root + parts.take(i + 1).joinToString("/") }
     val state = rememberLazyListState()
     LaunchedEffect(path) { state.scrollToItem(crumbs.lastIndex) }
     LazyRow(
@@ -61,7 +63,8 @@ internal fun Breadcrumbs(
         items(crumbs.size) { i ->
             val (label, target) = crumbs[i]
             val last = i == crumbs.lastIndex
-            if (i > 1) Symbol(Glyph.ChevronRight, Palette.muted, Modifier.padding(horizontal = 2.dp))
+            // / reads as the start of the path after it; phone folders, a name, doesn't.
+            if (i > 1 || (phone && i == 1)) Symbol(Glyph.ChevronRight, Palette.muted, Modifier.padding(horizontal = 2.dp))
             BasicText(
                 label,
                 Modifier.clip(LauncherStyle.shape(8.dp)).clickable(enabled = !last) { onNavigate(target) }.padding(horizontal = 6.dp, vertical = 6.dp),
@@ -72,30 +75,33 @@ internal fun Breadcrumbs(
 }
 
 /**
- * Quick jumps, like stock Files' drawer: home, config, the whole system; the one you're in is in the accent color.
- * Phone build: and the phone's storage while it's shared, at /sdcard; turned off, the mount point left there is empty.
- * Read again when [resumed] changes.
+ * Quick jumps, like stock Files' drawer: home, config, the phone's storage, the whole system, then the phone folders
+ * and each of [phoneFolders]; the one you're in is in the accent color.
  */
 @Composable
 internal fun Places(
     path: String,
+    phoneFolders: List<String>,
     exists: (String) -> Boolean,
     onNavigate: (String) -> Unit,
-    resumed: Int = 0,
 ) {
-    val places =
-        remember(path, resumed) {
-            listOfNotNull(
+    val linux =
+        remember(path) {
+            listOf(
                 R.string.files_home to "/root",
                 R.string.files_place_config to "/root/.config",
                 R.string.files_place_downloads to "/root/Downloads",
-                (R.string.phone_files_place_phone to SharedStorage.GUEST).takeIf { SharedStorage.allowed() },
+                R.string.files_place_sdcard to PhoneStorage.GUEST,
                 R.string.files_place_system to "/",
             ).filter { exists(it.second) }
         }
+    val places =
+        linux.map { (label, target) -> stringResource(label) to target } +
+            (stringResource(R.string.files_place_phone_folders) to FilesFs.PHONE + "/") +
+            phoneFolders.map { it to FilesFs.PHONE + "/" + it }
     LazyRow(Modifier.bleed(PanelPadding), contentPadding = PaddingValues(horizontal = PanelPadding - 8.dp)) {
         items(places) { (label, target) ->
-            BracketAction(stringResource(label), if (path == target) Palette.accent else Palette.muted) { onNavigate(target) }
+            BracketAction(label, if (path == target) Palette.accent else Palette.muted) { onNavigate(target) }
         }
     }
 }

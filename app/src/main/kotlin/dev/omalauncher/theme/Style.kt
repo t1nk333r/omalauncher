@@ -203,6 +203,7 @@ class Style(
                 false,
                 "The empty page after home's last, for new tiles; false shows it only while a tile is selected or carried, to drop it on.",
             )
+        val HOME_PAGE = Setting.Count("home.home-page", 1, -99..99, "The page home opens on and Home returns to: 1 is the first page of tiles, 0 the face left of it, -1 the one left of that. A number with no page of its own takes the first page after it, or the last page when it is past them all.")
         val COLUMNS = Setting.Count("home.columns", 6, 4..9, "Columns of home's grid. Fewer make bigger cells, and apps show their names under their icons once a cell is tall enough.")
         val FORCE_SINGLE_PAGE =
             Setting.Flag(
@@ -210,6 +211,19 @@ class Style(
                 false,
                 "One page even on a screen shaped like an unfolded foldable's; false shows two there, auto-detected from the screen's shape and width.",
             )
+        val COVER_SCREEN =
+            Setting.Flag(
+                "home.cover-screen",
+                true,
+                "An upright grid and the bar below it on a foldable's cover screen, whose window is wider than tall while the phone stands upright; false turns the grid on its side there as in a phone's landscape.",
+            )
+        val UNFOLDED_LAYOUT =
+            Setting.Flag(
+                "home.unfolded-layout",
+                false,
+                "A home of its own on a foldable's unfolded inner screen, one wide page whose tiles can span the hinge, kept under [unfolded] in home/layout.toml; it starts from home's pages side by side. False shows home's pages there as home.single-page says.",
+            )
+        val UNFOLDED_COLUMNS = Setting.Count("home.unfolded-columns", 12, 6..12, "Columns of the unfolded inner screen's grid, with home.unfolded-layout.")
 
         val GAPS_IN = Setting.Number("widgets.gaps-in", 6.0, 0.0..24.0, "Space in dp between two of home's widgets (all of it, unlike Hyprland's gaps_in, which each window has on its side).")
         val GAPS_OUT = Setting.Number("widgets.gaps-out", 6.0, 0.0..48.0, "Space in dp from home's widgets, the strip and the prompt bar to the screen's edges.")
@@ -296,7 +310,7 @@ class Style(
                     "Swipe a key up to send its popup. Up to ${ExtraKeysLayout.MAX_ROWS} rows of ${ExtraKeysLayout.MAX_KEYS}; '[]' hides the bar. " +
                     "Phone build: while it's set, these stand in for keybar.owl's keys; unset, keybar.owl has the bar.",
             ) { ExtraKeysLayout.parse(it) }
-        val TERMINAL_KEYBOARD_TEXT = Setting.Flag("terminal.keyboard-text", false, "Offer the terminals to the keyboard as a plain text field, so Gboard shows its microphone (voice typing) and clipboard; false is a password-style field without suggestions or autocorrect, like Termux.")
+        val TERMINAL_SUGGESTIONS = Setting.Flag("terminal.keyboard-suggestions", true,"The terminals' input as a normal text field, so the keyboard can suggest words and clipboard items, glide-type and dictate; false hides these but passes raw keys. Text reaches the terminal a word at a time. Takes effect when the keyboard next opens.")
 
         val SWIPE_UP =
             Setting.Text(
@@ -348,11 +362,11 @@ object StyleFile {
 
     val ALL: List<Setting<*>> =
         with(Style) {
-            listOf(THEME, BACKGROUND, FONT, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, WEB_SEARCH, HOME_ROWS, EMPTY_PAGE_LEFT, EMPTY_PAGE_RIGHT, COLUMNS, FORCE_SINGLE_PAGE) +
+            listOf(THEME, BACKGROUND, FONT, ANDROID_WALLPAPER, APP_TILES, APP_LABELS, RECENT_APPS, DOCK, DOCK_BOX, DOCK_HEIGHT, SETTINGS_STRIP, HOME_PILL, PROMPT_BAR, WEB_SEARCH, HOME_ROWS, EMPTY_PAGE_LEFT, EMPTY_PAGE_RIGHT, HOME_PAGE, COLUMNS, FORCE_SINGLE_PAGE, COVER_SCREEN, UNFOLDED_LAYOUT, UNFOLDED_COLUMNS) +
                 listOf(GAPS_IN, GAPS_OUT, TILE_OPACITY, WIDGET_BLUR, TILE_FROST, TILE_BORDER_WIDTH, TILE_BORDER, TILE_BORDER_FOCUSED) +
                 listOf(SCREEN_GAPS_OUT, SCREEN_BORDER_WIDTH, KEYBAR_GAPS_OUT, KEYBAR_BORDER_WIDTH, MONOCHROME_ICONS, ICON_PACK, CORNER_SCALE) +
                 listOf(DRAWER_SORT, DRAWER_LETTERS, DRAWER_SUGGESTIONS, DRAWER_NEW, DRAWER_COLUMNS, DRAWER_ICON, DRAWER_LABELS, DRAWER_SECTIONS, DRAWER_LAYOUT, DRAWER_CATEGORIES, DRAWER_EXTRAS, DRAWER_OPACITY, DRAWER_BLUR, DRAWER_LOCK) +
-                listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, TERMINAL_KEYBOARD_TEXT, EXTRA_KEYS, SWIPE_UP, SWIPE_DOWN)
+                listOf(STATUS_BAR_SHOWN) + STATUS_BAR.all + NAVIGATION_BAR.all + listOf(TERMINAL_FONT, TERMINAL_TEXT, TERMINAL_OPACITY, TERMINAL_SUGGESTIONS, EXTRA_KEYS, SWIPE_UP, SWIPE_DOWN)
         }
 
     private val byKey = ALL.associateBy { it.key }
@@ -362,6 +376,9 @@ object StyleFile {
 
     /** Brings [table] up to [VERSION]. A newer one (after a downgrade) is left as it is. */
     fun migrate(table: MutableMap<String, Any>) {
+        // Phone build: its terminal.keyboard-text is upstream's terminal.keyboard-suggestions since 1.1.0. Not a numbered
+        // step, which would take the version number upstream's own next one needs; saved under the new key with the next save.
+        table.remove("terminal.keyboard-text")?.let { table.putIfAbsent(Style.TERMINAL_SUGGESTIONS.key, it) }
         var v = versionOf(table)
         while (v < VERSION) {
             MIGRATIONS[v - 1](table)

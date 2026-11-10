@@ -369,6 +369,8 @@ internal fun HomeGrid(
     layout: WidgetLayout,
     arrange: Arrange,
     selected: String?,
+    /** A widget holds the home screen still: the pages don't turn and a long press does nothing, a tap is the tile's. */
+    locked: Boolean,
     onSelect: (String?) -> Unit,
     render: @Composable (HomeItem, Modifier, Boolean) -> Unit,
     actions: @Composable (HomeItem) -> Unit,
@@ -530,6 +532,8 @@ internal fun HomeGrid(
         // The pages fill the window: the dock stands above what tiles keep clear of at the bottom (the bar, the navigation bar).
         val belowDockPx by rememberUpdatedState(keepClear.bottom.toFloat())
         val edgePx by rememberUpdatedState(with(density) { EdgeGap.toPx() })
+        // Read inside the gesture below, which outlives recomposition: a lock that comes and goes is seen there too.
+        val lockedNow by rememberUpdatedState(locked)
 
         fun placedOn(
             page: Int,
@@ -768,6 +772,9 @@ internal fun HomeGrid(
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                         val start = down.position
+                        // A widget holds the home screen still: no page turn, no long press, no menu, and nothing of home's
+                        // taken, so the press goes on to the tile that wants it.
+                        if (lockedNow) return@awaitEachGesture
                         val (slots, grids, sel) = current
                         val shown = pagesAt(pager.currentPage, slots)
                         val g = gridFor(shown, grids)
@@ -911,7 +918,7 @@ internal fun HomeGrid(
                 // and composing that one, a face's shaders drawn with it, held up the swipe's first frames. Their animated
                 // widgets wait until some of the page shows.
                 val homeCovered = LocalHomeCovered.current
-                HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 2, key = { slots.getOrNull(it)?.first() ?: -it }) { slot ->
+                HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 2, key = { slots.getOrNull(it)?.first() ?: -it }, userScrollEnabled = !locked) { slot ->
                     val shown = pagesAt(slot, slots)
                     val g = gridFor(shown, grid to wide)
                     val covered = remember(homeCovered, pager, slot) { { homeCovered() || pager.layoutInfo.visiblePagesInfo.none { it.index == slot } } }

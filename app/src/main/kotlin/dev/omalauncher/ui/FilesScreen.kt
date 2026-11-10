@@ -42,7 +42,9 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import android.net.Uri
 import androidx.core.content.FileProvider
+import dev.omalauncher.PhoneFolders
 import dev.omalauncher.R
 import dev.omalauncher.Runtime
 import dev.omalauncher.linux.GuestEntry
@@ -55,7 +57,7 @@ import java.io.IOException
 
 /**
  * A touch-first file manager for the guest filesystem, in the Omarchy theme. Phone build: [resumed] changing, it reads
- * the folder and its places again.
+ * the folder again (all-files access may have changed meanwhile).
  */
 @Composable
 fun FilesScreen(
@@ -66,10 +68,16 @@ fun FilesScreen(
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
-    val fs = runtime.proot.guestFs
+    val fs = remember(runtime) { FilesFs(runtime.proot.guestFs, runtime.phoneFolders) }
+    val addFolder = rememberAddPhoneFolder(runtime.phoneFolders)
     val scope = rememberCoroutineScope()
 
-    var path by remember(startPath) { mutableStateOf(fs.normalize(startPath)) }
+    val phoneFolders by produceState(emptyList<PhoneFolders.Folder>(), runtime.phoneFolders.changes) {
+        value = withContext(Dispatchers.IO) { runCatching { runtime.phoneFolders.folders() }.getOrDefault(emptyList()) }
+    }
+    var asked by remember(startPath) { mutableStateOf(fs.normalize(startPath)) }
+    // A granted folder's real contents rather than /sdcard's view of it, which has only what Linux saved there.
+    val path = FilesFs.viaGrant(asked, phoneFolders.mapNotNull { f -> f.storagePath?.let { it to f.name } }) ?: asked
     val history = remember(startPath) { mutableStateListOf<String>() }
     var showHidden by remember { mutableStateOf(true) }
     var query by remember { mutableStateOf<String?>(null) }
@@ -78,8 +86,9 @@ fun FilesScreen(
     var viewing by remember { mutableStateOf<File?>(null) }
     var dialog by remember { mutableStateOf<FileDialog?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    val atPhoneFolders = path == FilesFs.PHONE + "/"
 
-    val entries by produceState<List<GuestEntry>?>(null, path, showHidden, reload, resumed) {
+    val entries by produceState<List<GuestEntry>?>(null, path, showHidden, reload, resumed, runtime.phoneFolders.changes) {
         value = withContext(Dispatchers.IO) { runCatching { fs.list(path, showHidden) }.getOrDefault(emptyList()) }
     }
     val shown = entries?.filter { e -> query.isNullOrBlank() || query!!.lowercase() in e.name.lowercase() }
@@ -113,7 +122,7 @@ fun FilesScreen(
     fun navigate(to: String) {
         landIn(to, path)
         history += path
-        path = to
+        asked = to
         query = null
         selected.clear()
     }
@@ -128,6 +137,21 @@ fun FilesScreen(
         }
     }
 
+    fun openUri(uri: Uri, name: String, share: Boolean) {
+        val mime = mimeOf(name) ?: "*/*"
+        val intent =
+            if (share) {
+                Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri)
+            } else {
+                Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
+            }.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            context.startActivity(Intent.createChooser(intent, name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: ActivityNotFoundException) {
+            toast(resources.getString(R.string.files_no_app, name))
+        }
+    }
+
     fun openWithAndroid(file: File, share: Boolean = false) {
         // A file outside the folders in file_paths.xml (a link out of them) has no uri.
         val uri =
@@ -136,18 +160,7 @@ fun FilesScreen(
             } catch (e: IllegalArgumentException) {
                 return toast(resources.getString(R.string.files_cant_hand_over, file.name))
             }
-        val mime = mimeOf(file.name) ?: "*/*"
-        val intent =
-            if (share) {
-                Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri)
-            } else {
-                Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
-            }.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        try {
-            context.startActivity(Intent.createChooser(intent, file.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e: ActivityNotFoundException) {
-            toast(resources.getString(R.string.files_no_app, file.name))
-        }
+        openUri(uri, file.name, share)
     }
 
     fun edit(entry: GuestEntry) = runtime.edit(entry.path)
@@ -164,8 +177,19 @@ fun FilesScreen(
             null
         }
 
+    /** A file to Android's apps: one of the phone folders' as it is, a Linux one through the launcher's FileProvider. */
+    fun handOver(entry: GuestEntry, share: Boolean) {
+        if (!fs.isPhone(entry.path)) return hostFile(entry)?.let { openWithAndroid(it, share) } ?: Unit
+        scope.launch {
+            val uri = withContext(Dispatchers.IO) { runCatching { fs.uri(entry.path) }.getOrNull() }
+            if (uri == null) toast(resources.getString(R.string.files_cant_hand_over, entry.name)) else openUri(uri, entry.name, share)
+        }
+    }
+
     fun open(entry: GuestEntry) {
         if (entry.isDir) return navigate(fs.resolve(entry.path))
+        // The phone folders' files go to Android's apps, which open them where they are.
+        if (fs.isPhone(entry.path)) return handOver(entry, share = false)
         val file = hostFile(entry) ?: return
         when {
             isImage(entry.name) -> viewing = file
@@ -181,7 +205,7 @@ fun FilesScreen(
             query != null -> query = null
             history.isNotEmpty() -> {
                 landIn(history.last(), path)
-                path = history.removeAt(history.lastIndex)
+                asked = history.removeAt(history.lastIndex)
                 selected.clear()
             }
             else -> onExit()
@@ -231,6 +255,7 @@ fun FilesScreen(
                             when (path) {
                                 "/" -> "/"
                                 "/root" -> stringResource(R.string.files_home)
+                                FilesFs.PHONE + "/" -> stringResource(R.string.files_place_phone_folders)
                                 else -> path.substringAfterLast('/')
                             },
                         )
@@ -243,11 +268,13 @@ fun FilesScreen(
                         PanelIcon(Icons.More, stringResource(R.string.files_more)) { menuOpen = true }
                         if (menuOpen) {
                             MenuPopup(
-                                listOf(
-                                    stringResource(R.string.files_new_file) to { dialog = FileDialog.NewFile },
-                                    stringResource(R.string.files_new_folder) to { dialog = FileDialog.NewFolder },
+                                listOfNotNull(
+                                    // The list of phone folders holds only them: they're added, not made.
+                                    (stringResource(R.string.files_new_file) to { dialog = FileDialog.NewFile }).takeIf { !atPhoneFolders },
+                                    (stringResource(R.string.files_new_folder) to { dialog = FileDialog.NewFolder }).takeIf { !atPhoneFolders },
+                                    (stringResource(R.string.files_add_phone_folder) to addFolder).takeIf { fs.isPhone(path) },
                                     stringResource(if (showHidden) R.string.files_hide_hidden else R.string.files_show_hidden) to { showHidden = !showHidden },
-                                    stringResource(R.string.files_open_terminal) to { runtime.terminal("cd ${shellQuote(path)} && exec bash", "Terminal") },
+                                    (stringResource(R.string.files_open_terminal) to { runtime.terminal("cd ${shellQuote(path)} && exec bash", "Terminal") }).takeIf { !fs.isPhone(path) },
                                 ),
                                 onDismiss = { menuOpen = false },
                             )
@@ -258,7 +285,7 @@ fun FilesScreen(
             contentWidth = ReadingWidth,
         ) {
             Breadcrumbs(path, onNavigate = ::navigate)
-            Places(path, exists = { runCatching { fs.isDir(it) }.getOrDefault(false) }, onNavigate = ::navigate, resumed = resumed)
+            Places(path, phoneFolders.map { it.name }, exists = { runCatching { fs.isDir(it) }.getOrDefault(false) }, onNavigate = ::navigate)
             Spacer(Modifier.height(4.dp))
 
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -266,7 +293,13 @@ fun FilesScreen(
                     shown == null -> {}
                     shown.isEmpty() ->
                         BasicText(
-                            stringResource(if (query.isNullOrBlank()) R.string.files_empty_folder else R.string.files_no_matches),
+                            stringResource(
+                                when {
+                                    !query.isNullOrBlank() -> R.string.files_no_matches
+                                    atPhoneFolders -> R.string.files_no_phone_folders
+                                    else -> R.string.files_empty_folder
+                                },
+                            ),
                             Modifier.align(Alignment.Center),
                             style = Mono.copy(color = Palette.muted),
                         )
@@ -285,7 +318,8 @@ fun FilesScreen(
                                             selected += entry.path
                                         }
                                     },
-                                    onLongClick = { if (entry.path !in selected) selected += entry.path },
+                                    // The phone folders themselves are added and removed in settings, not here.
+                                    onLongClick = { if (entry.path !in selected && !atPhoneFolders) selected += entry.path },
                                 )
                             }
                         }
@@ -300,7 +334,7 @@ fun FilesScreen(
                 val single = entries?.firstOrNull { it.path == selected.singleOrNull() }
                 // Sniffing a file for text reads it: off the main thread, once per selection.
                 val singleIsText by produceState(false, single?.path) {
-                    value = single?.takeIf { !it.isDir }?.let { s -> withContext(Dispatchers.IO) { runCatching { isText(s.name, fs.host(s.path)) }.getOrDefault(false) } } == true
+                    value = single?.takeIf { !it.isDir && !fs.isPhone(it.path) }?.let { s -> withContext(Dispatchers.IO) { runCatching { isText(s.name, fs.host(s.path)) }.getOrDefault(false) } } == true
                 }
                 SelectionBar(
                     Modifier.passesKeys(paste, land, rows),
@@ -320,8 +354,8 @@ fun FilesScreen(
                     },
                     onDelete = { dialog = FileDialog.Delete(selected.toList()) },
                     onRename = single?.let { { dialog = FileDialog.Rename(it) } },
-                    onShare = single?.takeIf { !it.isDir }?.let { { hostFile(it)?.let { f -> openWithAndroid(f, share = true) } } },
-                    onOpenWith = single?.takeIf { !it.isDir }?.let { { hostFile(it)?.let(::openWithAndroid) } },
+                    onShare = single?.takeIf { !it.isDir }?.let { { handOver(it, share = true) } },
+                    onOpenWith = single?.takeIf { !it.isDir }?.let { { handOver(it, share = false) } },
                     onEdit = single?.takeIf { singleIsText }?.let { { edit(it) } },
                 )
             } else if (clip.isNotEmpty()) {
@@ -352,7 +386,7 @@ fun FilesScreen(
                     val created = withContext(Dispatchers.IO) { runCatching { fs.createFile(path, name) } }
                     created.exceptionOrNull()?.let { toast(it.message ?: resources.getString(R.string.files_failed)) }
                     reload++
-                    created.getOrNull()?.let { runtime.edit(it) }
+                    created.getOrNull()?.takeIf { !fs.isPhone(it) }?.let { runtime.edit(it) }
                 }
             }
         FileDialog.NewFolder ->

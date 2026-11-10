@@ -26,8 +26,6 @@
 
     <!-- An Android widget's edit bar: opens the widget's own settings. -->
     <string name="phone_home_widget_settings">settings</string>
-    <!-- The files screen's place for the phone's shared storage. -->
-    <string name="phone_files_place_phone">phone</string>
     <plurals name="phone_pages_android_widgets">
         <item quantity="one">%1$d android widget</item>
         <item quantity="other">%1$d android widgets</item>
@@ -57,10 +55,6 @@
     <string name="phone_style_icon_pack">icon pack</string>
     <string name="phone_style_icon_pack_none">each app\'s own</string>
     <string name="phone_style_terminal_opacity_hint">see-through also needs foot\'s alpha, under [colors] in ~/.config/foot/foot.ini</string>
-    <string name="phone_style_keyboard">keyboard</string>
-    <string name="phone_style_keyboard_voice">voice + clipboard</string>
-    <string name="phone_style_keyboard_plain">plain keys</string>
-    <string name="phone_style_keyboard_hint">voice + clipboard shows the keyboard\'s mic and clipboard; it may autocorrect commands · from the next time the keyboard opens</string>
 
     <!-- Style's phone-only options, in its tabs. -->
     <string name="phone_style_launcher_widgets_font">launcher &amp; widgets font</string>
@@ -246,7 +240,7 @@
     <string name="phone_linux_start">start</string>
     <string name="phone_linux_storage">phone storage</string>
     <string name="phone_linux_storage_on">on · /sdcard in Linux is the phone\'s storage; Linux apps and agents can read and change every file there</string>
-    <string name="phone_linux_storage_off">off · lets Linux see the phone\'s files at /sdcard; asks Android for all-files access</string>
+    <string name="phone_linux_storage_off">off · Linux sees only the files it saved at /sdcard; turning it on asks Android for all-files access</string>
     <string name="phone_linux_storage_turn_off">turn off</string>
     <string name="phone_linux_storage_turn_on">turn on</string>
 

@@ -277,6 +277,9 @@ private fun StylePane(
             Flag(R.string.style_pages, R.string.style_pages_one, R.string.style_pages_auto, style, Style.FORCE_SINGLE_PAGE)
             Flag(R.string.style_empty_page_left, R.string.style_shown, R.string.style_hidden, style, Style.EMPTY_PAGE_LEFT)
             Flag(R.string.style_empty_page_right, R.string.style_shown, R.string.style_hidden, style, Style.EMPTY_PAGE_RIGHT)
+            Flag(R.string.style_cover_screen, R.string.style_cover_upright, R.string.style_cover_turned, style, Style.COVER_SCREEN)
+            Flag(R.string.style_unfolded, R.string.style_unfolded_own, R.string.style_unfolded_pages, style, Style.UNFOLDED_LAYOUT)
+            if (style.style[Style.UNFOLDED_LAYOUT]) CountOption(R.string.style_unfolded_columns, Style.UNFOLDED_COLUMNS, style)
             NumberOption(R.string.style_corners, Corners.entries.map { stringResource(it.label) to it.scale.toDouble() }, Style.CORNER_SCALE, style)
             HomePreview(runtime)
         }
@@ -644,12 +647,12 @@ private fun TerminalSection(
     NumberOption(R.string.style_text, TerminalText.entries.map { stringResource(it.label) to it.em.toDouble() }, Style.TERMINAL_TEXT, style, unit = " dp")
     OpacityStepper(R.string.style_opacity, style, Style.TERMINAL_OPACITY)
     OptionHint(stringResource(R.string.phone_style_terminal_opacity_hint), Modifier.padding(bottom = 4.dp))
-    Flag(R.string.phone_style_keyboard, R.string.phone_style_keyboard_voice, R.string.phone_style_keyboard_plain, style, Style.TERMINAL_KEYBOARD_TEXT)
-    OptionHint(stringResource(R.string.phone_style_keyboard_hint), Modifier.padding(bottom = 4.dp))
     // In portrait, where columns run short; landscape has plenty.
     val metrics = LocalContext.current.resources.displayMetrics
     val columns = font.columns(minOf(metrics.widthPixels, metrics.heightPixels))
     OptionHint(pluralStringResource(R.plurals.style_terminal_size, columns, TerminalFont.format(font.size).removeSuffix(".0"), columns), Modifier.padding(top = 2.dp))
+    Flag(R.string.style_keyboard_suggestions, R.string.style_on, R.string.style_off, style, Style.TERMINAL_SUGGESTIONS)
+    OptionHint(stringResource(R.string.style_keyboard_suggestions_hint), Modifier.padding(bottom = 4.dp))
     TerminalPreview(font, launcherFont)
 }
 

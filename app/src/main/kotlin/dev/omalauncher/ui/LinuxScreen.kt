@@ -1,7 +1,6 @@
 package dev.omalauncher.ui
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,6 +46,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.attribute.BasicFileAttributes
+import dev.omalauncher.hasPermission
 
 // Request local network access only on Android 17+, where the permission exists.
 internal fun needsLocalNetworkPermission(sdkInt: Int, granted: Boolean): Boolean =
@@ -89,13 +89,13 @@ fun rememberLinuxInstall(runtime: Runtime): (List<String>) -> Unit {
         runtime.installLinux(AGENTS.filter { it.bin in bins })
         val need = buildList {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                !context.hasPermission(Manifest.permission.POST_NOTIFICATIONS)
             ) {
                 add(Manifest.permission.POST_NOTIFICATIONS)
             }
             if (needsLocalNetworkPermission(
                     sdkInt = Build.VERSION.SDK_INT,
-                    granted = context.checkSelfPermission(Manifest.permission.ACCESS_LOCAL_NETWORK) == PackageManager.PERMISSION_GRANTED,
+                    granted = context.hasPermission(Manifest.permission.ACCESS_LOCAL_NETWORK),
                 )
             ) {
                 add(Manifest.permission.ACCESS_LOCAL_NETWORK)
@@ -151,9 +151,11 @@ private fun Installed(runtime: Runtime) {
         Spacer(Modifier.height(8.dp))
         GpuRow(runtime)
     }
+    Spacer(Modifier.height(8.dp))
+    CpuPinningRow(runtime)
     if (SharedStorage.supported) {
         Spacer(Modifier.height(8.dp))
-        SharedStorageRow(runtime)
+        SharedStorageRow()
     }
     Spacer(Modifier.height(16.dp))
     BasicText(
@@ -189,18 +191,16 @@ private fun Installed(runtime: Runtime) {
 }
 
 /**
- * The phone's storage as /sdcard in Linux, off until the user allows Android's all-files access on its own page; see
- * [SharedStorage]. Read again on coming back from that page.
+ * All of the phone's storage at /sdcard in Linux, rather than only the files Linux saved there ([dev.omalauncher.PhoneStorage]), once
+ * the user allows Android's all-files access on its own page; see [SharedStorage]. Read again on coming back from that page.
  */
 @Composable
-private fun SharedStorageRow(runtime: Runtime) {
+private fun SharedStorageRow() {
     val context = LocalContext.current
     var allowed by remember { mutableStateOf(SharedStorage.allowed()) }
     val open =
         rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             allowed = SharedStorage.allowed()
-            // Phone build: listed in / and in Files at once, not from the next Linux start.
-            runtime.proot.showSharedStorage()
         }
     Row(Modifier.card(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -210,7 +210,7 @@ private fun SharedStorageRow(runtime: Runtime) {
                 style = Mono.copy(color = if (allowed) Palette.green else Palette.muted, fontSize = TextSize.Small),
             )
         }
-        // Android's own toggle on its own page is the switch; the bind follows it from the next Linux command.
+        // Android's own toggle on its own page is the switch; Android checks it on every access, so /sdcard follows at once.
         BracketAction(stringResource(if (allowed) R.string.phone_linux_storage_turn_off else R.string.phone_linux_storage_turn_on), if (allowed) Palette.red else Palette.accent) {
             open.launch(SharedStorage.settings(context))
         }
@@ -252,6 +252,28 @@ private fun GpuRow(runtime: Runtime) {
             }
         }
         JobLog(state)
+    }
+}
+
+/** The switch for proot's CPU pinning; see [dev.omalauncher.linux.Proot.cpuPinning]. */
+@Composable
+private fun CpuPinningRow(runtime: Runtime) {
+    val proot = runtime.proot
+    val on = proot.cpuPinning
+    Row(Modifier.card(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            BasicText(stringResource(R.string.linux_cpu_pinning_title), style = Mono.copy(fontSize = TextSize.Item))
+            BasicText(
+                stringResource(if (on) R.string.linux_cpu_pinning_on else R.string.linux_cpu_pinning_off),
+                style = Mono.copy(color = if (on) Palette.green else Palette.muted, fontSize = TextSize.Small),
+            )
+        }
+        val passed = Modifier.takesPassedKeys().passesKeys()
+        if (on) {
+            BracketAction(stringResource(R.string.linux_gpu_turn_off), Palette.red, passed) { proot.changeCpuPinning(false) }
+        } else {
+            BracketAction(stringResource(R.string.linux_gpu_turn_on), Palette.accent, passed) { proot.changeCpuPinning(true) }
+        }
     }
 }
 

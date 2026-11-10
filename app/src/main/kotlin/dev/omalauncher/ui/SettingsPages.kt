@@ -51,6 +51,9 @@ enum class SettingsPage {
 
     /** Phone build: a coding agent on a computer editing widgets and apps (remote/PcAgent.kt). */
     PcAgent,
+
+    /** Every permission, to turn on or off. */
+    Permissions,
 }
 
 /** Opens [page] over the ones in [stack]; one that's already open comes back to the top, closing what's over it. */
@@ -126,6 +129,7 @@ private fun SettingsPage(
                 onGestures = { stack.push(SettingsPage.Gestures) },
                 onBackup = { stack.push(SettingsPage.Backup) },
                 onPcAgent = { stack.push(SettingsPage.PcAgent) },
+                onPermissions = { stack.push(SettingsPage.Permissions) },
             )
         SettingsPage.Style ->
             StyleScreen(runtime, onDismiss = close, onBrowse = { stack.push(SettingsPage.Themes) }, onIconPacks = { stack.push(SettingsPage.IconPacks) }, onAgent = ::agent)
@@ -177,5 +181,6 @@ private fun SettingsPage(
         SettingsPage.IconPacks -> IconPackScreen(runtime, onDismiss = close)
         SettingsPage.Backup -> BackupScreen(runtime.backups, onDismiss = close)
         SettingsPage.PcAgent -> PcAgentScreen(runtime.pcAgent, onDismiss = close)
+        SettingsPage.Permissions -> PermissionsScreen(runtime, onDismiss = close)
     }
 }

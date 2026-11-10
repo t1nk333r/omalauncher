@@ -1,8 +1,11 @@
 package dev.omalauncher.linux
 
 import android.content.Context
-import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import dev.omalauncher.LauncherData
+import dev.omalauncher.PhoneStorage
 import dev.omalauncher.upgrade.Managed
 import dev.omalauncher.upgrade.Policy
 import java.io.File
@@ -38,6 +41,20 @@ class Proot(
     /** How guest apps render OpenGL and Vulkan: in software, or on the GPU once [Gpu] turns it on. */
     @Volatile var graphicsEnv: List<String> = SOFTWARE_ENV
 
+    private val prefs = LauncherData.prefs(context)
+
+    /**
+     * proot keeping itself and programs making many syscalls on one fast CPU (patches/proot/0002): Linux runs
+     * several times faster. On unless the user turned it off; applies to what starts after a change.
+     */
+    var cpuPinning by mutableStateOf(prefs.getBoolean(CPU_PINNING, true))
+        private set
+
+    fun changeCpuPinning(on: Boolean) {
+        cpuPinning = on
+        prefs.edit().putBoolean(CPU_PINNING, on).apply()
+    }
+
     /** Launcher data the guest sees in its home, kept outside the rootfs; see [LauncherData]. */
     private val dataBinds =
         listOf(
@@ -55,8 +72,13 @@ class Proot(
      */
     private val cjkFont = File("/system/fonts/NotoSansCJK-Regular.ttc")
 
-    /** Host directories bound over guest paths by [command]; the phone's storage too while [SharedStorage] allows it. */
-    private val binds get() = listOf("/tmp" to tmpDir, "/dev/shm" to tmpDir, GUEST_RUNTIME_DIR to runtimeDir) + dataBinds + storageBinds()
+    private val fixedBinds = listOf("/tmp" to tmpDir, "/dev/shm" to tmpDir, GUEST_RUNTIME_DIR to runtimeDir) + dataBinds
+
+    /** The phone's shared storage, as far as Android lets the launcher see it ([PhoneStorage]). */
+    private val storageBinds = if (PhoneStorage.supported()) listOf(PhoneStorage.GUEST to PhoneStorage.root) else emptyList()
+
+    /** Host directories bound over guest paths by [command]. */
+    private val binds = fixedBinds + storageBinds
 
     /**
      * Where an absolute guest path lives on the Android side, following the
@@ -70,26 +92,13 @@ class Proot(
     }
 
     /** Where the guest can see: the rootfs and the binds, as real paths. */
-    private val fixedVisible by lazy { (listOf(rootfs, tmpDir, runtimeDir) + dataBinds.map { it.second }).map { it.canonicalFile } }
-
-    /** Phone build: with /sdcard, bound only while it's allowed, so it can be turned on after the first check. */
-    private val visible get() = fixedVisible + storageBinds().map { it.second.canonicalFile }
-
-    @Volatile private var storageChecked = 0L to emptyList<Pair<String, File>>()
-
-    /**
-     * Phone build: [SharedStorage.binds], asked of Android at most once a second. Paths are resolved a part at a time,
-     * each through [binds] and [guestVisible], and each ask is a call into another process.
-     */
-    private fun storageBinds(): List<Pair<String, File>> {
-        val now = android.os.SystemClock.elapsedRealtime()
-        val (at, binds) = storageChecked
-        if (at != 0L && now - at < 1_000) return binds
-        return SharedStorage.binds().also { storageChecked = now to it }
-    }
+    private val visible by lazy { (listOf(rootfs) + binds.map { it.second }).map { it.canonicalFile } }
 
     /** Whether [real], a canonical host file, is one the guest can see, rather than the launcher's own. */
     fun guestVisible(real: File) = visible.any { real.startsWith(it) }
+
+    /** The empty directory in the rootfs that the phone's storage is bound over. */
+    private val storageMount get() = File(rootfs, PhoneStorage.GUEST.removePrefix("/"))
 
     /** The guest's files as it sees them; see [GuestFs]. */
     val guestFs by lazy { GuestFs(::hostFile, ::mountsIn, ::guestVisible) }
@@ -125,7 +134,8 @@ class Proot(
             host.mkdirs()
             if (rootfs.isDirectory) File(rootfs, guest.removePrefix("/")).mkdirs()
         }
-        showSharedStorage()
+        // Its mount point, so / lists it; Android 10 has none (an empty one is all that's left there).
+        if (rootfs.isDirectory) storageMount.let { if (PhoneStorage.supported()) it.mkdirs() else it.delete() }
         File(rootfs, "var/lib/pacman/db.lck").delete()
         // An empty stand-in, so fontconfig lists the bound font when it reads the directory.
         if (rootfs.isDirectory) {
@@ -152,8 +162,8 @@ class Proot(
     fun managed(): List<Managed> =
         listOf(Managed.asset(context, "bwrap-shim.sh", File(rootfs, "usr/local/bin/bwrap"), Policy.Owned, executable = true))
 
-    private fun command(script: String): List<String> =
-        listOf(
+    private fun command(script: String): List<String> {
+        return listOf(
             File(nativeDir, "libproot.so").path,
             "--kill-on-exit",
             "--link2symlink",
@@ -191,6 +201,10 @@ class Proot(
                 "DISABLE_AUTOUPDATER=1",
                 "OPENCODE_DISABLE_AUTOUPDATE=1",
                 "GROK_DISABLE_AUTOUPDATER=1",
+                // Claude Code's cross-session messaging (its internal switch, undocumented): proot sends opens of
+                // /proc/*/uid_map to /dev/null, for bwrap's writes, so Claude reads an empty map, takes it for a user
+                // namespace without one, and greets every start with a warning that messaging is off.
+                "CLAUDE_CODE_HARBOR_KITE=0",
                 "BROWSER=xdg-open",
                 // The launcher's editor; yazi and git open files with it. Its shim falls back to micro.
                 "EDITOR=$EDIT_COMMAND",
@@ -203,6 +217,7 @@ class Proot(
                 "MOZ_ENABLE_WAYLAND=1",
                 "SDL_VIDEODRIVER=wayland",
             ) + graphicsEnv + listOf("/bin/sh", "-c", script)
+    }
 
     /**
      * Kills every proot we started and every guest process: before the rootfs
@@ -223,17 +238,6 @@ class Proot(
     }
 
     /**
-     * Phone build: the empty mount point [SharedStorage] binds over while it's allowed. Without one, proot makes it up
-     * as it binds, and /sdcard works but isn't listed in / (nor in Files). Made as soon as it's allowed, from settings ›
-     * linux or before the next guest command, not only when Linux starts.
-     */
-    fun showSharedStorage() {
-        if (!rootfs.isDirectory || !SharedStorage.allowed()) return
-        val point = File(rootfs, SharedStorage.GUEST.removePrefix("/"))
-        if (!point.isDirectory && !point.mkdirs()) Log.w(TAG, "cannot make ${point.path}, /sdcard's mount point")
-    }
-
-    /**
      * Phone build: the names of [binds] right inside the guest directory [dir] whose host directory is there, so Files
      * lists them whether or not their mount point is in the rootfs; see [GuestFs.list].
      */
@@ -242,21 +246,22 @@ class Proot(
             .filter { (guest, host) -> guest.substringBeforeLast('/').ifEmpty { "/" } == dir && host.isDirectory }
             .map { it.first.substringAfterLast('/') }
 
-    /** A guest `sh -c [script]`, stderr merged into stdout. Needs [prepare] to have run. Phone build: [showSharedStorage] first. */
+    /** A guest `sh -c [script]`, stderr merged into stdout. Needs [prepare] to have run. */
     fun process(script: String): ProcessBuilder =
-        ProcessBuilder(command(script).also { showSharedStorage() }).apply {
+        ProcessBuilder(command(script)).apply {
             environment().apply {
                 clear()
                 put("PROOT_LOADER", File(nativeDir, "libproot-loader.so").path)
                 put("PROOT_TMP_DIR", tmpDir.path)
                 put("LD_LIBRARY_PATH", nativeDir.path)
+                if (!cpuPinning) put("PROOT_HOME_CPU", "off")
             }
             redirectErrorStream(true)
         }
 
     companion object {
-        // Phone build: for showSharedStorage's warning.
-        private const val TAG = "proot"
+        private const val CPU_PINNING = "proot_cpu_pinning"
+
         const val GUEST_HOME = "/root"
 
         /** XDG_RUNTIME_DIR in the guest, bound to [runtimeDir]. */

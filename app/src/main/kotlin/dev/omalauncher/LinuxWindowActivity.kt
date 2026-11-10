@@ -49,7 +49,7 @@ import dev.omalauncher.theme.Style
 import dev.omalauncher.ui.ExtraKeys
 import dev.omalauncher.ui.ImagePicker
 import dev.omalauncher.ui.KeyboardSink
-import dev.omalauncher.ui.MicPermission
+import dev.omalauncher.ui.WidgetAsks
 import dev.omalauncher.ui.Mono
 import dev.omalauncher.ui.Palette
 import dev.omalauncher.ui.TouchpadCursor
@@ -66,7 +66,7 @@ import kotlinx.coroutines.flow.first
 class LinuxWindowActivity : InstantActivity() {
     private var window: XdgToplevel? = null
     private val imagePicker = ImagePicker(this) { runtime }
-    private val mic = MicPermission(this)
+    private val asks = WidgetAsks(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,7 +100,7 @@ class LinuxWindowActivity : InstantActivity() {
         super.onResume()
         window?.let(runtime.wm::focus)
         runtime.keyboard.imagePicker = imagePicker
-        runtime.dictation.askMic = mic::ask
+        asks.resumed(runtime)
     }
 
     override fun onStop() {
@@ -132,7 +132,7 @@ class LinuxWindowActivity : InstantActivity() {
         super.onPause()
         runtime.keyboard.releaseHeld()
         if (runtime.keyboard.imagePicker === imagePicker) runtime.keyboard.imagePicker = null
-        runtime.dictation.askMic = null
+        asks.paused(runtime)
     }
 }
 
@@ -194,7 +194,7 @@ private fun AppWindow(
             .systemBarsPadding(),
     ) {
         AndroidView(
-            factory = { KeyboardSink(it, runtime.keyboard) { runtime.style.style[Style.TERMINAL_KEYBOARD_TEXT] }.also { v -> sink = v } },
+            factory = { KeyboardSink(it, runtime.keyboard).also { v -> sink = v } },
             modifier = Modifier.size(1.dp),
         )
         // Always the whole screen: a SurfaceView that changes size shows its last frame stretched until the next one,

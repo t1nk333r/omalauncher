@@ -15,11 +15,13 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputContentInfo
 import android.view.inputmethod.InputMethodManager
+import android.view.inputmethod.TextAttribute
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import dev.omalauncher.theme.Style
 import dev.omalauncher.wayland.GuestImages
 import dev.omalauncher.wayland.Keys
 import dev.omalauncher.widgets.lang.KeyNames
@@ -42,6 +44,9 @@ class KeyboardBridge(
 ) {
     /** Launcher shortcuts triggered with Meta (Super), like Omarchy's Super bindings. */
     var onShortcut: (Int) -> Boolean = { false }
+
+    /** Types what the active soft keyboard is still composing; keys sent from a widget call it first so they don't overtake it. */
+    var flush: () -> Unit = {}
 
     val ctrl = StickyModifier(Keys.KEY_LEFTCTRL)
     val alt = StickyModifier(Keys.KEY_LEFTALT)
@@ -281,8 +286,6 @@ class KeyboardBridge(
 class KeyboardSink(
     context: Context,
     private val bridge: KeyboardBridge,
-    /** Whether to offer the field as plain text so the keyboard shows its microphone (terminal.keyboard-text). */
-    private val keyboardText: () -> Boolean = { false },
 ) : View(context) {
     /**
      * Only claim to be a text editor while the soft keyboard is wanted. A focused
@@ -314,13 +317,31 @@ class KeyboardSink(
             }
         }
 
+    /**
+     * Text the IME is still composing, like pinyin before a candidate is picked. A window
+     * can't show it, and the IME's candidate bar does, so it's only typed once finished.
+     */
+    private var composing: CharSequence = ""
+
+    /** Types the pending composing text ahead of a key sent from elsewhere, and restarts the IME so it drops its copy. */
+    private val flushComposing: () -> Unit = {
+        val text = composing
+        if (text.isNotEmpty()) {
+            composing = ""
+            bridge.type(text)
+            imm().restartInput(this)
+        }
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        bridge.flush = flushComposing
         val uri = Settings.Secure.getUriFor(Settings.Secure.SELECTED_INPUT_METHOD_SUBTYPE)
         context.contentResolver.registerContentObserver(uri, false, subtypeObserver)
     }
 
     override fun onDetachedFromWindow() {
+        if (bridge.flush === flushComposing) bridge.flush = {}
         context.contentResolver.unregisterContentObserver(subtypeObserver)
         super.onDetachedFromWindow()
     }
@@ -330,28 +351,13 @@ class KeyboardSink(
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
         cjk = cjkKeyboard()
         // Like Termux: no suggestions or autocorrect, raw keys where the IME allows. Gboard
-        // drops pinyin and the like in such a field, so those get plain text, autocorrect and all.
-        // It also hides its microphone in a password field, so voice typing asks for plain text too;
-        // dictated words arrive as composing text and are typed when each phrase is finished.
-        outAttrs.inputType =
-            if (cjk) {
-                InputType.TYPE_CLASS_TEXT
-            } else if (keyboardText()) {
-                InputType.TYPE_CLASS_TEXT
-            } else {
-                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
-                    InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-            }
+        // drops pinyin and the like in such a field, so those get plain text, autocorrect and all, as does the
+        // terminal.keyboard-suggestions setting.
+        outAttrs.inputType = terminalInputType(cjk || LauncherStyle.style[Style.TERMINAL_SUGGESTIONS])
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_FLAG_NO_EXTRACT_UI
         // So Gboard's clipboard and screenshot suggestions can insert an image, see [KeyboardBridge.insertImage].
         outAttrs.contentMimeTypes = arrayOf("image/*")
         return object : BaseInputConnection(this, false) {
-            /**
-             * Text the IME is still composing, like pinyin before a candidate is picked. A window
-             * can't show it, and the IME's candidate bar does, so it's only typed once finished.
-             */
-            private var composing: CharSequence = ""
-
             override fun setComposingText(
                 text: CharSequence,
                 newCursorPosition: Int,
@@ -380,6 +386,24 @@ class KeyboardSink(
                 afterLength: Int,
             ): Boolean {
                 repeat(beforeLength.coerceAtLeast(1)) { bridge.tap(Keys.KEY_BACKSPACE) }
+                return true
+            }
+
+            /**
+             * A suggestion tapped that changes letters already typed, teh to the: Gboard replaces them here instead of
+             * composing. They end at the cursor, so they're backspaced over; the base class would only edit its own
+             * empty buffer, and the terminal would keep the old word.
+             */
+            override fun replaceText(
+                start: Int,
+                end: Int,
+                text: CharSequence,
+                newCursorPosition: Int,
+                textAttribute: TextAttribute?,
+            ): Boolean {
+                composing = ""
+                repeat(end - start) { bridge.tap(Keys.KEY_BACKSPACE) }
+                bridge.type(text)
                 return true
             }
 
@@ -443,6 +467,14 @@ class KeyboardSink(
         isFocusable = false
     }
 }
+
+/** The terminal input's type: plain text, or a password field that hides suggestions and takes raw keys. */
+internal fun terminalInputType(plain: Boolean) =
+    if (plain) {
+        InputType.TYPE_CLASS_TEXT
+    } else {
+        InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+    }
 
 private val cjkLanguages = setOf("zh", "ja", "ko")
 

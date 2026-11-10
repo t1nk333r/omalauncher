@@ -20,6 +20,9 @@
 
     <string name="home_drop_here">solte aqui</string>
     <string name="home_drop_face_only">aqui só cabe uma face</string>
+    <!-- The cue over a locked home screen. -->
+    <string name="home_lock_locked">tela bloqueada</string>
+    <string name="home_lock_unlock">desbloquear</string>
 
     <plurals name="home_file_problems">
         <item quantity="one">%1$s: %2$d problema</item>
@@ -49,6 +52,7 @@
     <string name="home_prompt_hint_short">apps</string>
 
     <string name="home_folder_named">pasta %1$s</string>
+    <string name="home_app_has_notifications">%1$s, tem notificações</string>
     <string name="home_folder">pasta</string>
     <string name="home_folder_tap_to_name">toque para nomear</string>
 

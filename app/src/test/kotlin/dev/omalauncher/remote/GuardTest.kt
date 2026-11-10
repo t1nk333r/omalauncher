@@ -65,6 +65,15 @@ class GuardTest {
     }
 
     @Test
+    fun refusesWhatUpstreamAddedSince1_0() {
+        for (s in listOf("location", "calendar", "airpods")) {
+            refused("  source x = android.$s\n  Text { text: \"${'$'}{x.granted}\"; onTap: $s(\"request\") }", "android.$s")
+            refused("  source x = android.$s\n  Text { text: \"${'$'}{x.granted}\"; onTap: $s(\"request\") }", "act as you: $s")
+        }
+        refused("  Browser { url: \"https://example.com/\" }", "browser GET")
+    }
+
+    @Test
     fun refusesPicturesFromFilesOrValues() {
         refused("  Image { src: \"/sdcard/DCIM/a.jpg\" }", "a file on the phone")
         refused("  Image { src: \"~/secret.png\" }", "a file on the phone")

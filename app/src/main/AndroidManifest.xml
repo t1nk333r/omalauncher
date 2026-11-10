@@ -7,14 +7,25 @@
          at start and before Linux starts (PR #47), and from a row in settings while it's missing
          (LocalNetwork.kt). -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
-    <!-- Phone build: the daily backup to Feather waits for Wi-Fi; from Android 14 a job with a network
-         constraint needs this, or scheduling it throws (backup/Backups.kt). -->
+    <!-- Linux follows the phone's DNS servers (LinuxDns); phone build: the daily backup to Feather waits for
+         Wi-Fi too, and from Android 14 a job with a network constraint needs this (backup/Backups.kt). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Speech input for the agent prompt bar; only recognized text reaches Linux. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Widgets' android.location, after a tap on location("request"): approximate only, and only while on screen. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Widgets' android.calendar, only after a tap on calendar("request"). -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
+    <!-- AirPods' batteries and settings for android.airpods (AirPods.kt), over their own link. Asked for by a widget's
+         first airpods(...); before Android 12, BLUETOOTH covers it. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
 
     <!-- Uninstall from the app drawer's long-press menu (ACTION_DELETE). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
@@ -144,6 +155,14 @@
         <!-- Opens a speech app's "speak now" screen for Speech and hands the words back; shows nothing itself. -->
         <activity
             android:name=".SpeakNowActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Omalauncher.Dialog" />
+        <!-- Android's file picker for `omalauncher pick` (PhoneBridge); shows nothing itself. -->
+        <activity
+            android:name=".PickActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
             android:excludeFromRecents="true"
             android:exported="false"
@@ -286,6 +305,55 @@
             android:exported="false"
             android:icon="@drawable/agent_kimi"
             android:label="Kimi"
+            android:targetActivity=".LinuxWindowActivity" />
+
+        <activity-alias
+            android:name=".QwenWindow"
+            android:exported="false"
+            android:icon="@drawable/agent_qwen"
+            android:label="Qwen Code"
+            android:targetActivity=".LinuxWindowActivity" />
+
+        <activity-alias
+            android:name=".McodeWindow"
+            android:exported="false"
+            android:icon="@drawable/agent_mcode"
+            android:label="MiniMax Code"
+            android:targetActivity=".LinuxWindowActivity" />
+
+        <activity-alias
+            android:name=".KiroCliWindow"
+            android:exported="false"
+            android:icon="@drawable/agent_kiro_cli"
+            android:label="Kiro CLI"
+            android:targetActivity=".LinuxWindowActivity" />
+
+        <activity-alias
+            android:name=".KiloWindow"
+            android:exported="false"
+            android:icon="@drawable/agent_kilo"
+            android:label="Kilo"
+            android:targetActivity=".LinuxWindowActivity" />
+
+        <activity-alias
+            android:name=".DevinWindow"
+            android:exported="false"
+            android:icon="@drawable/agent_devin"
+            android:label="Devin CLI"
+            android:targetActivity=".LinuxWindowActivity" />
+
+        <activity-alias
+            android:name=".AmpWindow"
+            android:exported="false"
+            android:icon="@drawable/agent_amp"
+            android:label="Amp"
+            android:targetActivity=".LinuxWindowActivity" />
+
+        <activity-alias
+            android:name=".CommandcodeWindow"
+            android:exported="false"
+            android:icon="@drawable/agent_commandcode"
+            android:label="Command Code"
             android:targetActivity=".LinuxWindowActivity" />
 
         <!-- One task per owl app, named after it; launched with its file name in the intent's data. -->
