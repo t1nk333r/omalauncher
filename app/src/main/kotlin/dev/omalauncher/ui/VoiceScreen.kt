@@ -2,6 +2,7 @@ package dev.omalauncher.ui
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
