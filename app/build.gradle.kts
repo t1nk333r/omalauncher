@@ -25,7 +25,7 @@ android {
         versionCode = 3403
         versionName = "1.1.0-phone.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        ndk { abiFilters += "arm64-v8a" }
+        ndk { abiFilters += providers.gradleProperty("keyboardTestAbi").getOrElse("arm64-v8a") }
     }
 
     buildFeatures { buildConfig = true }
@@ -52,7 +52,10 @@ android {
     bundle { language { enableSplit = false } }
 
     // android.util.Log and friends are no-ops in JVM tests instead of throwing.
-    testOptions { unitTests.isReturnDefaultValues = true }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        unitTests.isIncludeAndroidResources = true
+    }
 
     signingConfigs {
         create("release") {
@@ -100,7 +103,12 @@ dependencies {
     implementation(libs.androidsvg)
     implementation(libs.zxing.core)
     implementation(project(":owl"))
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("org.jetbrains.compose.ui:ui-test-junit4:1.12.2")
     testImplementation(libs.junit)
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("org.jetbrains.compose.ui:ui-test-junit4:1.12.2")
+    debugImplementation("androidx.compose.ui:ui-test-manifest:1.12.1")
     // android.jar only has stubs of org.json.
     testImplementation(libs.org.json)
     androidTestImplementation(libs.junit)
