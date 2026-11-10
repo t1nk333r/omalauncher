@@ -105,7 +105,7 @@ class SystemUpdates(
 
     private fun runCheck(): PendingUpdates {
         val out = StringBuilder()
-        val code = runCatching { proot.run(CHECK_SCRIPT) { out.appendLine(it) } }.getOrElse { -1 }
+        val code = runCatching { proot.job { proot.run(CHECK_SCRIPT) { out.appendLine(it) } } }.getOrElse { -1 }
         val text = out.toString()
         val now = System.currentTimeMillis()
         if (code != 0 || "#pacman-error" in text) {

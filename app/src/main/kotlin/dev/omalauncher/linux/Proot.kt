@@ -9,6 +9,7 @@ import dev.omalauncher.PhoneStorage
 import dev.omalauncher.upgrade.Managed
 import dev.omalauncher.upgrade.Policy
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Paths and process launching for the proot'd Arch rootfs. */
 class Proot(
@@ -42,6 +43,15 @@ class Proot(
     @Volatile var graphicsEnv: List<String> = SOFTWARE_ENV
 
     private val prefs = LauncherData.prefs(context)
+
+    /** proot itself, as a guest process's command line names it. */
+    val prootBinary: String = File(nativeDir, "libproot.so").path
+
+    /** Phone build: the launcher's jobs running in the guest (installs, updates), which keep Linux awake ([GuestSleep]). */
+    val jobs = AtomicInteger()
+
+    /** Phone build: called before the launcher uses the guest, so a sleeping one wakes ([GuestSleep.needed]). */
+    @Volatile var onUse: () -> Unit = {}
 
     /**
      * proot keeping itself and programs making many syscalls on one fast CPU (patches/proot/0002): Linux runs
@@ -247,8 +257,9 @@ class Proot(
             .map { it.first.substringAfterLast('/') }
 
     /** A guest `sh -c [script]`, stderr merged into stdout. Needs [prepare] to have run. */
-    fun process(script: String): ProcessBuilder =
-        ProcessBuilder(command(script)).apply {
+    fun process(script: String): ProcessBuilder {
+        onUse()
+        return ProcessBuilder(command(script)).apply {
             environment().apply {
                 clear()
                 put("PROOT_LOADER", File(nativeDir, "libproot-loader.so").path)
@@ -258,6 +269,7 @@ class Proot(
             }
             redirectErrorStream(true)
         }
+    }
 
     companion object {
         private const val CPU_PINNING = "proot_cpu_pinning"

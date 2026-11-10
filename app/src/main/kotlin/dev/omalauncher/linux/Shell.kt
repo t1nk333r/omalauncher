@@ -161,6 +161,16 @@ internal fun forEachOutputLine(
     if (line.isNotEmpty()) onLine(line.toString())
 }
 
+/** Phone build: runs [block] as one of the launcher's [Proot.jobs], which keep Linux awake. */
+fun <T> Proot.job(block: () -> T): T {
+    jobs.incrementAndGet()
+    try {
+        return block()
+    } finally {
+        jobs.decrementAndGet()
+    }
+}
+
 /** Like [run], reporting the tail of the output to [report] as it comes. Returns success and the tail. */
 fun Proot.runJob(
     script: String,
@@ -168,7 +178,7 @@ fun Proot.runJob(
     report: (List<String>) -> Unit = {},
 ): Pair<Boolean, OutputTail> {
     val ok =
-        runCatching { run(script) { if (tail.add(it)) report(tail.toList()) } == 0 }
+        runCatching { job { run(script) { if (tail.add(it)) report(tail.toList()) } } == 0 }
             .getOrElse {
                 tail.add(it.message ?: it.toString())
                 false

@@ -26,6 +26,7 @@ import dev.omalauncher.linux.EDIT_COMMAND
 import dev.omalauncher.linux.FILES_COMMAND
 import dev.omalauncher.linux.VOICE_COMMAND
 import dev.omalauncher.linux.Gpu
+import dev.omalauncher.linux.GuestSleep
 import dev.omalauncher.linux.LinuxApp
 import dev.omalauncher.linux.LinuxDns
 import dev.omalauncher.linux.OpenBridge
@@ -191,6 +192,9 @@ class Runtime(
 
     /** Your own names and icons for apps; after [scope], which loads the icons. */
     val customs = AppCustoms(context, scope)
+
+    /** Phone build: Linux sleeps while the screen is off and nothing keeps it busy; after [scope]. */
+    private val guestSleep = GuestSleep(context, proot, scope) { audio.sounding }.also { proot.onUse = it::needed }
 
     private val prefs = LauncherData.prefs(context)
 
@@ -379,6 +383,7 @@ class Runtime(
                 widgets.linuxChanged(false)
                 audio.stop()
                 agentDaemon.stop()
+                guestSleep.linux(false)
                 withContext(Dispatchers.IO) { proot.killAll() }
                 bootstrap.remove()
                 withContext(Dispatchers.IO) {
@@ -407,6 +412,7 @@ class Runtime(
             audio.stop()
             // Ended with the other guest processes, and not started again until Linux is.
             agentDaemon.stop()
+            guestSleep.linux(false)
             withContext(Dispatchers.IO) { proot.killAll() }
             setService(false)
         }
@@ -474,6 +480,7 @@ class Runtime(
             agentDaemon.start()
         }
         widgets.linuxChanged(true)
+        guestSleep.linux(true)
         refreshApps()
         withContext(Dispatchers.IO) { updates.load() }
         scope.launch {

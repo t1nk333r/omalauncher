@@ -39,8 +39,9 @@ class GuestShell(
         command: String,
         timeoutSeconds: Int = 10,
         retry: Boolean = true,
-    ): ShellResult =
-        mutex.withLock {
+    ): ShellResult {
+        proot.onUse()
+        return mutex.withLock {
             withContext(Dispatchers.IO) {
                 runCatching { exec(command, timeoutSeconds) }.getOrElse {
                     stop()
@@ -49,6 +50,7 @@ class GuestShell(
                 }
             }
         }
+    }
 
     private fun exec(
         command: String,

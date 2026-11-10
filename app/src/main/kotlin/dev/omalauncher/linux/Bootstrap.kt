@@ -701,7 +701,7 @@ class Bootstrap(
 
     private fun guest(script: String) {
         log.add("$ $script")
-        val code = proot.run(script) { line -> if (log.add(line)) report(stage, step) }
+        val code = proot.job { proot.run(script) { line -> if (log.add(line)) report(stage, step) } }
         check(code == 0) { text(R.string.linux_error_command, script.take(60), code) }
     }
 }

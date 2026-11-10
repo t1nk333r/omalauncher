@@ -38,6 +38,9 @@ class AudioBridge(
     private val lock = Object()
     private var playing = false
 
+    /** Phone build: Linux is playing sound, which keeps it awake while the screen is off ([GuestSleep]). */
+    val sounding get() = synchronized(lock) { playing }
+
     @Volatile
     private var lastData = 0L
 
