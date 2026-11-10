@@ -71,6 +71,7 @@ import kotlinx.coroutines.launch
  * previews, with search and category tabs (and one for the newest). Faces and apps: the reviewed ones, the same way.
  * Tapping one opens its page, which shows what it installs and runs; from there a widget goes on the current page,
  * a face left of page 1 and an app in the drawer (or any of them updates). An installed app opens from its page too.
+ * Phone build: the owner's own gallery (see [dev.omalauncher.widgets.Gallery]) comes first in each kind, installed the same way.
  */
 @Composable
 fun StoreScreen(
@@ -87,15 +88,19 @@ fun StoreScreen(
 ) {
     var kind by remember { mutableStateOf(initialKind) }
     val market = engine.market(kind)
+    // Phone build: the gallery's catalog of this kind, once its token is there.
+    val gallery = engine.gallery.market(kind)?.takeIf { engine.gallery.hasToken }
     val scope = rememberCoroutineScope()
-    var open by remember { mutableStateOf<String?>(null) }
+    // The entry whose page shows, and which catalog it's in: the gallery's ids may be the store's too.
+    var open by remember { mutableStateOf<Pair<Market, String>?>(null) }
     var message by remember { mutableStateOf<StoreMessage?>(null) }
     var viewing by remember { mutableStateOf<ImageBitmap?>(null) }
     // Each kind keeps its search, tab and scroll while the other shows.
     val filters = remember { OwlKind.entries.associateWith { StoreFilter() } }
     val filter = filters.getValue(kind)
     LaunchedEffect(market) { market.refresh() }
-    val detail = open?.let { id -> market.entries.firstOrNull { it.id == id } }
+    LaunchedEffect(gallery) { gallery?.refresh() }
+    val detail = open?.let { (m, id) -> m.entries.firstOrNull { it.id == id }?.let { m to it } }
     val back = {
         open = null
         message = null
@@ -104,7 +109,7 @@ fun StoreScreen(
         // What the panel's content gets: the screen less the gap and padding on both sides.
         val wide = maxWidth - (PanelGap + PanelPadding) * 2 >= 720.dp
         // On its own, an entry's page takes the header: a chevron back to the grid and its name, nothing else.
-        val alone = detail?.takeIf { !wide }
+        val alone = detail?.second?.takeIf { !wide }
         OverlayPanel(
             alone?.name ?: stringResource(R.string.store_title),
             onDismiss,
@@ -116,23 +121,26 @@ fun StoreScreen(
                         open = null
                         message = null
                     }
-                    RefreshButton(market.loading) { scope.launch { market.refresh() } }
+                    RefreshButton(market.loading || gallery?.loading == true) {
+                        scope.launch { market.refresh() }
+                        scope.launch { gallery?.refresh() }
+                    }
                 }
             },
         ) {
             BoxWithConstraints {
                 val paneWidth = (maxWidth * 0.42f).coerceIn(340.dp, 520.dp)
                 // Side by side, the pane is never empty: until one is tapped, the grid's first entry shows in it.
-                val picked = if (wide) detail ?: shownEntries(market, filter).firstOrNull() else detail
-                val select = { id: String ->
-                    open = id
+                val picked = if (wide) detail ?: (gallery?.let { g -> shownEntries(g, filter).firstOrNull()?.let { g to it } } ?: shownEntries(market, filter).firstOrNull()?.let { market to it }) else detail
+                val select = { m: Market, id: String ->
+                    open = m to id
                     message = null
                 }
-                val showDetail = @Composable { e: CatalogEntry, modifier: Modifier ->
+                val showDetail = @Composable { m: Market, e: CatalogEntry, modifier: Modifier ->
                     // Acting on the preselected entry picks it, so its message stays with it when the grid's first entry changes.
-                    val pick = { open = e.id }
+                    val pick = { open = m to e.id }
                     Detail(
-                        market = market,
+                        market = m,
                         e = e,
                         theme = theme,
                         linux = engine.linux,
@@ -140,28 +148,40 @@ fun StoreScreen(
                         message = message,
                         modifier = modifier,
                         onView = { viewing = it },
-                        onOpen = { market.installedVersion(e)?.let { onOpenApp(it.file) } },
+                        onOpen = { m.installedVersion(e)?.let { onOpenApp(it.file) } },
                         onInstall = {
                             pick()
                             scope.launch {
-                                message = market.install(e, page)
+                                message = m.install(e, page)
                                 // A widget closes the store to show it on its page; an app or a face stays, its page saying where it went.
-                                if (message == null && market.kind == OwlKind.Widget) onDismiss()
+                                if (message == null && m.kind == OwlKind.Widget) onDismiss()
                             }
                         },
                         onAddPages = {
                             pick()
-                            scope.launch { message = market.addPages(e) }
+                            scope.launch { message = m.addPages(e) }
                         },
                         onRemove = {
                             pick()
                             message = null
-                            market.remove(e)
+                            m.remove(e)
                         },
+                        onRemoveFromGallery =
+                            if (m !== gallery) {
+                                null
+                            } else {
+                                {
+                                    pick()
+                                    scope.launch {
+                                        message = engine.gallery.remove(m, e)
+                                        if (message == null) open = null
+                                    }
+                                }
+                            },
                     )
                 }
                 val list = @Composable { modifier: Modifier ->
-                    StoreList(engine, market, agents, page, theme, filter, if (wide) picked?.id else null, modifier, select, onDismiss)
+                    StoreList(engine, market, gallery, agents, page, theme, filter, if (wide) picked?.let { (m, e) -> m to e.id } else null, modifier, select, onDismiss)
                 }
                 when {
                     // Side by side: the grid, and the picked widget's page beside it.
@@ -171,7 +191,7 @@ fun StoreScreen(
                             Box(Modifier.padding(horizontal = 12.dp).width(1.dp).fillMaxHeight().background(Palette.border))
                             val pane = Modifier.width(paneWidth).fillMaxHeight()
                             if (picked != null) {
-                                showDetail(picked, pane)
+                                showDetail(picked.first, picked.second, pane)
                             } else {
                                 Box(pane, contentAlignment = Alignment.Center) {
                                     BasicText(stringResource(pickText(kind)), style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
@@ -180,7 +200,7 @@ fun StoreScreen(
                         }
                     detail != null -> {
                         BackHandler(onBack = back)
-                        showDetail(detail, Modifier.padding(top = 8.dp).widthIn(max = ReadingWidth).align(Alignment.TopCenter))
+                        showDetail(detail.first, detail.second, Modifier.padding(top = 8.dp).widthIn(max = ReadingWidth).align(Alignment.TopCenter))
                     }
                     else -> list(Modifier)
                 }
@@ -231,13 +251,15 @@ private class StoreFilter {
 private fun StoreList(
     engine: WidgetEngine,
     market: Market,
+    /** Phone build: the owner's gallery of this kind, or null while it has no token. */
+    gallery: Market?,
     agents: List<Agent>,
     page: Int,
     theme: String?,
     filter: StoreFilter,
-    selected: String?,
+    selected: Pair<Market, String>?,
     modifier: Modifier,
-    onOpen: (String) -> Unit,
+    onOpen: (Market, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val apps = market.kind == OwlKind.App
@@ -245,26 +267,31 @@ private fun StoreList(
     val noun = stringResource(kindPlural(market.kind))
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
+    var connecting by remember { mutableStateOf(false) }
     Column(modifier) {
+        // Phone build: the tabs count the gallery's too.
+        val every = market.entries + gallery?.entries.orEmpty()
         val installed = market.entries.filter { market.installedVersion(it) != null }
+        val galleryInstalled = gallery?.let { g -> g.entries.filter { g.installedVersion(it) != null } }.orEmpty()
         val tabs =
             buildList {
-                add(ALL to market.entries.size)
+                add(ALL to every.size)
                 // There even when nothing is new.
-                if (!apps) add(NEW to market.entries.count { it.new })
+                if (!apps) add(NEW to every.count { it.new })
                 // The biggest categories first, ties in the catalog's order. Ones the store added after this launcher was built
                 // get a tab too, so a new category doesn't wait for an update.
                 val known = { c: String -> Catalog.CATEGORIES.indexOf(c).takeIf { it >= 0 } ?: Int.MAX_VALUE }
-                market.entries.mapNotNull { it.category }.filter { it != OTHER }.groupingBy { it }.eachCount().entries
+                every.mapNotNull { it.category }.filter { it != OTHER }.groupingBy { it }.eachCount().entries
                     .sortedWith(compareBy({ -it.value }, { known(it.key) }, { it.key }))
                     .forEach { (c, n) -> add(c to n) }
-                market.entries.count { it.category == null }.takeIf { it > 0 }?.let { add(OTHER to it) }
+                every.count { it.category == null }.takeIf { it > 0 }?.let { add(OTHER to it) }
                 // There even when nothing is, as "new" is, so each kind's store has the same tabs.
-                add(INSTALLED to installed.size)
+                add(INSTALLED to installed.size + galleryInstalled.size)
             }
         val q = filter.query.trim().lowercase()
         val shown = shownEntries(market, filter)
-        val updates = installed.count { market.hasUpdate(it) }
+        val galleryShown = gallery?.let { shownEntries(it, filter) }.orEmpty()
+        val updates = installed.count { market.hasUpdate(it) } + galleryInstalled.count { gallery!!.hasUpdate(it) }
 
         SearchField(filter.query, { filter.query = it }, onGo = { keyboard?.hide() }, placeholder = stringResource(R.string.store_search, market.entries.size, noun))
         Spacer(Modifier.height(8.dp))
@@ -318,6 +345,25 @@ private fun StoreList(
                     }
                 }
             }
+            // Phone build: the owner's own gallery, before upstream's.
+            item(key = "gallery", span = { GridItemSpan(maxLineSpan) }) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) { Caption(stringResource(R.string.phone_gallery_caption, noun, engine.gallery.repo)) }
+                        BracketAction(stringResource(R.string.phone_gallery_token), Palette.muted) { connecting = true }
+                    }
+                    when {
+                        gallery == null -> BasicText(stringResource(R.string.phone_gallery_no_token), style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+                        gallery.loading && gallery.entries.isEmpty() -> BasicText(stringResource(R.string.store_loading), style = Mono.copy(color = Palette.muted))
+                        gallery.error != null && gallery.entries.isEmpty() -> BasicText(gallery.error?.resolve().orEmpty(), style = Mono.copy(color = Palette.red))
+                        gallery.entries.isEmpty() -> BasicText(stringResource(R.string.phone_gallery_empty, noun), style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+                        galleryShown.isEmpty() -> BasicText(stringResource(R.string.phone_gallery_no_match), style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small))
+                    }
+                }
+            }
+            if (gallery != null) {
+                items(galleryShown, key = { "gallery:" + it.id }) { e -> Card(gallery, e, theme, engine.linux, selected = selected?.first === gallery && selected.second == e.id) { onOpen(gallery, e.id) } }
+            }
             item(key = "catalog", span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Caption(stringResource(R.string.store_reviewed, noun, Market.REPO))
@@ -331,7 +377,14 @@ private fun StoreList(
                     }
                 }
             }
-            items(shown, key = { it.id }) { e -> Card(market, e, theme, engine.linux, selected = e.id == selected) { onOpen(e.id) } }
+            items(shown, key = { it.id }) { e -> Card(market, e, theme, engine.linux, selected = selected?.first === market && selected.second == e.id) { onOpen(market, e.id) } }
+        }
+    }
+    if (connecting) {
+        GalleryTokenDialog(engine.gallery, onDismiss = { connecting = false }) {
+            connecting = false
+            // A new token may see what the old one couldn't.
+            engine.gallery.market(market.kind)?.let { scope.launch { it.refresh() } }
         }
     }
 }
@@ -625,6 +678,8 @@ private fun Detail(
     onInstall: () -> Unit,
     onAddPages: () -> Unit,
     onRemove: () -> Unit,
+    /** Phone build: takes it out of the owner's gallery; null for the store's. */
+    onRemoveFromGallery: (() -> Unit)? = null,
 ) = key(e.id) {
     val installed = market.installedVersion(e)
     val update = market.hasUpdate(e)
@@ -725,6 +780,22 @@ private fun Detail(
                 ) {
                     confirming = false
                     onRemove()
+                }
+            }
+        }
+        if (onRemoveFromGallery != null && busy == null) {
+            // Asked first: the other phones can't install it after.
+            var confirming by remember { mutableStateOf(false) }
+            BracketAction(stringResource(R.string.phone_gallery_remove), Palette.red) { confirming = true }
+            if (confirming) {
+                ConfirmDialog(
+                    stringResource(R.string.phone_gallery_remove_confirm, e.name),
+                    stringResource(R.string.phone_gallery_remove_message),
+                    stringResource(R.string.phone_gallery_remove),
+                    onDismiss = { confirming = false },
+                ) {
+                    confirming = false
+                    onRemoveFromGallery()
                 }
             }
         }

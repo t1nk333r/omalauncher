@@ -545,6 +545,13 @@ private fun ThemesOverlay(
             onDismiss = { state.sharing = null },
         )
     }
+    // Phone build: the first upload asks for the gallery's token, then goes on.
+    state.galleryUpload?.let { spec ->
+        GalleryTokenDialog(runtime.widgets.gallery, onDismiss = { state.galleryUpload = null }) {
+            state.galleryUpload = null
+            runtime.widgets.gallery.upload(spec)
+        }
+    }
 }
 
 /** Clear of the system bars and of the camera cutout, which landscape puts at a side. */

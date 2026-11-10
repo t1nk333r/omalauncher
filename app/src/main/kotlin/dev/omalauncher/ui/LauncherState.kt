@@ -34,6 +34,9 @@ class LauncherState {
     /** The widget whose share panel is open: a QR code and link, or the store. */
     var sharing by mutableStateOf<dev.omalauncher.widgets.WidgetSpec?>(null)
 
+    /** Phone build: a widget to upload to the gallery once its GitHub token is pasted. */
+    var galleryUpload by mutableStateOf<dev.omalauncher.widgets.WidgetSpec?>(null)
+
     /** A widget link that was opened (scanned from a QR code), waiting for the user to read it and add it. */
     var shared by mutableStateOf<String?>(null)
 
@@ -50,6 +53,7 @@ class LauncherState {
         homeMenuOpen = false
         shared = null
         sharing = null
+        galleryUpload = null
     }
 
     /** Key of the home tile in edit mode (handles and action bar shown), if any. */

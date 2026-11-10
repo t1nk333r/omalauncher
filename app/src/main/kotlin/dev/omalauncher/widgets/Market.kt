@@ -36,6 +36,24 @@ data class StoreMessage(
 )
 
 /**
+ * Where a [Market]'s catalog and files come from: the store's GitHub Pages, or (phone build) the owner's gallery,
+ * a private repo read with their token. [prefix] starts installed files' names and the install records' file.
+ */
+interface MarketSource {
+    val prefix: String
+
+    /** The file at [path] relative to the catalog, whole; a missing one is an IOException starting "HTTP 404". Blocking. */
+    fun get(path: String): ByteArray
+
+    /** The store's catalog: anyone's to read. */
+    object Store : MarketSource {
+        override val prefix = "market"
+
+        override fun get(path: String) = httpGet(Market.BASE + path)
+    }
+}
+
+/**
  * The marketplace for one [kind]: a reviewed catalog published from a GitHub repo to
  * GitHub Pages, widgets in index.json, faces in faces.json and apps in apps.json. Installs
  * are checked against the catalog's SHA-256, land on the current page (a face left of page
@@ -46,6 +64,7 @@ data class StoreMessage(
 class Market(
     private val engine: WidgetEngine,
     val kind: OwlKind,
+    private val source: MarketSource = MarketSource.Store,
 ) {
     companion object {
         /** The marketplace repo: widgets are submitted there as pull requests. */
@@ -100,17 +119,20 @@ class Market(
     val installed = mutableStateMapOf<String, Installed>()
     private val previews = StoreImages(PREVIEW_BYTES)
     private val icons = HashMap<Pair<String, Int>, ImageBitmap?>()
-    private val catalog = if (kind == OwlKind.Widget) "index.json" else "${kind.word}s.json"
+    internal val catalog = if (kind == OwlKind.Widget) "index.json" else "${kind.word}s.json"
+
+    /** What the catalog lists its entries under. */
+    internal val list = "${kind.word}s"
 
     /** Each kind keeps its own records: an app and a widget may share an id. */
-    private val record get() = File(engine.dir, if (kind == OwlKind.Widget) ".market.json" else ".market-${kind.word}s.json")
+    private val record get() = File(engine.dir, if (kind == OwlKind.Widget) ".${source.prefix}.json" else ".${source.prefix}-${kind.word}s.json")
 
     suspend fun refresh() {
         if (loading) return
         loading = true
         error = null
         try {
-            entries = withContext(Dispatchers.IO) { Catalog.parse(String(httpGet(BASE + catalog)), "${kind.word}s") }
+            entries = withContext(Dispatchers.IO) { Catalog.parse(String(source.get(catalog)), list) }
             refreshedAt = System.currentTimeMillis()
         } catch (e: Exception) {
             // A catalog the store doesn't publish yet (faces.json, before the first face) is an empty one.
@@ -134,7 +156,7 @@ class Market(
     fun fileFor(
         e: CatalogEntry,
         n: Int = 1,
-    ) = (if (kind == OwlKind.Widget) "market-" else "market-${kind.word}-") + "${e.author}-${e.id.substringAfter('/')}" + (if (n > 1) ".$n" else "") + ".owl"
+    ) = (if (kind == OwlKind.Widget) "${source.prefix}-" else "${source.prefix}-${kind.word}-") + "${e.author}-${e.id.substringAfter('/')}" + (if (n > 1) ".$n" else "") + ".owl"
 
     /** Bumped when [remove] moves files away, which no state shows, so the store's pages ask [installedVersion] again. */
     private var removals by mutableIntStateOf(0)
@@ -174,14 +196,36 @@ class Market(
         return i.files.any { page -> File(engine.dir, page.file).exists() && edited(page) }
     }
 
-    private fun edited(page: PageFile): Boolean {
-        val sha = page.sha256 ?: return true
-        val file = File(engine.dir, page.file)
-        val stamp = file.length() to file.lastModified()
-        editedFiles[page.file]?.takeIf { it.first == stamp }?.let { return it.second }
-        val edited = runCatching { sha256Hex(file.readBytes()) != sha }.getOrDefault(true)
-        editedFiles[page.file] = stamp to edited
-        return edited
+    // Phone build: the long-press menu asks too, off the main thread (see WidgetEngine.canUpload).
+    private fun edited(page: PageFile): Boolean =
+        synchronized(editedFiles) {
+            val sha = page.sha256 ?: return true
+            val file = File(engine.dir, page.file)
+            val stamp = file.length() to file.lastModified()
+            editedFiles[page.file]?.takeIf { it.first == stamp }?.let { return it.second }
+            val edited = runCatching { sha256Hex(file.readBytes()) != sha }.getOrDefault(true)
+            editedFiles[page.file] = stamp to edited
+            return edited
+        }
+
+    /** Phone build: whether the file [name], one this catalog installed, changed since; null when it isn't one of them. */
+    fun editedFile(name: String): Boolean? = installed.values.firstNotNullOfOrNull { i -> i.files.firstOrNull { it.file == name } }?.let(::edited)
+
+    /**
+     * Phone build: records [file] as [e] installed, for one the user uploaded from it: unchanged, there's nothing to upload
+     * again, and an update uploaded from another phone replaces it as any install's does.
+     */
+    fun adopt(
+        e: CatalogEntry,
+        file: String,
+    ) {
+        installed[e.id] = Installed(e.id, file, e.version, e.commands, e.requires, e.sha256)
+        save()
+    }
+
+    /** Phone build: forgets [id]'s install, once it's gone from the catalog; its file stays where it is, the user's own. */
+    fun forget(id: String) {
+        if (installed.remove(id) != null) save()
     }
 
     /**
@@ -228,7 +272,7 @@ class Market(
             // All of them or none: a face whose second page failed to download would be half there.
             val bytes =
                 withContext(Dispatchers.IO) {
-                    picked.associateWith { n -> httpGet(BASE + paths[n].first) }
+                    picked.associateWith { n -> source.get(paths[n].first) }
                 }
             if (bytes.any { (n, b) -> sha256Hex(b) != paths[n].second }) return StoreMessage(R.string.store_download_mismatch)
             // A page on home keeps its place; a new one goes where the user is. Apps go in the drawer, on no page, and a face's
@@ -328,7 +372,7 @@ class Market(
         if (previews.wasFetched(path)) {
             previews.fetched(path)
         } else {
-            runCatching { httpGet(BASE + path) }.getOrNull().also { previews.fetched(path, it) }
+            runCatching { source.get(path) }.getOrNull().also { previews.fetched(path, it) }
         }
 
     /**
@@ -345,7 +389,7 @@ class Market(
         val img =
             withContext(Dispatchers.IO) {
                 runCatching {
-                    if (e.icon != null) decodeSvgIcon(e.icon!!, size, accent) else decodeImageIcon(httpGet(BASE + e.iconFile), size)
+                    if (e.icon != null) decodeSvgIcon(e.icon!!, size, accent) else decodeImageIcon(source.get(e.iconFile!!), size)
                 }.getOrNull()?.asImageBitmap()
             }
         synchronized(icons) { icons[key] = img }

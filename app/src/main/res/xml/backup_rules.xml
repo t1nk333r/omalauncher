@@ -12,7 +12,8 @@
   opens with this install's key anyway. The same for the PC agent's settings, token and
   record of what it wrote (pc_agent.xml, pc-agent-token, pc-agent/): a restored phone
   starts with it off. And the copies of widgets it replaced (widgets/.pc-agent-history),
-  which could pass the quota on their own.
+  which could pass the quota on their own. The widget gallery's sealed GitHub token
+  (gallery-token) stays out too: it only opens with this install's key.
 -->
 <full-backup-content>
     <exclude domain="file" path="arch" />
@@ -32,6 +33,7 @@
     <exclude domain="file" path=".restore-kept" />
     <exclude domain="sharedpref" path="backup.xml" />
     <exclude domain="file" path="pc-agent-token" />
+    <exclude domain="file" path="gallery-token" />
     <exclude domain="sharedpref" path="pc_agent.xml" />
     <exclude domain="file" path="pc-agent" />
     <exclude domain="file" path="widgets/.pc-agent-history" />

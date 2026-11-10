@@ -282,4 +282,22 @@
     <string name="phone_pc_agent_copied">copied</string>
     <string name="phone_pc_agent_local_network">local network</string>
     <string name="phone_pc_agent_local_network_subtitle">let your computer reach the launcher over wi-fi</string>
+
+    <!-- The owner's own widget gallery, a private GitHub repo: home's long-press upload, and its row in the store. -->
+    <string name="phone_gallery_upload">upload</string>
+    <string name="phone_gallery_uploading">uploading %1$s to your gallery…</string>
+    <string name="phone_gallery_uploaded">%1$s is in your gallery, v%2$s</string>
+    <string name="phone_gallery_upload_failed">couldn\'t upload %1$s: %2$s</string>
+    <string name="phone_gallery_token_title">your gallery\'s github token</string>
+    <string name="phone_gallery_token_hint">a fine-grained token on github.com, repository access: only %1$s, permissions: contents read and write. kept encrypted on this phone; blank forgets it</string>
+    <string name="phone_gallery_caption">your %1$s from github.com/%2$s</string>
+    <string name="phone_gallery_token">token</string>
+    <string name="phone_gallery_no_token">paste a github token to see the widgets you uploaded; upload more from home\'s long-press menu</string>
+    <string name="phone_gallery_empty">no %1$s uploaded yet: long-press one you made or changed on home and tap upload</string>
+    <string name="phone_gallery_no_match">none of yours match</string>
+    <string name="phone_gallery_removing">removing from your gallery…</string>
+    <string name="phone_gallery_remove">remove from gallery</string>
+    <string name="phone_gallery_remove_confirm">remove %1$s from your gallery?</string>
+    <string name="phone_gallery_remove_message">your other phones can\'t install it from there anymore. a copy on this phone\'s home stays.</string>
+    <string name="phone_gallery_remove_failed">couldn\'t remove it from your gallery: %1$s</string>
 </resources>

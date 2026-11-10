@@ -160,6 +160,9 @@ class WidgetEngine(
     /** The store for [kind]; panels have none, so they get the widgets'. */
     fun market(kind: OwlKind) = markets.firstOrNull { it.kind == kind } ?: market
 
+    /** Phone build: the owner's own gallery, beside the store's in each kind but not one of [markets]: what's there is theirs. */
+    val gallery = Gallery(context, this)
+
     /** Settings' "update all" for widgets and apps is running. */
     var updating by mutableStateOf(false)
         private set
@@ -479,6 +482,23 @@ class WidgetEngine(
             markets.none { m -> m.installed.values.any { i -> i.files.any { it.file == name } } }
     }
 
+    /**
+     * Phone build: the user wrote it or changed it, so it can go to their gallery: their own, or a stock, store or gallery
+     * one edited since it came. Not an agent's or a terminal tile, one someone shared, or a kind the gallery has none of.
+     * Reads files: off the main thread.
+     */
+    fun canUpload(spec: WidgetSpec): Boolean {
+        val name = spec.file.name
+        if (spec.program == null || gallery.market(spec.kind) == null) return false
+        if (isAgentWidget(spec) || name.startsWith(TERMINAL_PREFIX) || name.startsWith(Shared.FILE_PREFIX)) return false
+        for (m in gallery.markets + markets) m.editedFile(name)?.let { return it }
+        if (name in bundledFiles) {
+            val stock = listOf("widgets/$name", "widgets/examples/$name").firstNotNullOfOrNull { runCatching { context.assets.open(it).use { s -> s.readBytes() } }.getOrNull() }
+            return stock == null || !stock.contentEquals(runCatching { spec.file.readBytes() }.getOrNull())
+        }
+        return true
+    }
+
     /** [agent]'s terminal tile is on the home screen. */
     fun hasAgentWidget(agent: Agent) = specs.any { it.file.name == agentWidgetFile(agent) }
 
@@ -626,6 +646,7 @@ class WidgetEngine(
                 runCatching { LauncherData.deleteTree(inboxDir) }
                 inboxDir.mkdirs()
                 markets.forEach { it.load() }
+                gallery.markets.forEach { it.load() }
             }
             // owl-check asks for a preview the launcher hasn't made yet by writing the file's hash to <file>.want.
             checkObserver =
@@ -864,6 +885,35 @@ class WidgetEngine(
         if (hashes[name] != hash) return
         val line = if (ok) shownCells(cells).let { (c, r) -> "preview $hash ${c}x$r ${w}x$h" } else "preview-skipped $hash rendering failed"
         writeCheck(spec.file, hash, "ok", listOfNotNull(line, screen).joinToString("\n"))
+    }
+
+    /**
+     * Phone build: [spec]'s picture for the gallery as PNG, drawn as owl-check's is (a widget at its size on home, a face as a
+     * page, an app's screen); null when there can't be one: a terminal or browser tile, one waiting for Linux or packages, one
+     * not running, or one that failed to draw.
+     */
+    suspend fun galleryPreview(spec: WidgetSpec): ByteArray? {
+        val program = spec.program ?: return null
+        val name = spec.file.name
+        if (program.terminal || program.browser || waitsForLinux(spec) || !missing[name].isNullOrEmpty()) return null
+        val inst = instance(spec) ?: return null
+        val dm = context.resources.displayMetrics
+        val out = File(context.cacheDir, "gallery-preview.png")
+        previewing += name
+        try {
+            val ok =
+                if (program.kind == OwlKind.Widget || program.kind == OwlKind.Face) {
+                    val cells = tileCells(spec)
+                    val (w, h) = if (spec.isFace) layout.pagePx(dm) else layout.tilePx(cells, dm)
+                    previews.render(spec, inst, shownCells(cells), w, h, out, loadedOf(inst))
+                } else {
+                    previews.renderScreen(spec, inst, dm.widthPixels, dm.heightPixels, out, loadedOf(inst))
+                }
+            return if (ok) withContext(Dispatchers.IO) { out.readBytes() } else null
+        } finally {
+            previewing.remove(name)
+            out.delete()
+        }
     }
 
     /** The tile's cells as it's laid out on home, else as the file sizes it; a face's are the whole grid. */

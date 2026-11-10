@@ -1,6 +1,7 @@
 package dev.omalauncher.ui
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.key
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
@@ -14,6 +15,8 @@ import dev.omalauncher.widgets.AppWidgetItem
 import androidx.compose.runtime.rememberUpdatedState
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import dev.omalauncher.widgets.FACE_PAGE
 import dev.omalauncher.widgets.isFacePage
 import dev.omalauncher.widgets.lang.OwlKind
@@ -586,6 +589,10 @@ fun HomeScreen(
                     offeredShortcuts(item.key) {
                         app?.let { shortcutMenu(runtime, it, page = { item.page }, onOpen = { arrange.folder = null }) }
                     }
+                // A widget's own file, or the owl app a pinned shortcut opens.
+                val spec = if (item is WidgetItem) item.spec else (item as? Shortcut)?.owl?.let(engine.specs::app)
+                // Phone build: one the user wrote or changed goes to their gallery; deciding reads its file.
+                val uploadable by produceState(false, spec) { value = spec != null && withContext(Dispatchers.IO) { engine.canUpload(spec) } }
                 // Nothing until they're loaded, so the bar doesn't jump down as they arrive.
                 if (offered != null) Column {
                     if (menu != null && offered.isNotEmpty()) {
@@ -595,14 +602,18 @@ fun HomeScreen(
                         Spacer(Modifier.height(6.dp))
                     }
                     EditBar {
-                        // A widget's own file, or the owl app a pinned shortcut opens.
-                        val spec = if (item is WidgetItem) item.spec else (item as? Shortcut)?.owl?.let(engine.specs::app)
                         if (spec != null) EditAction(stringResource(R.string.home_edit)) { edit(spec) }
                         // As a QR code or link, or (your own) to the store. An agent's tile is a terminal, not a widget to pass on.
                         if (spec != null && !engine.isAgentWidget(spec)) {
                             EditAction(stringResource(R.string.home_share)) {
                                 state.editing = null
                                 state.sharing = spec
+                            }
+                        }
+                        if (spec != null && uploadable) {
+                            EditAction(stringResource(R.string.phone_gallery_upload)) {
+                                state.editing = null
+                                if (engine.gallery.hasToken) engine.gallery.upload(spec) else state.galleryUpload = spec
                             }
                         }
                         if (item is WidgetItem) GlassActions(engine.layout, item.spec.file.name)

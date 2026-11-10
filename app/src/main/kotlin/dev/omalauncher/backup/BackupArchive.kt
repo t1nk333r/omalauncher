@@ -68,8 +68,8 @@ object BackupArchive {
         val rest = parts.drop(1)
         val name = rest.last()
         return when (top) {
-            // Dotted ones are caches, the trash, the stock copies; but the store's records go with its files.
-            "widgets" -> rest.none { it.startsWith(".") } || (rest.size == 1 && name.startsWith(".market") && name.endsWith(".json"))
+            // Dotted ones are caches, the trash, the stock copies; but the store's records go with its files, the gallery's too.
+            "widgets" -> rest.none { it.startsWith(".") } || (rest.size == 1 && (name.startsWith(".market") || name.startsWith(".gallery")) && name.endsWith(".json"))
             "style" -> rest.none { it.startsWith(".") } && !(rest.size == 1 && name in setOf("defaults.toml", "errors.txt"))
             "home" -> rest.none { it.startsWith(".") } && !(rest.size == 1 && name == "errors.txt")
             // persist values only; `.secret` is sealed with this install's key and stays out.
