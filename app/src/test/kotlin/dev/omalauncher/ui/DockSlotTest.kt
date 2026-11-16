@@ -5,6 +5,7 @@ import androidx.compose.ui.geometry.Rect
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import dev.omalauncher.ui.home.dockSlotAt
 
 class DockSlotTest {
     @Test fun aSlotAlongALyingDock() {

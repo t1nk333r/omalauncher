@@ -47,6 +47,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -88,9 +89,11 @@ import dev.omalauncher.widgets.runtime.PicturePainter
 import dev.omalauncher.widgets.runtime.WidgetImage
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -127,7 +130,7 @@ import dev.omalauncher.ui.Palette
 import dev.omalauncher.ui.frame
 import dev.omalauncher.ui.holdsKeys
 import dev.omalauncher.ui.keyActivated
-import dev.omalauncher.ui.TerminalView
+import dev.omalauncher.ui.home.TerminalView
 import dev.omalauncher.ui.BrowserView
 import dev.omalauncher.widgets.lang.Action
 import dev.omalauncher.widgets.lang.Builtins
@@ -138,7 +141,7 @@ import dev.omalauncher.widgets.lang.Lst
 import dev.omalauncher.widgets.lang.Null
 import dev.omalauncher.widgets.lang.Num
 import dev.omalauncher.widgets.lang.Obj
-import dev.omalauncher.ui.TerminalTiles
+import dev.omalauncher.ui.home.TerminalTiles
 import dev.omalauncher.widgets.lang.Str
 import dev.omalauncher.widgets.lang.Value
 import dev.omalauncher.widgets.lang.WNode
@@ -236,7 +239,7 @@ internal fun columnHugs(
 
 /**
  * Where a node's onLongPress says it took a long press, so the home screen around a face knows not to open its menu
- * for the same one; see [dev.omalauncher.ui.HomeGrid].
+ * for the same one; see [dev.omalauncher.ui.home.HomeGrid].
  */
 class LongPressClaim {
     /** When the last long press was taken, in uptime milliseconds. */
@@ -308,9 +311,11 @@ private fun FrameClock(
         // When the next tick is due. A frame up to a quarter of a tick early takes it, so a 60 Hz screen ticks on each
         // frame, 90 Hz on two in three and 120 Hz on every other one.
         var due = start
+        var last = start
         while (true) {
             if (covered()) snapshotFlow { covered() }.first { !it }
-            if (unread >= 3) {
+            // An `every frame` widget moves things each frame, whether or not anything reads `time`.
+            if (unread >= 3 && !inst.runsEachFrame) {
                 inst.awaitTimeRead(start)
                 unread = 0
             }
@@ -325,6 +330,8 @@ private fun FrameClock(
                 unread = if (inst.timeRead) 0 else unread + 1
                 inst.timeRead = false
                 inst.time = (now - start) / 1e9
+                inst.frame((now - last) / 1e9)
+                last = now
             }
         }
     }
@@ -685,7 +692,7 @@ private fun Element(
                 val hug = columnHugs(inst.program.level, sized, parent is RowScope, parent is ColumnScope && LocalHug.current)
                 HoldingPopups(el, mod, env, inst) { m, children ->
                     Column(
-                        m.then(pull).then(if (p.observe("scroll")?.truthy == true) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+                        m.then(pull).then(if (p.observe("scroll")?.truthy == true) Modifier.scrolls(rememberScrollState()) else Modifier),
                         verticalArrangement = arrangement,
                         horizontalAlignment = alignment,
                     ) { CompositionLocalProvider(LocalHug provides hug) { Nodes(children, env, inst, this) } }
@@ -929,6 +936,26 @@ private fun boxAlign(a: String?) =
         else -> Alignment.TopStart
     }
 
+/**
+ * A Column's `scroll: true`. Inside something that already scrolls up and down it has no limit to its height, and
+ * Compose throws on a scroll measured so, which took home down (Play, 1.4.0). There it's as tall as its rows and
+ * what it's in scrolls, as a `lazy:` one does.
+ */
+private fun Modifier.scrolls(state: ScrollState): Modifier =
+    layout { measurable, constraints ->
+        val bounded =
+            if (constraints.hasBoundedHeight) {
+                constraints
+            } else {
+                Constraints.fitPrioritizingWidth(constraints.minWidth, constraints.maxWidth, constraints.minHeight, UNBOUNDED_HEIGHT_PX)
+            }
+        val placeable = measurable.measure(bounded)
+        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    }.verticalScroll(state)
+
+/** Taller than any Column gets, and small enough to fit a Constraints next to any screen's width. */
+private const val UNBOUNDED_HEIGHT_PX = 1 shl 17
+
 private fun padding(v: Value?): PaddingValues? {
     val n = v?.num()
     if (n != null) return PaddingValues(inset(n))
@@ -1127,6 +1154,39 @@ private fun handlers(
                 ) { change, amount ->
                     change.consume()
                     dragged += amount
+                }
+            }
+    }
+    // Every finger at once, for a game's two thumbs (owl 22): the list of those down, on each change.
+    el.handlers["onTouch"]?.let { a ->
+        m =
+            m.pointerInput(el, p.env) {
+                val starts = HashMap<Long, Offset>()
+                fun dp(v: Float) = Num((v / density).toDouble())
+                try {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val had = starts.isNotEmpty()
+                            val touches = ArrayList<Value>(event.changes.size)
+                            for (c in event.changes) {
+                                if (!c.pressed) {
+                                    starts.remove(c.id.value)
+                                    continue
+                                }
+                                val start = starts.getOrPut(c.id.value) { c.position }
+                                // Its moves are the game's: nothing around it scrolls or swipes with them.
+                                if (c.positionChanged()) c.consume()
+                                touches += Obj(mapOf("id" to Num(c.id.value.toDouble()), "x" to dp(c.position.x), "y" to dp(c.position.y), "startX" to dp(start.x), "startY" to dp(start.y)))
+                            }
+                            // A mouse moving over it with no button down changes nothing.
+                            if (touches.isEmpty() && !had) continue
+                            a.run(p.env, listOf(Lst(touches)))
+                        }
+                    }
+                } finally {
+                    // Gone while fingers were down: none are, any more.
+                    if (starts.isNotEmpty()) a.run(p.env, listOf(Lst(emptyList())))
                 }
             }
     }

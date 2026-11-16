@@ -29,6 +29,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import kotlin.math.abs
+import dev.omalauncher.ui.home.HomeSwiper
 
 /**
  * An Android widget on home, drawn by its app at the size of its cells. No frame: widgets bring their own

@@ -1,15 +1,23 @@
 package dev.omalauncher.ui
 
-import dev.omalauncher.ui.GestureAction.Drawer
-import dev.omalauncher.ui.GestureAction.None
-import dev.omalauncher.ui.GestureAction.Notifications
-import dev.omalauncher.ui.GestureAction.Panel
-import dev.omalauncher.ui.GestureAction.Search
+import dev.omalauncher.ui.home.GestureAction.Drawer
+import dev.omalauncher.ui.home.GestureAction.None
+import dev.omalauncher.ui.home.GestureAction.Notifications
+import dev.omalauncher.ui.home.GestureAction.Panel
+import dev.omalauncher.ui.home.GestureAction.Search
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.omalauncher.ui.home.GestureAction
+import dev.omalauncher.ui.home.HomeSwipe
+import dev.omalauncher.ui.home.SwipeDownChoices
+import dev.omalauncher.ui.home.SwipeUpChoices
+import dev.omalauncher.ui.home.homeSwipeFor
+import dev.omalauncher.ui.home.pick
+import dev.omalauncher.ui.home.pillLabel
+import dev.omalauncher.ui.home.reachesPanel
 
 class GesturesTest {
     private val downward = 12f

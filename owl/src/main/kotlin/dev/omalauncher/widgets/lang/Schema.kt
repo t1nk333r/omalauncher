@@ -93,8 +93,16 @@ internal val DRAW: Map<String, DrawOp> =
         "layer" to DrawOp(1..1, group = true),
         // owl 3: pixel art from rows of letters, one color per letter.
         "sprite" to DrawOp(4..4),
+        // owl 22: 3D, models seen through a camera.
+        "scene" to DrawOp(1..1, group = true),
+        "model" to DrawOp(1..1),
     )
-internal val DRAW_NAMED = setOf("fill", "stroke", "width", "cap", "radius", "closed", "size", "color", "align", "bold", "palette") + TEXT_STYLE
+
+/** The options of scene(...) and model(...), which take only these (owl 22). */
+internal val SCENE_NAMED = setOf("light", "ambient", "fog")
+internal val MODEL_NAMED = setOf("at", "turn", "scale", "color", "image", "ambient", "smooth", "twoSided")
+
+internal val DRAW_NAMED = setOf("fill", "stroke", "width", "cap", "radius", "closed", "size", "color", "align", "bold", "palette") + TEXT_STYLE + SCENE_NAMED + MODEL_NAMED
 
 /** What needs a newer language than 1, with the version: using one without `meta { owl: N }` is an error. */
 internal val SINCE =
@@ -188,7 +196,31 @@ internal val SINCE =
         // owl 18: events in the phone's calendars, only after a tap asks for read access.
         listOf("android.calendar", "calendar").associateWith { 18 } +
         // owl 19: how many frames a second an animation needs, so a slow one costs the battery less.
-        mapOf(FRAME_RATE to 19)
+        mapOf(FRAME_RATE to 19) +
+        // owl 21: how the phone is tilted, for tilt games and spirit levels.
+        mapOf("android.motion" to 21) +
+        // owl 21: statements each frame, for games that move things by what they were a frame before.
+        mapOf(EVERY_FRAME to 21) +
+        // owl 22: every finger at once, for a game's two thumbs.
+        mapOf("onTouch" to 22) +
+        // owl 22: 3D scenes in a Canvas, the meshes they draw and the vector math of a 3D game.
+        listOf("scene", "model", "cube", "plane", "sphere", "cylinder", "cone", "terrain", "mesh", "parseObj", "project", "turn", "dot", "cross", "norm", "dist").associateWith { 22 } +
+        // owl 22: Shader images to sample, and uniforms that are arrays.
+        listOf(SHADER_IMAGE, SHADER_ARRAY).associateWith { 22 } +
+        // owl 23: what's playing moved to a point in it, for a scrubber or a record turned by hand; its speed, and the
+        // player's own buttons.
+        listOf("media(\"seek\")", "media(\"speed\")", "media(\"action\")").associateWith { 23 } +
+        // owl 23: how strong a haptic() is.
+        mapOf(HAPTIC_STRENGTH to 23)
+
+/** A Shader's `uniform shader name;`, an image it samples, named like this in [SINCE]. */
+internal const val SHADER_IMAGE = "uniform shader"
+
+/** A Shader's array uniform, like `uniform float3 enemies[8];`, named like this in [SINCE]. */
+internal const val SHADER_ARRAY = "an array uniform"
+
+/** `every frame { }`, named like this in [SINCE]. */
+internal const val EVERY_FRAME = "every frame"
 
 /** `strings { ... }`, named like this in [SINCE]. */
 internal const val STRINGS_DECL = "strings { }"
@@ -201,6 +233,9 @@ internal const val VOLUME_STREAM = "volume(…, stream)"
 
 /** `torch(40)`, a brightness, named like this in [SINCE]. */
 internal const val TORCH_LEVEL = "torch(level)"
+
+/** `haptic("light")`, a strength, named like this in [SINCE]. */
+internal const val HAPTIC_STRENGTH = "haptic(strength)"
 
 /** volume(...)'s second value; media without one. */
 internal val VOLUME_STREAMS = setOf("media", "ring", "notification", "alarm")
@@ -297,6 +332,8 @@ internal val HANDLER_PARAMS =
         "onDrag" to listOf("dx", "dy", "x", "y"),
         // How fast the finger was moving as it let go, in dp a second: a flick dismisses what a slow drag puts back.
         "onDragEnd" to listOf("vx", "vy"),
+        // owl 22: every finger down, as {id, x, y, startX, startY}, on each change; [] once they've all lifted.
+        "onTouch" to listOf("touches"),
         // A Column or Grid that scrolls, pulled down past its top and let go there: refresh(), mostly.
         "onPull" to emptyList(),
         "onChange" to listOf("value"),
@@ -344,7 +381,7 @@ val SPEECH_ANYWHERE = setOf("stop", "cancel")
 val ASKS = setOf("location", "calendar", "airpods")
 
 /** Data from the phone and the launcher; device is fixed, system, network and power are polled, the rest update as they change. */
-internal val ANDROID = setOf("battery", "device", "media", "notifications", "volume", "system", "network", "power", "sim", "alarm", "modes", "apps", "agents", "recent", "drawer", "modifiers", "speech", "location", "airpods", "calendar")
+internal val ANDROID = setOf("battery", "device", "media", "notifications", "volume", "system", "network", "power", "sim", "alarm", "modes", "apps", "agents", "recent", "drawer", "modifiers", "speech", "location", "airpods", "calendar", "motion")
 
 /**
  * The words an action's first value may be, when it's written out; [numbers] also allows a number. [forms] are the
@@ -368,7 +405,22 @@ internal val SETTINGS_PAGES = setOf("internet", "wifi", "bluetooth", "airplane",
 
 internal val ACTION_WORDS =
     mapOf(
-        "media" to setOf("toggle", "play", "pause", "next", "previous", "open").let { Words(it, "media takes ${it.joinToString()}") },
+        // seek takes where to go, in seconds from the start, speed how fast, action which of the app's buttons (owl 23);
+        // the others take nothing more.
+        "media" to
+            setOf("toggle", "play", "pause", "next", "previous", "open").let { plain ->
+                Words(
+                    plain + setOf("seek", "speed", "action"),
+                    "media takes ${plain.joinToString()}, seek, speed or action",
+                    forms =
+                        plain.associateWith { 1..1 to "media(\"$it\")" } +
+                            mapOf(
+                                "seek" to (2..2 to "media(\"seek\", seconds)"),
+                                "speed" to (2..2 to "media(\"speed\", 1.5)"),
+                                "action" to (2..2 to "media(\"action\", a.id), with a from the source's actions"),
+                            ),
+                )
+            },
         // A number sets the level in percent.
         "volume" to setOf("up", "down", "mute", "unmute", "toggle").let { Words(it, "volume takes a level in percent, or ${it.joinToString()}", numbers = true) },
         // true and false also turn it on and off.
@@ -393,6 +445,8 @@ internal val ACTION_WORDS =
                         "unsnoozeAll" to (1..1 to "notification(\"unsnoozeAll\")"),
                     ),
             ),
+        // How strong, from Android's own touch feedback; haptic() alone is medium.
+        "haptic" to setOf("light", "medium", "strong").let { Words(it, "haptic takes ${it.joinToString()}, or nothing for medium") },
         // Android's panel (a sheet over home) where it has one, else its settings screen.
         "settings" to SETTINGS_PAGES.let { Words(it, "settings takes ${it.joinToString()}") },
         // Phone build: hide, unhide, customize, dock, undock, group, select and similar too; pin, hide, unhide, dock, group,
@@ -435,3 +489,9 @@ internal val WIDGET_PROPS = setOf("size", "minSize", "page", "order", "padding",
 
 /** A face has no tile's size; it says where it goes and whether the status bar stays over it. */
 internal val FACE_PROPS = setOf("page", "order", "padding", "background", "statusBar", "edge", "lock", "fps")
+
+/** `uniform shader name;` in a Shader's code; see [SHADER_IMAGE]. */
+internal val SHADER_IMAGE_RE = Regex("""\buniform\s+shader\s+(\w+)""")
+
+/** `uniform float3 name[8];` in a Shader's code; see [SHADER_ARRAY]. */
+internal val SHADER_ARRAY_RE = Regex("""\buniform\s+\w+\s+\w+\s*\[""")

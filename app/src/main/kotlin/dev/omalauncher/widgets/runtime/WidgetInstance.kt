@@ -27,7 +27,7 @@ import androidx.compose.ui.graphics.toArgb
 import dev.omalauncher.linux.ShellResult
 import dev.omalauncher.theme.Setting
 import dev.omalauncher.theme.Style
-import dev.omalauncher.ui.EmbeddedTerminal
+import dev.omalauncher.ui.home.EmbeddedTerminal
 import dev.omalauncher.ui.EmbeddedBrowser
 import dev.omalauncher.ui.LauncherStyle
 import dev.omalauncher.ui.Palette
@@ -293,7 +293,7 @@ class WidgetInstance(
                 when (g) {
                     is Global.Let -> derivedStateOf(structuralEqualityPolicy()) { eval(g.value, root, g.name) }
                     is Global.Sampled -> mutableStateOf(if (g.prev) Null else Lst(emptyList()), structuralEqualityPolicy())
-                    is Global.Asset -> mutableStateOf(Str("asset:${g.name}"))
+                    is Global.Asset -> mutableStateOf(g.value)
                     else -> mutableStateOf(Null, structuralEqualityPolicy())
                 }
         }
@@ -674,15 +674,22 @@ class WidgetInstance(
             return
         }
         drawAverage = drawAverage * 0.9 + frame * 0.1
-        if (!slow && drawAverage > SLOW_DRAW_NANOS) {
+        if (!slow && drawAverage > SLOW_DRAW_NANOS && !keepsFullRate()) {
             slow = true
             // Once: a widget that hovers around the budget would otherwise report every time it crosses it.
             if (!reportedSlow) report("drawing takes %.1f ms per frame; animating at half rate".format(drawAverage / 1e6))
             reportedSlow = true
-        } else if (slow && drawAverage < SLOW_DRAW_NANOS / 2) {
+        } else if (slow && (drawAverage < SLOW_DRAW_NANOS / 2 || keepsFullRate())) {
             slow = false
         }
     }
+
+    /**
+     * An app that asks for `fps: 60` keeps it however long it draws: it has the screen to itself while it's used, and a
+     * game at half rate lags behind the finger. Widgets, faces and panels on home keep the governor, which holds the home
+     * screen smooth and the battery spared.
+     */
+    private fun keepsFullRate() = program.kind == OwlKind.App && program.fps != null && frameRate() >= MAX_FPS
 
     /** Evaluates [ev], turning errors into null plus a report; a broken binding never takes the launcher down. */
     fun eval(
@@ -1081,6 +1088,8 @@ class WidgetInstance(
         program.triggers.forEachIndexed { i, t ->
             // `on feed each` runs from feed's connection, for each message (see listen).
             if (t.each != null) return@forEachIndexed
+            // `every frame` runs from the frame clock (see frame).
+            if (t.kind == TriggerKind.FRAME) return@forEachIndexed
             jobs +=
                 scope.launch {
                     when (t.kind) {
@@ -1112,6 +1121,7 @@ class WidgetInstance(
                                 seen[i] = bool(now)
                                 if (now && !was) fire(i, t)
                             }
+                        TriggerKind.FRAME -> Unit
                         TriggerKind.ON ->
                             snapshotFlow { eval(t.expr, root, "on") }.collect { v ->
                                 // Null is "still loading": neither a change nor something to compare with.
@@ -1155,6 +1165,25 @@ class WidgetInstance(
         } finally {
             inTrigger = false
             byDictation = false
+        }
+    }
+
+    /** Whether an `every frame` trigger needs the frame clock to keep ticking, whatever reads `time`. */
+    val runsEachFrame = program.triggers.any { it.kind == TriggerKind.FRAME }
+
+    /**
+     * Runs the `every frame` triggers, from the frame clock as it draws a frame: [dt] is the seconds since the last
+     * one, at most [MAX_FRAME_DT], so a widget coming back on screen doesn't move things by the whole time it was away.
+     * As often as the frames come, at most the widget's fps:, so no run limit.
+     */
+    fun frame(dt: Double) {
+        if (!runsEachFrame) return
+        val values = listOf(Num(dt.coerceIn(0.0, MAX_FRAME_DT)))
+        inTrigger = true
+        try {
+            for (t in program.triggers) if (t.kind == TriggerKind.FRAME) t.action.run(root, values)
+        } finally {
+            inTrigger = false
         }
     }
 
@@ -1426,6 +1455,9 @@ class WidgetInstance(
 
         /** The least time between two runs of a source whose command or URL is built from state. */
         private const val MIN_RERUN_MS = 1_000L
+
+        /** The longest step `every frame` gets, in seconds: a frame late by more is a pause, not motion. */
+        private const val MAX_FRAME_DT = 0.1
 
         /** Runs per trigger per second before it's held back. */
         private const val MAX_TRIGGER_RUNS = 10

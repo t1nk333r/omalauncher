@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
-import dev.omalauncher.hasPermission
+import dev.omalauncher.system.hasPermission
 
 /**
  * AirPods, for `source a = android.airpods`: each bud's and the case's battery, which buds are in, the listening mode and
@@ -232,7 +232,7 @@ class AirPods(
             } finally {
                 context.unregisterReceiver(receiver)
                 synchronized(profiles) {
-                    for ((p, proxy) in profiles) runCatching { adapter?.closeProfileProxy(p, proxy) }
+                    for ((p, proxy) in profiles.toList()) runCatching { adapter?.closeProfileProxy(p, proxy) }
                     profiles.clear()
                 }
             }

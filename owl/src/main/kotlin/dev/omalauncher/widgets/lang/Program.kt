@@ -322,7 +322,10 @@ sealed interface Global {
     class Asset(
         override val name: String,
         val bytes: ByteArray,
-    ) : Global
+    ) : Global {
+        /** What the asset's name reads as: an image, font or sound source the app looks up by name. */
+        val value = Str("asset:$name")
+    }
 }
 
 /**
@@ -338,6 +341,9 @@ enum class TriggerKind(
     AT("at"),
     WHEN("when"),
     ON("on"),
+
+    /** `every frame { }` (owl 21): each frame the widget draws while it shows, with `dt`; run by the frame clock. */
+    FRAME("every frame"),
     ;
 
     companion object {
@@ -426,6 +432,8 @@ class Program(
     val terminal: Boolean = false,
     /** Has a Browser node: a web view in the tile, which keeps running while the widget shows. */
     val browser: Boolean = false,
+    /** Each text a Shader's code can be (see Compiler's shaderTexts), null for one worked out while the widget runs: what the store checks the GPU work of. */
+    val shaders: List<String?> = emptyList(),
     val nodeCount: Int,
     /** A tile or an app; for an app [screen] is the whole view and [root] is empty. */
     val kind: OwlKind = OwlKind.Widget,

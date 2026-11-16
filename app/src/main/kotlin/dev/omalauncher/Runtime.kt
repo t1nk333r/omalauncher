@@ -47,12 +47,12 @@ import dev.omalauncher.remote.PcAgent
 import dev.omalauncher.theme.Style
 import dev.omalauncher.theme.StyleStore
 import dev.omalauncher.theme.ThemeStore
-import dev.omalauncher.ui.Gestures
+import dev.omalauncher.ui.home.Gestures
 import dev.omalauncher.ui.KeyboardBridge
-import dev.omalauncher.ui.SettingsPage
-import dev.omalauncher.ui.Speaker
+import dev.omalauncher.ui.settings.SettingsPage
+import dev.omalauncher.ui.voice.Speaker
 import dev.omalauncher.voice.VoiceSession
-import dev.omalauncher.ui.TerminalTiles
+import dev.omalauncher.ui.home.TerminalTiles
 import dev.omalauncher.ui.WindowManager
 import dev.omalauncher.ui.bitmapMask
 import dev.omalauncher.ui.Palette
@@ -87,6 +87,13 @@ import java.io.File
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
+import dev.omalauncher.apps.AndroidAppCatalog
+import dev.omalauncher.apps.AppUsage
+import dev.omalauncher.apps.androidAppKey
+import dev.omalauncher.apps.androidShortcutKey
+import dev.omalauncher.linux.LinuxAppCatalog
+import dev.omalauncher.storage.LauncherData
+import dev.omalauncher.storage.PhoneFolders
 
 /**
  * Process-wide state: the launcher (themes, widgets, Android apps) and the
@@ -158,6 +165,12 @@ class Runtime(
         agents.release = { agent -> voiceSession.isInitialized() && voice.release(agent.bin) }
     }
     val updates = SystemUpdates(proot, pacman, agents)
+
+    /** A newer launcher: on Google Play in the play build, on GitHub releases in the foss build. */
+    val launcherUpdates = LauncherUpdates(context)
+
+    /** Messages from the developer, shown on home. */
+    val announcements = dev.omalauncher.net.Announcements(context)
     val gpu = Gpu(context, proot, pacman)
 
     /** Phone build: settings kept on Feather. The app's, since its daily job runs without a runtime. */
@@ -508,6 +521,7 @@ class Runtime(
     /** Checks for updates now, on the runtime's scope: leaving settings doesn't cancel it. */
     fun checkUpdates() {
         if (linux) scope.launch { updates.check(force = true) }
+        launcherUpdates.check(force = true)
     }
 
     /** Runs every pending update (packages and agents); the drawer then lists what changed. */

@@ -14,7 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import dev.omalauncher.R
-import dev.omalauncher.httpGet
+import dev.omalauncher.net.httpGet
 import dev.omalauncher.ui.decodeImageIcon
 import dev.omalauncher.ui.decodeSvgIcon
 import dev.omalauncher.upgrade.Versioned
@@ -64,7 +64,7 @@ interface MarketSource {
 class Market(
     private val engine: WidgetEngine,
     val kind: OwlKind,
-    private val source: MarketSource = MarketSource.Store,
+    val source: MarketSource = MarketSource.Store,
 ) {
     companion object {
         /** The marketplace repo: widgets are submitted there as pull requests. */

@@ -24,9 +24,9 @@ file.
 ## Build and test
 
 ```sh
-./scripts/fetch-proot.sh      # once per checkout; needs bsdtar
-./gradlew :owl:test :app:testDebugUnitTest :owl:owlJar
-./gradlew :app:assembleDebug :app:lintDebug
+./scripts/fetch-proot.sh      # once per checkout, and again when the build asks; needs bsdtar
+./gradlew :owl:test :app:testFossDebugUnitTest :owl:owlJar
+./gradlew :app:assembleFossDebug :app:lintFossDebug :app:lintPlayDebug
 ```
 
 These are what CI runs (`.github/workflows/ci.yml`). Run both before you call a
@@ -34,11 +34,12 @@ change done.
 
 - `app/src/main/jniLibs/` (proot) and `local.properties` are gitignored. A new
   `git worktree` has neither: its APK installs, but every Linux command exits
-  -1. Run `fetch-proot.sh` there, or copy both from the main checkout.
+  -1. Run `fetch-proot.sh` there, or copy both from the main checkout. The build stops when
+  `patches/proot` or the script changed after the libraries were built.
 - Tests: `owl/src/test` (the language) and `app/src/test` (plain JVM tests of
   the app). New behavior gets a test where the code allows one.
 - With more than one device connected, set `ANDROID_SERIAL` before
-  `installDebug`. Don't uninstall the app from a device you didn't set up: it
+  `installFossDebug`. Don't uninstall the app from a device you didn't set up: it
   holds the user's Linux install and widgets.
 - Debug builds run guest commands from adb:
   `adb shell am start -n dev.omalauncher/.MainActivity --es exec '<cmd>'`.

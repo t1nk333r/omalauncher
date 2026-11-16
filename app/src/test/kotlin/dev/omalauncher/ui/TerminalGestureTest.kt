@@ -2,6 +2,8 @@ package dev.omalauncher.ui
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import dev.omalauncher.ui.home.TerminalGesture
+import dev.omalauncher.ui.home.terminalGesture
 
 class TerminalGestureTest {
     @Test fun sidewaysOnAnInertTileTurnsThePage() {

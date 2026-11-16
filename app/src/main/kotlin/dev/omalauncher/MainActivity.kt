@@ -22,8 +22,8 @@ import kotlinx.coroutines.withContext
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import dev.omalauncher.ui.BrowserPages
-import dev.omalauncher.ui.expandNotifications
-import dev.omalauncher.ui.GestureAction
+import dev.omalauncher.ui.home.expandNotifications
+import dev.omalauncher.ui.home.GestureAction
 import dev.omalauncher.ui.ImagePicker
 import dev.omalauncher.ui.WidgetAsks
 import dev.omalauncher.ui.Palette
@@ -33,15 +33,17 @@ import dev.omalauncher.ui.keyPressed
 import dev.omalauncher.ui.keysFocused
 import dev.omalauncher.ui.keysStartAgain
 import dev.omalauncher.ui.movesFocus
-import dev.omalauncher.ui.panelOf
+import dev.omalauncher.ui.home.panelOf
 import dev.omalauncher.ui.LauncherStyle
 import dev.omalauncher.ui.SystemBarsEffect
 import dev.omalauncher.ui.applySystemBars
 import dev.omalauncher.ui.showStatusBar
-import dev.omalauncher.ui.LauncherRoot
-import dev.omalauncher.ui.LauncherState
-import dev.omalauncher.ui.PromptRequest
+import dev.omalauncher.ui.home.LauncherRoot
+import dev.omalauncher.ui.home.LauncherState
+import dev.omalauncher.ui.home.PromptRequest
 import dev.omalauncher.widgets.market.Share
+import dev.omalauncher.storage.LauncherData
+import dev.omalauncher.system.AppLanguage
 
 /** The home screen: widgets, pinned apps and the drawer; Linux windows open as their own tasks. */
 class MainActivity : ComponentActivity() {

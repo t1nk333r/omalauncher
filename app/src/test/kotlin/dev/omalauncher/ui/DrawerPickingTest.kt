@@ -4,6 +4,9 @@ import dev.omalauncher.linux.LinuxApp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import dev.omalauncher.ui.home.AppHit
+import dev.omalauncher.ui.home.shown
+import dev.omalauncher.ui.home.toggled
 
 class DrawerPickingTest {
     private fun app(id: String) = AppHit.Linux(LinuxApp(id, id, terminal = false, id = id, wmClass = null))

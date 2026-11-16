@@ -3,6 +3,8 @@ package dev.omalauncher.ui
 import dev.omalauncher.widgets.Cell
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import dev.omalauncher.ui.home.gridRows
+import dev.omalauncher.ui.home.reachRow
 
 class GridRowsTest {
     @Test fun theGridHasTheRowsAskedFor() {

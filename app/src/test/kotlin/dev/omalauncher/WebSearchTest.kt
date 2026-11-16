@@ -1,13 +1,17 @@
 package dev.omalauncher
 
-import dev.omalauncher.ui.BarSearch.Companion.ASK
-import dev.omalauncher.ui.BarSearch.Companion.WEB
-import dev.omalauncher.ui.barHighlight
-import dev.omalauncher.ui.barStep
+import dev.omalauncher.ui.home.BarSearch.Companion.ASK
+import dev.omalauncher.ui.home.BarSearch.Companion.WEB
+import dev.omalauncher.ui.home.barHighlight
+import dev.omalauncher.ui.home.barStep
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.omalauncher.ui.home.BarSearch
+import dev.omalauncher.system.isWebSearch
+import dev.omalauncher.system.webSearchName
+import dev.omalauncher.system.webSearchUrl
 
 class WebSearchTest {
     @Test fun theWordsGoInTheAddressEncoded() {

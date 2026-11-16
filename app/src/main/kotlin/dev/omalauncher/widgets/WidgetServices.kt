@@ -1,8 +1,8 @@
 package dev.omalauncher.widgets
 
-import dev.omalauncher.copyText
-import dev.omalauncher.registerNotExported
-import dev.omalauncher.shareText
+import dev.omalauncher.system.copyText
+import dev.omalauncher.system.registerNotExported
+import dev.omalauncher.system.shareText
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -35,7 +35,7 @@ import android.os.UserManager
 import android.util.Log
 import android.widget.Toast
 import dev.omalauncher.R
-import dev.omalauncher.postNotification
+import dev.omalauncher.system.postNotification
 import dev.omalauncher.Runtime
 import dev.omalauncher.linux.Agent
 import dev.omalauncher.linux.LinuxState
@@ -44,7 +44,7 @@ import dev.omalauncher.linux.GuestShell
 import dev.omalauncher.linux.Proot
 import dev.omalauncher.linux.ShellPool
 import dev.omalauncher.linux.ShellResult
-import dev.omalauncher.SecretBox
+import dev.omalauncher.widgets.runtime.SecretBox
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.resume
 import kotlin.concurrent.thread
@@ -52,12 +52,12 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.suspendCancellableCoroutine
-import dev.omalauncher.WebSocket
-import dev.omalauncher.LocalNetwork
-import dev.omalauncher.openHttp
-import dev.omalauncher.pin
-import dev.omalauncher.openUrl
-import dev.omalauncher.readUpTo
+import dev.omalauncher.net.WebSocket
+import dev.omalauncher.net.LocalNetwork
+import dev.omalauncher.net.openHttp
+import dev.omalauncher.net.pin
+import dev.omalauncher.system.openUrl
+import dev.omalauncher.system.readUpTo
 import dev.omalauncher.widgets.lang.sha256Hex
 import dev.omalauncher.upgrade.writeAtomically
 import dev.omalauncher.widgets.lang.Builtins
@@ -71,40 +71,41 @@ import dev.omalauncher.widgets.lang.Str
 import dev.omalauncher.widgets.lang.Value
 import dev.omalauncher.widgets.lang.WidgetError
 import dev.omalauncher.widgets.lang.bool
-import dev.omalauncher.androidAppKey
-import dev.omalauncher.OfferedShortcut
-import dev.omalauncher.ui.AppHandlers
-import dev.omalauncher.ui.ShortcutMenu
-import dev.omalauncher.ui.initials
-import dev.omalauncher.ui.AppHit
+import dev.omalauncher.apps.androidAppKey
+import dev.omalauncher.apps.OfferedShortcut
+import dev.omalauncher.ui.home.AppHandlers
+import dev.omalauncher.ui.home.ShortcutMenu
+import dev.omalauncher.ui.home.initials
+import dev.omalauncher.ui.home.AppHit
 import dev.omalauncher.ui.EmbeddedBrowser
-import dev.omalauncher.ui.act
-import dev.omalauncher.ui.actionWords
-import dev.omalauncher.ui.kind
-import dev.omalauncher.ui.profileKind
+import dev.omalauncher.ui.home.act
+import dev.omalauncher.ui.home.actionWords
+import dev.omalauncher.ui.home.kind
+import dev.omalauncher.ui.home.profileKind
 import dev.omalauncher.ui.LauncherStyle
-import dev.omalauncher.ui.SettingsPage
-import dev.omalauncher.ui.allApps
-import dev.omalauncher.ui.barAsksAgent
+import dev.omalauncher.ui.settings.SettingsPage
 import dev.omalauncher.ui.category
 import dev.omalauncher.ui.similarGroups
 import dev.omalauncher.ui.installed
 import dev.omalauncher.ui.isNew
-import dev.omalauncher.ui.isWork
-import dev.omalauncher.ui.name
 import dev.omalauncher.ui.railLetter
 import dev.omalauncher.ui.smart
 import dev.omalauncher.ui.smartExtra
+import dev.omalauncher.ui.home.allApps
+import dev.omalauncher.ui.home.appIconOf
+import dev.omalauncher.ui.home.barAsksAgent
+import dev.omalauncher.ui.home.isWork
+import dev.omalauncher.ui.home.name
+import dev.omalauncher.ui.home.open
+import dev.omalauncher.ui.home.recentApps
 import dev.omalauncher.theme.Style
-import dev.omalauncher.webSearchName
-import dev.omalauncher.ui.appIconOf
-import dev.omalauncher.ui.open
-import dev.omalauncher.ui.recentApps
+import dev.omalauncher.system.webSearchName
 import dev.omalauncher.widgets.runtime.battery
 import dev.omalauncher.widgets.runtime.AirPods
 import dev.omalauncher.widgets.runtime.Alarm
 import dev.omalauncher.widgets.runtime.Media
 import dev.omalauncher.widgets.runtime.Modes
+import dev.omalauncher.widgets.runtime.Motion
 import dev.omalauncher.widgets.runtime.Notifications
 import dev.omalauncher.widgets.runtime.Services
 import dev.omalauncher.widgets.runtime.Sim
@@ -193,6 +194,7 @@ class WidgetServices(
     private val alarm = Alarm(context)
     private val modes = Modes(context)
     private val sim = Sim(context)
+    private val motion = Motion(context)
     /** android.airpods and airpods(...); each activity that shows widgets lets it ask for Bluetooth while it's in front. */
     val airpods = AirPods(context, scope)
     private val panels = SystemPanels(context)
@@ -264,11 +266,13 @@ class WidgetServices(
             "alarm" -> alarm.updates()
             "modes" -> modes.updates()
             "sim" -> sim.updates()
+            "motion" -> motion.updates()
             "location" -> runtime.location.updates()
             "calendar" -> runtime.calendar.updates()
             "airpods" -> airpods.updates()
             // Both read Compose state: the app list and its usage, the installed agents and the one picked.
-            "apps" -> snapshotFlow { apps() }
+            // The apps are up to a thousand values made on each change, as the drawer's are: not on the main thread.
+            "apps" -> snapshotFlow { apps() }.flowOn(Dispatchers.Default)
             "agents" -> snapshotFlow { agents() }
             "recent" -> snapshotFlow { recent() }
             "modifiers" -> snapshotFlow { modifiers() }
@@ -303,11 +307,11 @@ class WidgetServices(
     override fun heard(owner: Any) = runtime.dictation.heard(owner)
 
     /** "work" or "clone" for an app in a profile beside the launcher's own, as the drawer marks it; null for its own. */
-    private fun profileKind(user: UserHandle): String? {
-        if (user == Process.myUserHandle()) return null
-        val serial = context.getSystemService(UserManager::class.java).getSerialNumberForUser(user)
-        return if (runtime.androidApps.cloned(serial)) "clone" else "work"
-    }
+    private fun profileKind(user: UserHandle): String? =
+        if (user == Process.myUserHandle()) null else profileKind(context.getSystemService(UserManager::class.java).getSerialNumberForUser(user))
+
+    /** As above, by [profile]'s serial number (see [dev.omalauncher.apps.AndroidApp.profile]): no binder call. */
+    private fun profileKind(profile: Long?): String? = profile?.let { if (runtime.androidApps.cloned(it)) "clone" else "work" }
 
     /** Apps by package, in the drawer's order: a widget listing every app asks for each one's icon, and a scan per icon was O(n²). */
     private val appsByPackage by derivedStateOf { runtime.androidApps.apps.groupBy { it.component.packageName } }
@@ -487,14 +491,14 @@ class WidgetServices(
 
     /**
      * Launchable Android apps for `source a = android.apps`, updated as apps come and go and are opened, each `{key, name, package, component, profile, system, icon, score, last}`.
-     * `key` is [dev.omalauncher.AndroidApp.key], unique across profiles, for `androidApp(a.key)`; `profile` is `work` or
+     * `key` is [dev.omalauncher.apps.AndroidApp.key], unique across profiles, for `androidApp(a.key)`; `profile` is `work` or
      * `clone` as on notifications, else null; `icon` is the `app:` src for that copy. `score` and `last` are what the
-     * search ranks by ([dev.omalauncher.AppUsage]), so a widget can rank apps the same way.
+     * search ranks by ([dev.omalauncher.apps.AppUsage]), so a widget can rank apps the same way.
      */
     private fun apps(): Value =
         Lst(
             runtime.androidApps.apps.take(Builtins.MAX_LIST).map { app ->
-                val kind = profileKind(app.user)
+                val kind = profileKind(app.profile)
                 val usage = "a:" + app.key
                 Obj(
                     mapOf(
@@ -646,7 +650,7 @@ class WidgetServices(
                 "style" to style,
                 "groups" to groups,
                 "dock" to Obj(mapOf("shown" to bool(LauncherStyle.dockShown), "full" to bool(dock.full))),
-                "asks" to bool(barAsksAgent(runtime, linux)),
+                "asks" to bool(barAsksAgent(runtime, linux == LinuxState.Installed)),
                 "web" to Str(webSearchName(LauncherStyle.style[Style.WEB_SEARCH])),
                 // Phone build: Smart Launcher's own category icons while it's on the phone, as res: sources by category.
                 "categoryIcons" to (apps.categoryIcons.takeIf { it.isNotEmpty() }?.let { icons -> Obj(icons.mapValues { Str(it.value) }) } ?: Null),
@@ -727,7 +731,7 @@ class WidgetServices(
             // Any scheme an app handles: tel:, geo:, mailto:, ... One nothing handles mustn't crash the launcher.
             "url" -> if (!context.openUrl(arg)) Toast.makeText(context, context.getString(R.string.widgets_no_app_opens, arg), Toast.LENGTH_SHORT).show()
             "launcher" -> launcherAction?.invoke(arg)
-            "media" -> media.control(arg)
+            "media" -> media.control(arg, args.getOrNull(1))
             "volume" -> volume.control(args[0], args.getOrNull(1).textOrNull())
             "notification" -> notifications.control(arg, args.getOrNull(1).textOrNull(), args.getOrNull(2))
             "settings" -> panels.open(arg, media.playingPackage())
@@ -747,7 +751,16 @@ class WidgetServices(
                     }
                 }
             "share" -> share(arg)
-            "haptic" -> view?.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            // Android's own touch feedback effects, so the user's setting still decides; a word from a value it doesn't
+            // know is medium, as haptic() was before it took one.
+            "haptic" ->
+                view?.performHapticFeedback(
+                    when (args.firstOrNull().textOrNull()) {
+                        "light" -> HapticFeedbackConstants.CLOCK_TICK
+                        "strong" -> HapticFeedbackConstants.LONG_PRESS
+                        else -> HapticFeedbackConstants.VIRTUAL_KEY
+                    },
+                )
             "open" -> openApp(arg)
             "ask" -> ask(arg, args.getOrNull(1).textOrNull())
             "appAction" -> args.getOrNull(1)?.takeIf { it != Null }?.let { appAction(arg, it) }

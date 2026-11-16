@@ -8,7 +8,7 @@ import android.os.ParcelFileDescriptor
 import android.os.PersistableBundle
 import android.util.Log
 import android.webkit.MimeTypeMap
-import dev.omalauncher.readUpTo
+import dev.omalauncher.system.readUpTo
 import java.io.File
 import java.io.IOException
 import java.time.LocalDateTime

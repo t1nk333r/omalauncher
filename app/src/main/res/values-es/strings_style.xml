@@ -15,6 +15,8 @@
     <string name="style_icons">iconos</string>
     <string name="style_monochrome">monocromo</string>
     <string name="style_colored">color</string>
+    <string name="style_icon_pack">paquete de iconos</string>
+    <string name="style_icon_pack_none">ninguno</string>
     <string name="style_home_apps">apps de inicio</string>
     <string name="style_boxed">con recuadro</string>
     <string name="style_icon_only">solo icono</string>
@@ -105,7 +107,7 @@
     </plurals>
 
     <string name="pages_title">páginas</string>
-    <string name="pages_intro">Las páginas de inicio, de izquierda a derecha. Arrastra una por ≡ para moverla, o con el teclado toma ≡ con Enter y muévela con las flechas. Inicio se abre en la primera con widgets o apps; los faces antes de ella quedan a su izquierda.</string>
+    <string name="pages_intro">Las páginas de inicio, de izquierda a derecha. Arrastra una por ≡ para moverla, o con el teclado toma ≡ con Enter y muévela con las flechas. Inicio se abre en la primera con widgets o apps; los widgets de pantalla completa antes de ella quedan a su izquierda.</string>
     <string name="pages_loading">cargando…</string>
     <string name="pages_remove_named">¿quitar %1$s?</string>
     <string name="pages_remove_page">¿quitar esta página?</string>
@@ -119,7 +121,7 @@
     </plurals>
     <string name="pages_empty">vacía</string>
     <string name="pages_doesnt_compile">no compila</string>
-    <string name="pages_face">face</string>
+    <string name="pages_face">pantalla completa</string>
     <string name="pages_home">inicio</string>
     <string name="pages_edit">editar</string>
     <string name="pages_share">compartir</string>
@@ -139,7 +141,7 @@
     <string name="gestures_keybar_until_fixed">la barra de teclas de la terminal es la original hasta que se arregle: %1$s</string>
 
     <string name="agents_title">agentes de programación</string>
-    <string name="agents_intro">Se instalan con mise, como en Omarchy. Los inicios de sesión se abren en tu navegador; pega las claves con el portapapeles del teclado.</string>
+    <string name="agents_intro">Se instalan como en Omarchy, la mayoría con mise. Los inicios de sesión se abren en tu navegador; pega las claves con el portapapeles del teclado.</string>
     <string name="agents_open">abrir</string>
     <string name="agents_remove">desinstalar</string>
     <string name="agents_still_running">%1$s sigue abierto: ciérralo y vuelve a desinstalarlo</string>

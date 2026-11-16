@@ -14,15 +14,15 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import dev.omalauncher.AppLanguage
+import dev.omalauncher.system.AppLanguage
 import dev.omalauncher.BuildConfig
-import dev.omalauncher.LauncherData
+import dev.omalauncher.storage.LauncherData
 import dev.omalauncher.Runtime
 import dev.omalauncher.linux.Agent
 import dev.omalauncher.linux.Proot
 import dev.omalauncher.linux.pacmanInstall
 import dev.omalauncher.linux.runJob
-import dev.omalauncher.ui.GestureAction
+import dev.omalauncher.ui.home.GestureAction
 import dev.omalauncher.ui.Palette
 import dev.omalauncher.theme.Style
 import dev.omalauncher.theme.StyleStore
@@ -42,6 +42,7 @@ import dev.omalauncher.widgets.market.Shared
 import dev.omalauncher.widgets.runtime.WidgetInstance
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -722,6 +723,9 @@ class WidgetEngine(
 
     private fun widgetFiles() = dir.listFiles { f -> (!f.name.startsWith(".") || f.name == STOCK_DRAWER || f.name == STOCK_KEYBAR) && f.extension == "owl" }.orEmpty().sortedBy { it.name }
 
+    /** New files that haven't compiled yet: home placed them at the default size. Main thread. */
+    private val unsized = HashSet<String>()
+
     private suspend fun reload(files: List<File>) {
         // Compiled for another language, a file's texts would stay in it.
         val relanguaged = phoneLanguage() != language
@@ -732,6 +736,16 @@ class WidgetEngine(
             withContext(Dispatchers.IO) {
                 files.map { f -> async { old[f.name]?.takeIf { !relanguaged && it.stamp == f.lastModified() } ?: compile(f, old[f.name]) } }.awaitAll()
             }
+        // A new file that didn't compile was placed with no size: to go by; once it compiles, its page places it again, at its size.
+        unsized.retainAll(parsed.mapTo(HashSet()) { it.file.name })
+        for (spec in parsed) {
+            val name = spec.file.name
+            if (spec.program == null) {
+                if (old[name] == null && Screen.entries.none { layout.cell(name, it) != null }) unsized += name
+            } else if (unsized.remove(name) && spec.size != null) {
+                for (screen in Screen.entries) layout.clearCell(name, screen)
+            }
+        }
         val changed = parsed.filter { old[it.file.name] !== it }.map { it.file.name }
         specs.clear()
         specs += parsed.sortedWith(compareBy({ it.page }, { it.order }, { it.file.name }))
@@ -820,6 +834,8 @@ class WidgetEngine(
                 parts.getOrNull(1) == "set" -> inst.setState(parts.getOrNull(2).orEmpty(), Json.parseOrText(parts.getOrNull(3).orEmpty()))?.let { "error: $it" } ?: "ok"
                 else -> "error: unknown command '${parts.getOrNull(1).orEmpty()}'"
             }
+        // The picture owl-check has is of the widget before this: without its preview line, the next check asks for a new one.
+        if (reply == "ok") hashes[name]?.let { writeCheck(spec!!.file, it, "ok").join() }
         withContext(Dispatchers.IO) {
             runCatching { writeAtomically(File(inboxDir, "$id.done"), (reply + "\n").toByteArray()) }
         }
@@ -859,7 +875,10 @@ class WidgetEngine(
                 instance(spec) == null -> "it isn't running"
                 else -> null
             }
-        if (skip != null) return writeCheck(spec.file, hash, "ok", "preview-skipped $hash $skip")
+        if (skip != null) {
+            writeCheck(spec.file, hash, "ok", "preview-skipped $hash $skip")
+            return
+        }
         val inst = instance(spec)!!
         if (program.kind == OwlKind.App || program.kind == OwlKind.Panel || program.kind == OwlKind.Keybar) return previewView(spec, inst, hash)
         val cells = tileCells(spec)
@@ -884,7 +903,9 @@ class WidgetEngine(
         // The file may have changed while this rendered; its own preview follows.
         if (hashes[name] != hash) return
         val line = if (ok) shownCells(cells).let { (c, r) -> "preview $hash ${c}x$r ${w}x$h" } else "preview-skipped $hash rendering failed"
-        writeCheck(spec.file, hash, "ok", listOfNotNull(line, screen).joinToString("\n"))
+        // Where home put the tile, which the file's size: only decides the first time.
+        val home = if (spec.isFace) null else layout.cell(name)?.let { "home $hash ${it.x} ${it.y} ${it.w} ${it.h}" }
+        writeCheck(spec.file, hash, "ok", listOfNotNull(line, screen, home).joinToString("\n"))
     }
 
     /**
@@ -1106,7 +1127,8 @@ class WidgetEngine(
     /**
      * Writes .check/<file>.txt for `owl-check`: `sha256 <hash>`, `result ok` or
      * `result error`, and once rendered, `preview <hash> <cells> <pixels>` or
-     * `preview-skipped <hash> <why>`, then `screen <hash> <pixels>` for a screen { }. After the error file, in the same order,
+     * `preview-skipped <hash> <why>`, then `screen <hash> <pixels>` for a screen { } and `home <hash> <x> <y> <w> <h>`
+     * for a tile's cell on home. After the error file, in the same order,
      * so a check that sees the hash also sees that version's errors.
      */
     private fun writeCheck(
@@ -1114,9 +1136,9 @@ class WidgetEngine(
         hash: String,
         result: String,
         preview: String? = null,
-    ) {
+    ): Job {
         val text = "sha256 $hash\nresult $result\n" + (preview?.let { "$it\n" } ?: "")
-        scope.launch(errorWriter) {
+        return scope.launch(errorWriter) {
             runCatching { writeAtomically(File(checkDir, "${file.name}.txt"), text.toByteArray()) }
         }
     }
@@ -1237,8 +1259,12 @@ class WidgetEngine(
             "# omalauncher\n\nThis Arch system runs inside an Android launcher, omalauncher; its source is at " +
                 "https://github.com/SimonSchubert/omalauncher, should you need to understand how the launcher works.\n\n" +
                 "It's Arch Linux ARM under proot, not a booted system: you are root already (no sudo needed), and there is " +
-                "no systemd (systemctl, services and timers don't work), no cron, no Docker and no kernel modules. Install " +
-                "packages with pacman or yay, command-line tools with mise. /sdcard is the phone's own storage, but it shows only " +
+                "no systemd (systemctl, services and timers don't work), no cron, no Docker and no kernel modules. A server, " +
+                "bot or gateway keeps running in the background, but only as long as the terminal or window it was started in " +
+                "stays open, and nothing starts it again: run it in the foreground there. Install " +
+                "packages with pacman or yay, command-line tools with mise. A Chromium that a tool downloads (Playwright, " +
+                "an agent's browser) needs --no-sandbox, as you are root, and its libraries from pacman: nss at-spi2-core " +
+                "libcups libxcomposite libxdamage libxrandr mesa cairo pango. /sdcard is the phone's own storage, but it shows only " +
                 "the files Linux put there itself: save files for the user's other apps in /sdcard/Download or /sdcard/Documents " +
                 "(pictures in /sdcard/Pictures). The user's other files are in the phone folders they let Linux reach, which have " +
                 "no path: `omalauncher folders` lists them, `omalauncher ls`, `get` and `put` list and copy files in and out, and " +

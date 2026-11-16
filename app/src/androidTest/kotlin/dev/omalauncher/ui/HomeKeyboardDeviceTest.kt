@@ -7,7 +7,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
-import dev.omalauncher.LauncherData
+import dev.omalauncher.storage.LauncherData
 import dev.omalauncher.MainActivity
 import org.junit.After
 import org.junit.Assert.assertFalse

@@ -7,8 +7,8 @@ import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
 import androidx.test.platform.app.InstrumentationRegistry
-import dev.omalauncher.ui.HomeMenu
-import dev.omalauncher.ui.LauncherState
+import dev.omalauncher.ui.home.HomeMenu
+import dev.omalauncher.ui.home.LauncherState
 import dev.omalauncher.wayland.Args
 import dev.omalauncher.wayland.Client
 import dev.omalauncher.wayland.Surface

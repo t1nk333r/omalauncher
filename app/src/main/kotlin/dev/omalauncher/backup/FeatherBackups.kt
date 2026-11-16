@@ -1,6 +1,6 @@
 package dev.omalauncher.backup
 
-import dev.omalauncher.openHttp
+import dev.omalauncher.net.openHttp
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException

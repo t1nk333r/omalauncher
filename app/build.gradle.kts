@@ -1,3 +1,4 @@
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -21,9 +22,9 @@ android {
         applicationId = "dev.omalauncher"
         minSdk = 29
         targetSdk = 37
-        // Phone build: upstream's versionCode × 100 + this build, so it stays above both Play's 34 and the earlier phone builds (14xx to 29xx).
-        versionCode = 3404
-        versionName = "1.1.0-phone.4"
+        // Phone build: upstream's versionCode × 100 + this build, so it stays above both Play's 39 and the earlier phone builds (14xx to 34xx).
+        versionCode = 3901
+        versionName = "1.6.0-phone.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += providers.gradleProperty("keyboardTestAbi").getOrElse("arm64-v8a") }
     }
@@ -33,6 +34,17 @@ android {
     // Phone build: upstream 0.15.0 reads strings with LocalContext's getString in tap handlers, which this check
     // fails (the tag itself does too). A tap reads the current configuration anyway, so a warning is enough.
     lint { warning += "LocalContextGetResourceValueCall" }
+
+    // play: the AAB for Google Play, with Play's in-app updates, whose library is closed source. foss: the APK on
+    // GitHub releases, which F-Droid builds too, without it; its LauncherUpdates asks GitHub releases instead.
+    flavorDimensions += "store"
+    productFlavors {
+        create("foss") {
+            dimension = "store"
+            isDefault = true
+        }
+        create("play") { dimension = "store" }
+    }
 
     externalNativeBuild {
         cmake { path = file("src/main/cpp/CMakeLists.txt") }
@@ -84,9 +96,28 @@ android {
 tasks.withType<Test>().configureEach { inputs.dir("src/main/assets/widgets") }
 
 // Gitignored, built by scripts/fetch-proot.sh. Without it a release still builds, but every Linux command fails.
-tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+tasks.matching { it.name.matches(Regex("pre\\w*ReleaseBuild")) }.configureEach {
     val proot = file("src/main/jniLibs/arm64-v8a/libproot.so")
     doFirst { check(proot.exists()) { "$proot is missing; run scripts/fetch-proot.sh" } }
+}
+
+// The libraries don't follow a pull: built before patches/proot or the script changed, they make an app with
+// an old proot (and no fast lane library) that builds and installs like any other. The script leaves a hash
+// of what it built from in .source; a debug build without any libraries stays possible (CI lints that way).
+tasks.matching { it.name.matches(Regex("pre\\w*(Debug|Release)Build")) }.configureEach {
+    val libs = file("src/main/jniLibs/arm64-v8a")
+    val root = rootProject.projectDir
+    val sources = listOf(rootProject.file("scripts/fetch-proot.sh")) +
+        rootProject.fileTree("patches/proot").files.filter { !it.name.startsWith(".") }.sortedBy { it.relativeTo(root).invariantSeparatorsPath }
+    inputs.files(sources)
+    doFirst {
+        if (!File(libs, "libproot.so").exists()) return@doFirst
+        val digest = MessageDigest.getInstance("SHA-256")
+        sources.forEach { digest.update(it.readBytes()) }
+        val now = digest.digest().joinToString("") { "%02x".format(it) }
+        val built = File(libs, ".source").takeIf { it.isFile }?.readText()?.trim()
+        check(built == now) { "$libs was built from an older patches/proot or scripts/fetch-proot.sh; run scripts/fetch-proot.sh" }
+    }
 }
 
 composeCompiler {
@@ -105,6 +136,9 @@ dependencies {
     implementation(project(":owl"))
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("org.jetbrains.compose.ui:ui-test-junit4:1.12.2")
+    "playImplementation"(libs.play.app.update)
+    // Play's library brings fragment 1.0.0, too old for registerForActivityResult.
+    "playImplementation"(libs.androidx.fragment)
     testImplementation(libs.junit)
     testImplementation("org.robolectric:robolectric:4.17")
     testImplementation("org.jetbrains.compose.ui:ui-test-junit4:1.12.2")

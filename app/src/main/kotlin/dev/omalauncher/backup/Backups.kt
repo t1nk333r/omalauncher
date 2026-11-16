@@ -9,8 +9,8 @@ import android.content.Context
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
-import dev.omalauncher.LauncherData
-import dev.omalauncher.SecretBox
+import dev.omalauncher.storage.LauncherData
+import dev.omalauncher.widgets.runtime.SecretBox
 import dev.omalauncher.upgrade.writeAtomically
 import dev.omalauncher.widgets.AppWidgets
 import kotlinx.coroutines.CoroutineScope

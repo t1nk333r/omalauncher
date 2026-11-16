@@ -1,5 +1,6 @@
 package dev.omalauncher.voice
 
+import dev.omalauncher.linux.shellQuote
 import dev.omalauncher.widgets.WidgetEngine
 import org.json.JSONArray
 import org.json.JSONObject
@@ -135,10 +136,9 @@ val VOICE_LINKS: Map<String, (write: (String) -> Unit) -> AgentLink> =
         "devin" to { w -> AcpLink(w, "devin acp") },
         "commandcode" to { w -> AcpLink(w, "commandcode acp") },
         "agy" to { w -> AcpLink(w, "agy acp") },
+        "hermes" to { w -> AcpLink(w, "hermes-acp") },
         "pi" to ::PiLink,
     )
-
-private fun sh(s: String) = "'" + s.replace("'", "'\\''") + "'"
 
 /**
  * Claude Code over stream-json both ways: `claude -p --input-format stream-json`, one user message per prompt,
@@ -155,8 +155,8 @@ class ClaudeLink(
 
     override fun command(resume: String?) =
         "exec claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages " +
-            "--append-system-prompt ${sh(VOICE_PROMPT)} --allowedTools Read,Glob,Grep,WebSearch,WebFetch " +
-            "--permission-prompt-tool stdio" + (resume?.let { " --resume ${sh(it)}" } ?: "")
+            "--append-system-prompt ${shellQuote(VOICE_PROMPT)} --allowedTools Read,Glob,Grep,WebSearch,WebFetch " +
+            "--permission-prompt-tool stdio" + (resume?.let { " --resume ${shellQuote(it)}" } ?: "")
 
     override fun open(resume: String?): List<LinkEvent> {
         session = resume
@@ -676,7 +676,7 @@ class PiLink(
     /** Why the turn in flight failed, once it has. */
     private var error: String? = null
 
-    override fun command(resume: String?) = "exec pi --mode rpc --append-system-prompt ${sh(VOICE_PROMPT)}"
+    override fun command(resume: String?) = "exec pi --mode rpc --append-system-prompt ${shellQuote(VOICE_PROMPT)}"
 
     override fun open(resume: String?): List<LinkEvent> {
         if (resume == null) return becomeReady()

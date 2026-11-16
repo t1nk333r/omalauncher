@@ -37,5 +37,6 @@ jobs:
         run: ./gradlew $(scripts/affected-tests.py --base "$BASE" --head HEAD) :owl:owlJar
 
       # Builds without proot (scripts/fetch-proot.sh), which is enough to compile wlbridge and run lint.
+      # The play build adds Play's in-app updates and their dependencies; linting it too catches what they break.
       - name: Build and lint
-        run: ./gradlew :app:assembleDebug :app:lintDebug
+        run: ./gradlew :app:assembleFossDebug :app:lintFossDebug :app:lintPlayDebug

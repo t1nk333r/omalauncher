@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prints the Gradle test tasks and `--tests` filters for the unit tests a change can affect.
 
-    ./gradlew $(scripts/affected-tests.py) :app:assembleDebug
+    ./gradlew $(scripts/affected-tests.py) :app:assembleFossDebug
 
 It splits Kotlin into units: each top-level function or property, and each class's header, init code and
 members. A unit changed when its code did, comments and spacing aside; a deleted or renamed one counts too, so a
@@ -42,7 +42,7 @@ SEES = {
     "app-main": {"owl-main", "app-main"},
     "app-test": {"owl-main", "app-main", "app-test"},
 }
-TEST_TASKS = {"owl-test": (":owl:test", "owl"), "app-test": (":app:testDebugUnitTest", "app")}
+TEST_TASKS = {"owl-test": (":owl:test", "owl"), "app-test": (":app:testFossDebugUnitTest", "app")}
 
 RUN_ALL = re.compile(
     r"(^|/)(build\.gradle\.kts|settings\.gradle\.kts|gradle\.properties|gradlew|gradlew\.bat)$"

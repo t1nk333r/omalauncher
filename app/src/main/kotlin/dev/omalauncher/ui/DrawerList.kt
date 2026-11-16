@@ -2,6 +2,8 @@ package dev.omalauncher.ui
 
 import android.content.pm.ApplicationInfo
 import dev.omalauncher.SmartCategories
+import dev.omalauncher.ui.home.AppHit
+import dev.omalauncher.widgets.app
 
 /** When an app was first installed, in millis; 0 for Linux apps and shortcuts, which don't say. */
 internal val AppHit.installed: Long get() = (this as? AppHit.Android)?.app?.installed ?: 0L

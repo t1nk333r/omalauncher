@@ -39,6 +39,7 @@ import dev.omalauncher.widgets.AppWidgets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
+import dev.omalauncher.ui.home.SearchField
 
 /** A widget an app offers, as the picker lists it. */
 private class Offer(

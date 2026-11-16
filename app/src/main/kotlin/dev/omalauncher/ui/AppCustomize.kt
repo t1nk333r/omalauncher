@@ -36,6 +36,9 @@ import androidx.compose.ui.unit.dp
 import dev.omalauncher.R
 import dev.omalauncher.Runtime
 import kotlinx.coroutines.launch
+import dev.omalauncher.ui.home.AppHit
+import dev.omalauncher.ui.home.icons
+import dev.omalauncher.ui.home.isWork
 
 /**
  * An app's own look and place, from its long-press menu: your name for it (blank for its own), your icon (an image

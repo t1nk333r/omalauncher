@@ -1,6 +1,6 @@
 package dev.omalauncher.linux
 
-import dev.omalauncher.readUpTo
+import dev.omalauncher.system.readUpTo
 import java.net.HttpURLConnection
 import java.net.URL
 

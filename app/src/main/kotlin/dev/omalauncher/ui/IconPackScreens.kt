@@ -51,6 +51,10 @@ import dev.omalauncher.suggestPackIcons
 import dev.omalauncher.theme.Style
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import dev.omalauncher.ui.home.AppHit
+import dev.omalauncher.ui.home.IconBadge
+import dev.omalauncher.ui.home.SearchField
+import dev.omalauncher.widgets.app
 
 /**
  * Style's icon pack, as other launchers list them: each pack on the phone with its own icon, and the apps' own

@@ -3,6 +3,7 @@ package dev.omalauncher.ui
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.omalauncher.ui.settings.needsLocalNetworkPermission
 
 class LocalNetworkPermissionTest {
     @Test fun android17WithoutTheGrantAsks() {

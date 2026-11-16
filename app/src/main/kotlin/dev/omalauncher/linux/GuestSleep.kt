@@ -10,8 +10,8 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import dev.omalauncher.LauncherData
-import dev.omalauncher.registerNotExported
+import dev.omalauncher.storage.LauncherData
+import dev.omalauncher.system.registerNotExported
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

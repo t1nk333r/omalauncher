@@ -7,8 +7,8 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.omalauncher.R
-import dev.omalauncher.SecretBox
-import dev.omalauncher.openHttp
+import dev.omalauncher.widgets.runtime.SecretBox
+import dev.omalauncher.net.openHttp
 import dev.omalauncher.upgrade.writeAtomically
 import dev.omalauncher.widgets.lang.OwlKind
 import dev.omalauncher.widgets.market.Catalog

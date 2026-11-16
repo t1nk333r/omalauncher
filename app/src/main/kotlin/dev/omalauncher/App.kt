@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.content.res.Resources
 import dev.omalauncher.backup.Backups
+import dev.omalauncher.system.AppLanguage
 
 class App : Application() {
     val runtime by lazy { Runtime(this) }

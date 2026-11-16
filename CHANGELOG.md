@@ -4,6 +4,83 @@ The most important changes in each release. The Play Store notes for a release
 are in `fastlane/metadata/android/en-US/changelogs/<versionCode>.txt`.
 Dates are when the build was uploaded to Play.
 
+## Unreleased
+
+## 1.6.0 (versionCode 39) – 2026-11-15
+
+- Hermes is in the coding agents list (#244): it installs with its own installer (about 2.5 GB),
+  starts with --yolo like on Omarchy, updates with the system update, and can be talked to on the
+  Voice screen.
+- Linux: programs that hard link files work (uv, pnpm, cp -al, git clone --local failed with
+  "Operation not permitted"), replacing a hard-linked file no longer destroys its other copies,
+  and a program in one window can talk to its own background process started from another.
+- The Omarchy themes download is 79 MB instead of 180, and an interrupted download picks up where
+  it stopped.
+- Our widgets animate at half their rate while battery saver is on; a tap or a game in play stays
+  smooth.
+- Fix: a widget with a scrolling Column inside another scrolling Column no longer takes the
+  launcher down (the most reported crash on Play since 1.2.0).
+
+## 1.5.0 (versionCode 38) – 2026-11-14
+
+- The launcher comes in Russian, with the words Russian Android uses, and a Russian store listing.
+- Android apps can take their icons from an installed icon pack such as Arcticons: style › icon
+  pack; monochrome tints the pack's icons in the theme's accent (#120).
+- Settings tells you when a newer Omalauncher is out: from Google Play, with an update button that
+  opens Play's update screen (#190), or for the GitHub build, from GitHub releases, with a link to
+  the release.
+- Settings can show a message from us once, like a contest with a countdown, from
+  announcements.json in the store repo; "don't show news again" turns them off.
+- Owl 23: widgets pick how strong a haptic is (`haptic("light")`, `"medium"`, `"strong"`), seek
+  what's playing (`media("seek", s)`), change its speed and press its notification buttons
+  (#287, #291). now playing's progress bar is a slider where the player allows seeking.
+- Fixes: 3D models no longer flicker where their parts overlap, and one with a long thin sliver no
+  longer runs the launcher out of memory; pacman works again after the app was killed mid-install
+  (#273); the GitHub build's update button no longer crashes on a phone without a browser.
+
+## 1.4.0 (versionCode 37) – 2026-11-12
+
+- Linux commands that look at many files run 2-8x faster with "fast system calls" on (pacman -Qk
+  8x, ls -lR 6x, du 5x, grep -r 3x, git status 2x): a small library inside Linux answers stat,
+  access, readlink, read-only open and similar calls itself instead of stopping for proot each
+  time.
+- Sunset heist: a brake button under the right thumb, and cars bump instead of passing through
+  each other: police, race rivals, the takedown car and parked cars are solid like traffic.
+- Agents building widgets lose fewer turns: owl-check draws a new preview after owl-send changed a
+  state and says which cells the tile has on home. The bundled game examples drop boomtown, sky
+  forge and last outpost.
+- Home no longer redraws for every line a Linux install logs, and typing and drawing do less work.
+- Fixes: AirPods no longer crash the launcher when their link stops.
+
+## 1.3.0 (versionCode 36) – 2026-11-11
+
+- Owl 22 brings 3D: a Canvas `scene(camera)` draws lit, fogged and textured models from cubes,
+  spheres, cylinders, cones, planes, terrain, your own meshes or OBJ files, with vector math for
+  games. `onTouch` sees every finger at once, and a Shader can sample images and take array
+  uniforms. New example apps: sunset heist, a 3D city to drive, run missions in and escape the
+  police, and canyon run, a low-poly flight down an endless canyon; plus boomtown, a city builder,
+  sky forge, a shooter with a hangar of upgrades, and last outpost, tower defense.
+- The store has two sections, widgets and apps; faces are now called full-screen widgets, with a
+  tab of their own in the store.
+- Apps that ask for 60 frames a second keep them however long they take to draw, and widgets that
+  read fixed values draw faster.
+- today, what's new, ntfy and github inbox refresh when their list is pulled down.
+
+## 1.2.0 (versionCode 35) – 2026-11-10
+
+- Owl 21: `android.motion` gives the phone's tilt from the gyroscope and accelerometer, and
+  `every frame { }` runs each frame with `dt`. New example apps: space bounce, a tilt-to-fly
+  arena shooter, and sky raid, a pixel-art plane shooter over five stages.
+- Voice: the orb is a glossy blob in shades of its colour whose edge moves while it listens,
+  speaks or works, more as you talk louder. Replies use the text-to-speech engine picked in
+  Android's settings without a launcher restart, and voice settings say which voice the default
+  is, like "default (Germany)".
+- Linux no longer looks uninstalled after the launcher restarts: the old /tmp is deleted in the
+  background, and while Linux starts, settings and the Linux screen say checking.
+- Fixes: a widget Shader whose loops take over 1000 turns a pixel isn't drawn (the store review
+  turns it away), so it can't freeze the screen; past 256 Wayland clients at once new ones are
+  turned away, so a runaway Linux program can't run the launcher out of memory.
+
 ## 1.1.0 (versionCode 34) – 2026-11-10
 
 - Linux commands under proot run 2-30x faster: proot keeps itself and processes making many

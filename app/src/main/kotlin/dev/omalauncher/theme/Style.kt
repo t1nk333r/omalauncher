@@ -2,7 +2,7 @@ package dev.omalauncher.theme
 
 import androidx.compose.runtime.Immutable
 import dev.omalauncher.SmartCategories
-import dev.omalauncher.isWebSearch
+import dev.omalauncher.system.isWebSearch
 import dev.omalauncher.ui.ExtraKeysLayout
 
 /**

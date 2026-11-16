@@ -3,6 +3,7 @@ package dev.omalauncher.ui
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import dev.omalauncher.ui.home.dockCellSize
 
 class DockCellTest {
     /** A large dock on a phone: five across set the size, not the dock's height. */
