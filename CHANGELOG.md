@@ -6,6 +6,37 @@ Dates are when the build was uploaded to Play.
 
 ## Unreleased
 
+## 1.8.0 (versionCode 41) – 2026-11-19
+
+- The app drawer starts with an app store tile: the store is now a widget store and an app store,
+  with the top five apps you haven't installed as big screenshots (launcher("store:apps"), owl 25).
+- Voice can listen with Parakeet, speech recognition running on the phone itself (670 MB download
+  in the voice settings, 25 European languages). It sends on a tap on the orb by default, shows
+  what you say as a draft you can erase, takes "always" as an approval answer, shows Hermes'
+  questions with their choices, and stops saying "one moment" while the agent works. The orb is the
+  theme's accent in every state and tells them apart by how it moves.
+- The launcher comes in French, with a French store listing.
+- A tap on a community theme opens its preview: its terminal colors, light or dark, its wallpapers
+  large and zoomable (#319), and about how much it downloads.
+- Widgets can show the battery of the Bluetooth headphones or speaker media plays on (#318, owl 25).
+- Fix: a widget with a scrolling Row inside another scrolling Row no longer takes the launcher down.
+
+## 1.7.0 (versionCode 40) – 2026-11-17
+
+- Linux can be stopped and started again in settings › linux (#73): stopping ends every Linux app,
+  terminal and agent and the foreground service without deleting anything, and it stays stopped
+  across restarts until you start it there.
+- Files, text and links can be shared to Linux from other Android apps: the share sheet lists it
+  while Linux is installed, and what's shared is saved in ~/Downloads.
+- The recent apps strip above the prompt bar is strip.owl (owl 24), yours to change like the drawer
+  and the key bar: pinned apps, bigger icons, apps left out. Swiping up from it opens the drawer.
+- The launcher comes in Japanese and Ukrainian (#311), each with a store listing.
+- Voice: what you say or type while the agent is still writing stays below what it wrote so far,
+  and Hermes without a provider gets a log in button.
+- Hermes reviewing a shared widget has only its file tools, and installing or updating it no longer
+  leaves 140 to 600 MB of downloads behind.
+- The key bars tick lightly under a finger.
+
 ## 1.6.0 (versionCode 39) – 2026-11-15
 
 - Hermes is in the coding agents list (#244): it installs with its own installer (about 2.5 GB),

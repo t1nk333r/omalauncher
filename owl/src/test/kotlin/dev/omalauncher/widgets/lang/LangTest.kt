@@ -847,8 +847,9 @@ class LangTest {
             host.budget.eval(ev, Env.root(host))
             return (System.nanoTime() - started) / 1_000_000
         }
-        // A text long enough that one match takes a while, on this machine, but gives up on its own.
-        while (timed() < 60) host.slots[0] = Num((host.slots[0] as Num).v + 4)
+        // A text long enough that one match takes a while, on this machine, but gives up on its own. The faster of two
+        // runs, so the first one's warm-up (class loading, the regex thread) on a slow runner doesn't pass for it.
+        while (minOf(timed(), timed()) < 60)host.slots[0] = Num((host.slots[0] as Num).v + 4)
         host.slots[1] = Num(40.0)
         val started = System.nanoTime()
         try {
@@ -1235,6 +1236,35 @@ class LangTest {
         assertTrue(compileError("widget {\n meta { owl: 15 }\n keyboard: false\n Text { text: 1 } }").isNotEmpty())
     }
 
+    @Test fun theStripIsAFileOfItsOwn() {
+        val p =
+            Compiler.compile(
+                "strip \"mine\" {\n meta { owl: 24 }\n source s = android.strip\n state menu = \"\"\n" +
+                    " Row { scroll: true\n for a in s.apps key a.key { Box { onTap: open(a.key); onLongPress: menu = a.key\n" +
+                    " Image { src: a.icon; size: 40 } } } } }",
+            )
+        assertEquals(OwlKind.Strip, p.kind)
+        assertEquals("mine", p.name)
+        assertTrue(p.root.isEmpty())
+        assertEquals(1, p.screen!!.size)
+        assertFalse(p.needsLinux)
+        assertEquals(listOf("read the recently opened apps"), p.commands)
+        assertEquals(OwlKind.Strip, OwlKind.of("// apps\nstrip \"x\" { }"))
+
+        assertTrue(compileError("strip {\n meta { owl: 23 }\n Text { text: 1 } }").contains("needs owl 24"))
+        assertTrue(compileError("strip {\n meta { owl: 24 }\n size: 2x2\n Text { text: 1 } }").contains("puts it above the prompt bar"))
+        assertTrue(compileError("strip {\n meta { owl: 24 }\n onTap: open(\"a:x\")\n Text { text: 1 } }").contains("handlers go on the nodes inside"))
+        assertTrue(compileError("strip {\n meta { owl: 24 }\n screen { Text { text: 1 } } }").contains("a strip has no screen { }"))
+        assertTrue(compileError("strip {\n meta { owl: 24 }\n Text { text: 1; onTap: close() } }").contains("the strip stays on home"))
+        assertTrue(compileError("strip {\n meta { owl: 24 }\n}").contains("a strip needs at least one node"))
+        assertTrue(compileError("strip {\n meta { owl: 24 }\n Browser { url: \"https://example.com\" } }").contains("or the strip"))
+        // android.strip is owl 24 wherever it's used; a Row that scrolls is owl 11 on the phone build, which had it first.
+        assertTrue(compileError("widget {\n meta { owl: 23 }\n source s = android.strip\n Text { text: 1 } }").contains("needs owl 24"))
+        Compiler.compile("widget {\n meta { owl: 23 }\n Row { scroll: true; Text { text: 1 } } }")
+        Compiler.compile("widget {\n meta { owl: 24 }\n Row { scroll: true; Text { text: 1 } } }")
+        assertTrue(compileError("widget {\n meta { owl: 24 }\n Row { scroll: true; wrap: true; Text { text: 1 } } }").contains("drop scroll or wrap"))
+    }
+
     @Test fun extraKeysAreAFileOfTheirOwn() {
         val p =
             Compiler.compile(
@@ -1388,6 +1418,21 @@ class LangTest {
         assertTrue(compileError(src.replace(" Text {", " every 1m { calendar(\"request\") }\n Text {")).contains("not in a trigger"))
         assertTrue(compileError(src.replace(" source agenda = android.calendar\n", "").replace("agenda.granted", "true")).contains("declare it"))
         assertEquals(listOf("sees calendar event titles, times and locations; check nothing sends them elsewhere"), Review.risks(p.commands).map { it.removePrefix("command ").substringBefore(": ") })
+    }
+
+    @Test fun bluetoothBatteryAskedForOnATap() {
+        val src = "widget {\n meta { owl: 25 }\n source v = android.volume\n Text { text: v.output.battery != null ? \"${'$'}{v.output.name} · ${'$'}{v.output.battery}%\" : v.output.name; onTap: volume(\"request\") } }"
+        val p = Compiler.compile(src)
+        val host = TestHost(p)
+        (p.root.single() as WNode.Element).handlers["onTap"]!!.run(Env.root(host), listOf(Num(0.0), Num(0.0)))
+        assertEquals(listOf("volume request"), host.actions)
+        assertTrue(compileError(src.replace("owl: 25", "owl: 24")).contains("owl 25"))
+        // The permission dialog only for a tap, and for a source that reads what it allows.
+        for (h in listOf("onPress", "onRelease")) assertTrue(compileError(src.replace("onTap", h)).contains("put it in onTap"))
+        assertTrue(compileError(src.replace(" Text {", " every 1m { volume(\"request\") }\n Text {")).contains("not in a trigger"))
+        assertTrue(compileError("widget {\n meta { owl: 25 }\n Text { text: \"allow\"; onTap: volume(\"request\") } }").contains("x.output.granted"))
+        // The rest of volume(...) works anywhere, as before.
+        Compiler.compile("widget {\n meta { owl: 12 }\n source v = android.volume\n every 1m { volume(\"up\") }\n Text { text: \"v\"; onPress: volume(50) } }")
     }
 
     @Test fun airpodsAskedForOnATap() {

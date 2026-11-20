@@ -5,12 +5,8 @@
 -->
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <!-- Settings: Linux's row while it's installed, and the Feather backup row. -->
-    <string name="phone_settings_linux_running">installed · running</string>
-    <string name="phone_settings_linux_stopped">installed · stopped</string>
     <string name="phone_settings_backup">backup</string>
     <string name="phone_settings_backup_subtitle">keep home, widgets and style on feather; restore them on any phone</string>
-    <!-- After Linux's size in the Linux screen while it isn't running. -->
-    <string name="phone_linux_stopped_suffix">" · stopped"</string>
 
     <!-- What a swipe on home can do, in settings › gestures. -->
     <string name="phone_gesture_drawer">app drawer</string>
@@ -236,8 +232,6 @@
     <string name="phone_drawer_rename">rename</string>
 
     <!-- The Linux screen: stopping and starting Linux, and the phone's storage in it. -->
-    <string name="phone_linux_stop">stop</string>
-    <string name="phone_linux_start">start</string>
     <string name="phone_linux_storage">phone storage</string>
     <string name="phone_linux_storage_on">on · /sdcard in Linux is the phone\'s storage; Linux apps and agents can read and change every file there</string>
     <string name="phone_linux_storage_off">off · Linux sees only the files it saved at /sdcard; turning it on asks Android for all-files access</string>

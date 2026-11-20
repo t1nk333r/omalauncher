@@ -204,11 +204,14 @@ private val TWO_PAGES_MIN_WIDTH = 320.dp
  * Added up in whole pixels, each part rounded as [SideRail] lays it out, so the grid ends exactly where the strip starts.
  */
 @Composable
-internal fun sideWidth(): Dp =
-    with(LocalDensity.current) {
+internal fun sideWidth(runtime: Runtime): Dp {
+    // The dock stands as wide as the stock strip; strip.owl as wide as it measured.
+    val strip = stripRoom(runtime, vertical = true).takeUnless { LauncherStyle.dock } ?: RecentStripHeight
+    return with(LocalDensity.current) {
         val gap = HomeGap.roundToPx()
-        ((if (LauncherStyle.recentApps) RecentStripHeight.roundToPx() + gap else 0) + PromptBarHeight.roundToPx() + EdgeGap.roundToPx()).toDp()
+        ((if (LauncherStyle.recentApps) strip.roundToPx() + gap else 0) + PromptBarHeight.roundToPx() + EdgeGap.roundToPx()).toDp()
     }
+}
 
 /**
  * Landscape home's side: portrait's bottom turned with the grid. The recent apps strip stands

@@ -146,18 +146,15 @@ private fun Installed(runtime: Runtime) {
         Column(Modifier.weight(1f)) {
             BasicText(stringResource(R.string.linux_arch), style = Mono.copy(fontSize = TextSize.Item))
             BasicText(
-                stringResource(R.string.linux_installed_size, size?.let(::formatSize) ?: stringResource(R.string.linux_measuring)) +
-                    (if (runtime.linuxRunning) "" else stringResource(R.string.phone_linux_stopped_suffix)),
+                stringResource(R.string.linux_installed_size, size?.let(::formatSize) ?: stringResource(R.string.linux_measuring)),
                 style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
             )
         }
-        if (runtime.linuxRunning) {
-            BracketAction(stringResource(R.string.phone_linux_stop), Palette.red, Modifier.takesPassedKeys().passesKeys(), runtime::stopLinux)
-        } else {
-            BracketAction(stringResource(R.string.phone_linux_start), Palette.accent, Modifier.takesPassedKeys().passesKeys(), runtime::startLinux)
-        }
     }
-    if (runtime.linuxRunning && runtime.gpu.supported) {
+    Spacer(Modifier.height(8.dp))
+    RunningRow(runtime)
+    // Its job runs in Linux; stopped, its buttons would do nothing.
+    if (runtime.gpu.supported && !runtime.linuxStopped) {
         Spacer(Modifier.height(8.dp))
         GpuRow(runtime)
     }
@@ -169,15 +166,6 @@ private fun Installed(runtime: Runtime) {
         Spacer(Modifier.height(8.dp))
         SharedStorageRow()
     }
-    Spacer(Modifier.height(16.dp))
-    BasicText(
-        if (runtime.linuxRunning) {
-            "Stop ends the Linux session without deleting anything; start it again here."
-        } else {
-            "Stopped. Arch Linux and everything in /root stay installed; start it when you need it."
-        },
-        style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
-    )
     Spacer(Modifier.height(16.dp))
     // Keys go between remove linux and its cancel as they swap, and wait out the removal for the install it ends with.
     val ask = remember { FocusRequester() }
@@ -225,6 +213,55 @@ private fun SharedStorageRow() {
         // Android's own toggle on its own page is the switch; Android checks it on every access, so /sdcard follows at once.
         BracketAction(stringResource(if (allowed) R.string.phone_linux_storage_turn_off else R.string.phone_linux_storage_turn_on), if (allowed) Palette.red else Palette.accent) {
             open.launch(SharedStorage.settings(context))
+        }
+    }
+}
+
+/**
+ * Whether Linux runs, with a way to stop it (after asking: it ends everything running in it) and to start it again.
+ * Stopping deletes nothing; see [Runtime.stopLinux].
+ */
+@Composable
+private fun RunningRow(runtime: Runtime) {
+    val stopped = runtime.linuxStopped
+    val running = runtime.linuxRunning
+    var asked by remember { mutableStateOf(false) }
+    // Only while there's something to stop; it's asked anew next time.
+    val confirm = asked && running && !stopped
+    Column(Modifier.card(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                BasicText(stringResource(R.string.linux_session_title), style = Mono.copy(fontSize = TextSize.Item))
+                val status =
+                    when {
+                        stopped -> R.string.linux_session_stopped
+                        running -> R.string.linux_session_running
+                        else -> R.string.linux_session_starting
+                    }
+                BasicText(
+                    stringResource(status),
+                    style = Mono.copy(color = if (running) Palette.green else Palette.muted, fontSize = TextSize.Small),
+                )
+            }
+            val passed = Modifier.takesPassedKeys().passesKeys()
+            when {
+                stopped -> BracketAction(stringResource(R.string.linux_start), Palette.accent, passed, runtime::startLinux)
+                running && !confirm -> BracketAction(stringResource(R.string.linux_stop), Palette.red, passed) { asked = true }
+            }
+        }
+        if (confirm) {
+            BasicText(stringResource(R.string.linux_stop_ask), style = Mono.copy(color = Palette.red))
+            BasicText(
+                stringResource(R.string.linux_stop_body),
+                style = Mono.copy(color = Palette.muted, fontSize = TextSize.Small),
+            )
+            Row {
+                BracketAction(stringResource(R.string.linux_stop_confirm), Palette.red, Modifier.takesPassedKeys().passesKeys()) {
+                    asked = false
+                    runtime.stopLinux()
+                }
+                BracketAction(stringResource(R.string.linux_cancel), Palette.muted, Modifier.passesKeys()) { asked = false }
+            }
         }
     }
 }

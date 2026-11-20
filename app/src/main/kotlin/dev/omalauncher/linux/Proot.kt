@@ -68,6 +68,9 @@ class Proot(
         prefs.edit().putBoolean(CPU_PINNING, on).apply()
     }
 
+    /** Linux was stopped in settings: no guest command starts until it's started again; see [stop]. */
+    @Volatile var stopped = false
+
     /**
      * The fast lane library (patches/proot/fastpath): preloaded into guest programs, it answers stat, access,
      * readlink and read-only open for plain rootfs paths itself, without a stop in proot (patches/proot/0003).
@@ -166,8 +169,7 @@ class Proot(
         }
         // Its mount point, so / lists it; Android 10 has none (an empty one is all that's left there).
         if (rootfs.isDirectory) storageMount.let { if (PhoneStorage.supported()) it.mkdirs() else it.delete() }
-        File(rootfs, "var/lib/pacman/db.lck").delete()
-        Pacman.dropUnfinished(File(rootfs, "var/lib/pacman/local")).takeIf { it.isNotEmpty() }?.let { Log.w("proot", "unfinished pacman entries dropped: $it") }
+        releasePacman()
         // An empty stand-in, so fontconfig lists the bound font when it reads the directory.
         if (rootfs.isDirectory) {
             val stub = File(rootfs, GUEST_CJK_FONT.removePrefix("/"))
@@ -184,6 +186,22 @@ class Proot(
         // bwrap is never empty.
         File(rootfs, "usr/bin/bwrap").takeIf { it.isFile && it.length() == 0L }?.delete()
         File(filesDir, "bwrap-shim").delete()
+    }
+
+    /** pacman's lock and the database entries of an install it didn't finish, left by a pacman that was killed. */
+    private fun releasePacman() {
+        File(rootfs, "var/lib/pacman/db.lck").delete()
+        Pacman.dropUnfinished(File(rootfs, "var/lib/pacman/local")).takeIf { it.isNotEmpty() }?.let { Log.w("proot", "unfinished pacman entries dropped: $it") }
+    }
+
+    /**
+     * Stops Linux without deleting anything: no guest command starts from now on, every running one is killed, and
+     * what a pacman killed mid-install left is cleaned up as after a restart. Setting [stopped] to false undoes it.
+     */
+    fun stop() {
+        stopped = true
+        killAll()
+        releasePacman()
     }
 
     /** Old /tmp contents waiting to be deleted; see [discardTmp]. */
@@ -298,8 +316,9 @@ class Proot(
             .filter { (guest, host) -> guest.substringBeforeLast('/').ifEmpty { "/" } == dir && host.isDirectory }
             .map { it.first.substringAfterLast('/') }
 
-    /** A guest `sh -c [script]`, stderr merged into stdout. Needs [prepare] to have run. */
+    /** A guest `sh -c [script]`, stderr merged into stdout. Needs [prepare] to have run; fails while Linux is [stopped]. */
     fun process(script: String): ProcessBuilder {
+        if (stopped) throw java.io.IOException("Linux is stopped")
         onUse()
         return ProcessBuilder(command(script)).apply {
             environment().apply {
@@ -322,6 +341,9 @@ class Proot(
         private const val CPU_PINNING = "proot_cpu_pinning"
 
         const val GUEST_HOME = "/root"
+
+        /** Where `omalauncher pick` and a share from another app put the files: the guest's own Downloads. */
+        const val GUEST_DOWNLOADS = "$GUEST_HOME/Downloads"
 
         /** XDG_RUNTIME_DIR in the guest, bound to [runtimeDir]. */
         const val GUEST_RUNTIME_DIR = "/run/user/0"

@@ -204,10 +204,11 @@ private fun DesktopScreen(
         // The whole window: a face fills it, and tiles keep clear of the system bars and the bar themselves.
         HomeScreen(runtime, state, Modifier.fillMaxSize().blurUnderDrawer(state))
     }
-    HomeMenu(runtime, state)
 
     // Only whether it shows is read here; the animation itself runs in the layer, without recomposing.
     val panelShown by remember(state) { derivedStateOf { state.drawer.value > 0.01f } }
+    // All the way open: the strip has slid away by then.
+    val drawerOpen by remember(state) { derivedStateOf { state.drawer.value >= 1f } }
     // Closing it forgets the search, like stock drawers: the next swipe up shows every app, not the old results. It also
     // stops picking apps and hides the hidden ones again.
     LaunchedEffect(panelShown) {
@@ -389,8 +390,21 @@ private fun DesktopScreen(
                             HomePill(runtime, state, Modifier.homeSwipe(runtime, state, enabled = !locked).lockedTaps(locked))
                             Spacer(Modifier.height(HomeGap))
                         }
-                        if (LauncherStyle.recentApps && !panelShown) {
-                            AppStrip(runtime, state, handlers, Modifier.homeSwipe(runtime, state, enabled = !locked).lockedTaps(locked).focusRequester(state.stripEntry).focusGroup(), home = state.homeEntry)
+                        // As the drawer opens the strip slides down behind the bar and fades, as the panel comes up; it
+                        // stays until the drawer is all the way open, so a swipe that started on it goes on opening the drawer.
+                        if (LauncherStyle.recentApps && !drawerOpen) {
+                            AppStrip(
+                                runtime,
+                                state,
+                                handlers,
+                                Modifier
+                                    .leavesWith(state)
+                                    .homeSwipe(runtime, state, enabled = !locked)
+                                    .lockedTaps(locked)
+                                    .focusRequester(state.stripEntry)
+                                    .focusGroup(),
+                                home = state.homeEntry,
+                            )
                         }
                         // Off home (home.prompt-bar), the bar shows only with the panel. It stays composed, taking no room and
                         // drawn nowhere, so Super+A or a widget can still focus it, which opens the panel and shows it.
@@ -461,6 +475,8 @@ private fun DesktopScreen(
     // A dock app being dragged out, over everything on home.
     state.dockDrag?.let { DockDragIcon(runtime, state, it) }
 
+    // Over home, the strip and the bar, so its scrim dims them all and they take no taps while it's open.
+    HomeMenu(runtime, state)
     // An owl panel swiping down brings over home and the bar, as it comes down from the top.
     PulledPanel(runtime, state)
 
@@ -653,3 +669,21 @@ private fun Modifier.placedWhile(shown: () -> Boolean): Modifier {
         }
     }
 }
+
+/**
+ * The strip's way out as the drawer opens, the panel's way in turned around: it slides down behind the bar and fades
+ * with the drawer's first half, in the layer, so a drag doesn't recompose it. From the moment the drawer shows it takes
+ * no room, as when it left then, so the panel above gets the strip's height at once, while the strip still draws there.
+ */
+private fun Modifier.leavesWith(state: LauncherState): Modifier =
+    layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        val height = if (state.drawer.value > 0.01f) 0 else placeable.height
+        // Bottom-aligned where it took room: with none, it reaches up over the panel's bottom edge.
+        layout(placeable.width, height) { placeable.place(0, height - placeable.height) }
+    }.graphicsLayer {
+        // Gone by the time the drawer is half open, so it doesn't sit over the drawer's first row for long.
+        val out = (state.drawer.value * 2f).coerceIn(0f, 1f)
+        alpha = 1f - out
+        translationY = out * size.height
+    }

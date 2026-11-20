@@ -45,6 +45,9 @@ enum class SettingsPage {
 
     /** The store on its faces, from the empty page left of page 1. */
     FaceStore,
+
+    /** The store on its apps alone, from the drawer's app store tile. */
+    AppStore,
     Packages,
 
     /** Install, progress, remove; opened by anything that needs Linux. */
@@ -113,7 +116,7 @@ private fun SettingsPage(
     onDismiss: () -> Unit,
 ) {
     val close = onDismiss
-    val linuxInstalled = runtime.bootstrap.state.collectAsState().value == LinuxState.Installed
+    val linuxInstalled = runtime.bootstrap.state.collectAsState().value == LinuxState.Installed && !runtime.linuxStopped
 
     // Settings has no home underneath: the agent opens in its own terminal, or the agents screen offers one.
     fun agent(
@@ -183,6 +186,7 @@ private fun SettingsPage(
             }
         SettingsPage.Store -> StoreScreen(runtime.widgets, runtime.agents.installed, homePage, runtime.themes.picked, onDismiss = close, onOpenApp = runtime::openOwlApp)
         SettingsPage.FaceStore -> StoreScreen(runtime.widgets, runtime.agents.installed, homePage, runtime.themes.picked, onDismiss = close, initialKind = OwlKind.Face, onOpenApp = runtime::openOwlApp)
+        SettingsPage.AppStore -> StoreScreen(runtime.widgets, runtime.agents.installed, homePage, runtime.themes.picked, onDismiss = close, initialKind = OwlKind.App, onOpenApp = runtime::openOwlApp)
         SettingsPage.Packages -> PackagesScreen(runtime, onDismiss = close)
         SettingsPage.Linux -> LinuxScreen(runtime, onDismiss = close)
         SettingsPage.Licenses -> LicensesScreen(onDismiss = close)

@@ -182,7 +182,7 @@ class Style(
 
         val APP_TILES = Setting.Flag("home.app-tiles", true, "Apps on home in a tile like a widget; false draws bare icons on the wallpaper.")
         val APP_LABELS = Setting.Flag("home.app-labels", true, "Apps' names under their icons on home; false shows the icons alone, a little bigger.")
-        val RECENT_APPS = Setting.Flag("home.recent-apps", true, "The strip above the prompt bar: the dock (home.dock) or the apps used lately; false hides it.")
+        val RECENT_APPS = Setting.Flag("home.recent-apps", true, "The strip above the prompt bar: the dock (home.dock) or the apps used lately, which strip.owl in the widgets folder draws; false hides it.")
         val DOCK = Setting.Flag("home.dock", true, "true: the strip holds a dock of up to 5 apps you pick (long-press an app, add to dock); false: the apps used lately.")
         val DOCK_BOX = Setting.Flag("home.dock-box", true, "The dock on a box of the tiles' glass; false leaves its icons bare on the wallpaper.")
         val DOCK_HEIGHT = Setting.Number("home.dock-height", 100.0, 48.0..160.0, "The dock's height in dp; its icons grow to fill it, as wide as five fit across. 56 is the strip's own height, 100 takes the pill's row too.")

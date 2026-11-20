@@ -222,6 +222,7 @@ fun HomeScreen(
                 "style", "themes" -> state.show(SettingsPage.Style)
                 "agents" -> state.show(SettingsPage.Agents)
                 "store" -> state.show(SettingsPage.Store)
+                "store:apps" -> state.show(SettingsPage.AppStore)
                 "linux" -> state.show(SettingsPage.Linux)
                 "drawer" -> state.open()
                 "settings" -> state.show()
@@ -400,7 +401,7 @@ fun HomeScreen(
     val side = homeSide()
     val focusManager = LocalFocusManager.current
     val turned = homeTurned()
-    val sideRoom = sideWidth()
+    val sideRoom = sideWidth(runtime)
     // Without the bar on home (home.prompt-bar), only the gap to the edge stays below the strip.
     val barRoom =
         if (!barOnHome(runtime)) {
@@ -754,12 +755,15 @@ fun HomeScreen(
  * Added up in whole pixels, as the column drawing them rounds each part, so the pill can't reach into the grid's gap.
  */
 @Composable
-internal fun homeStripRoom(runtime: Runtime): Dp =
-    with(LocalDensity.current) {
-        val strip = if (LauncherStyle.recentApps) stripHeight.roundToPx() else 0
+internal fun homeStripRoom(runtime: Runtime): Dp {
+    // The dock's own height; strip.owl's as it measured.
+    val recent = stripRoom(runtime, vertical = false)
+    return with(LocalDensity.current) {
+        val strip = if (!LauncherStyle.recentApps) 0 else if (LauncherStyle.dockShown) stripHeight.roundToPx() else recent.roundToPx()
         val pill = if (LauncherStyle.homePill && pillLabel(runtime.gestures.swipeDown) != null) PillHeight.roundToPx() + HomeGap.roundToPx() else 0
         (strip + pill + LauncherStyle.settingsStrip.roundToPx()).toDp()
     }
+}
 
 /** Whether the prompt bar stays on home: style says so, or nothing else opens the app panel (no swipe, no pill). */
 internal fun barOnHome(runtime: Runtime) = LauncherStyle.promptBarOnHome || !runtime.gestures.reachPanel
@@ -980,6 +984,9 @@ enum class LinuxPhase {
     Installing,
     Installed,
 
+    /** Installed, but stopped in settings; what needs it sends the user there to start it. */
+    Stopped,
+
     /** Not installed, failed or being removed. */
     Absent,
 }
@@ -990,8 +997,11 @@ fun linuxPhase(runtime: Runtime): LinuxPhase {
     val bootstrap = runtime.bootstrap
     val phases = remember(bootstrap) { bootstrap.state.phases() }
     val initial = remember(bootstrap) { linuxPhase(bootstrap.state.value) }
-    return phases.collectAsState(initial).value
+    return phases.collectAsState(initial).value.stopped(runtime.linuxStopped)
 }
+
+/** [LinuxPhase.Stopped] for an installed Linux that was stopped; any other phase as it is. */
+internal fun LinuxPhase.stopped(stopped: Boolean) = if (stopped && this == LinuxPhase.Installed) LinuxPhase.Stopped else this
 
 /** These states' phases, each once until it changes. */
 internal fun Flow<LinuxState>.phases(): Flow<LinuxPhase> = map(::linuxPhase).distinctUntilChanged()

@@ -135,7 +135,7 @@ class WidgetEngine(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val services = WidgetServices(context, proot, runtime, scope)
 
-    /** Opens launcher screens ("style" or "themes", "agents", "drawer"); set by the UI. */
+    /** Opens launcher screens ("style" or "themes", "agents", "store" or "store:apps", "drawer"); set by the UI. */
     var launcherAction by services::launcherAction
 
     /** What the drawer's long-press menu does, for appAction(...); set by the UI. */
@@ -146,6 +146,9 @@ class WidgetEngine(
 
     /** android.airpods and airpods(...), which ask the activity in front for Bluetooth. */
     val airpods get() = services.airpods
+
+    /** android.volume and volume(...), whose "request" asks the activity in front for Bluetooth. */
+    val volume get() = services.volume
 
     /** android.media, and android.modes' Do Not Disturb switch: both need notification access. */
     val media get() = services.media
@@ -331,7 +334,40 @@ class WidgetEngine(
         keybarShown += if (shown) 1 else -1
     }
 
-    /** On a home page: a widget's tile, or a face; not an app, a panel or the extra keys. */
+    /**
+     * The strip above home's prompt bar: strip.owl, else the stock one, so a strip that's gone or broken still shows the
+     * recent apps. Null while neither compiles.
+     */
+    fun stripSpec(): WidgetSpec? = listOf(STRIP, STOCK_STRIP).firstNotNullOfOrNull { name -> specs.firstOrNull { it.file.name == name && it.kind == OwlKind.Strip && it.program != null } }
+
+    /** The running [stripSpec]; null until it runs. Through specs, which are snapshot state, so home follows a reload. */
+    fun stripInstance(): WidgetInstance? = stripSpec()?.let(::instance)
+
+    /** Whether the strip shows stood up beside the grid, in landscape: `vertical` in `android.strip`. */
+    var stripVertical by mutableStateOf(false)
+
+    private val stripPrefs = LauncherData.prefs(context)
+
+    /**
+     * How tall the strip measured above the bar, and how wide stood up beside the grid, in pixels; -1 until it ever has.
+     * Kept across starts: home's tiles are where they stay from the first frame, however tall the user's strip is.
+     */
+    var stripHeightPx by mutableIntStateOf(stripPrefs.getInt(STRIP_HEIGHT, -1))
+        private set
+    var stripWidthPx by mutableIntStateOf(stripPrefs.getInt(STRIP_WIDTH, -1))
+        private set
+
+    /** The strip measured [px] tall above the bar, or wide stood up [vertical] beside the grid. */
+    fun stripMeasured(
+        vertical: Boolean,
+        px: Int,
+    ) {
+        if (px == if (vertical) stripWidthPx else stripHeightPx) return
+        if (vertical) stripWidthPx = px else stripHeightPx = px
+        stripPrefs.edit().putInt(if (vertical) STRIP_WIDTH else STRIP_HEIGHT, px).apply()
+    }
+
+    /** On a home page: a widget's tile, or a face; not an app, a panel, the extra keys or the strip. */
     fun onHome(spec: WidgetSpec) = spec.kind == OwlKind.Widget || spec.kind == OwlKind.Face
 
     /** The running widget whose screen is open, with its spec (for the title fallback). */
@@ -721,7 +757,7 @@ class WidgetEngine(
         }
     }
 
-    private fun widgetFiles() = dir.listFiles { f -> (!f.name.startsWith(".") || f.name == STOCK_DRAWER || f.name == STOCK_KEYBAR) && f.extension == "owl" }.orEmpty().sortedBy { it.name }
+    private fun widgetFiles() = dir.listFiles { f -> (!f.name.startsWith(".") || f.name == STOCK_DRAWER || f.name == STOCK_KEYBAR || f.name == STOCK_STRIP) && f.extension == "owl" }.orEmpty().sortedBy { it.name }
 
     /** New files that haven't compiled yet: home placed them at the default size. Main thread. */
     private val unsized = HashSet<String>()
@@ -880,7 +916,7 @@ class WidgetEngine(
             return
         }
         val inst = instance(spec)!!
-        if (program.kind == OwlKind.App || program.kind == OwlKind.Panel || program.kind == OwlKind.Keybar) return previewView(spec, inst, hash)
+        if (!onHome(spec)) return previewView(spec, inst, hash)
         val cells = tileCells(spec)
         val (w, h) = if (spec.isFace) layout.pagePx(context.resources.displayMetrics) else layout.tilePx(cells, context.resources.displayMetrics)
         previewing += name
@@ -970,6 +1006,7 @@ class WidgetEngine(
                 when (spec.kind) {
                     OwlKind.Panel -> "a panel has no tile"
                     OwlKind.Keybar -> "the terminal key bar has no tile"
+                    OwlKind.Strip -> "the strip has no tile"
                     else -> "an app has no tile"
                 }
         writeCheck(spec.file, hash, "ok", if (ok) "$tile\nscreen $hash ${dm.widthPixels}x${dm.heightPixels}" else "$tile; rendering its screen failed")
@@ -1020,7 +1057,7 @@ class WidgetEngine(
                 for (theme in themes) {
                     Palette.apply(theme.colors)
                     val out = File(dir, "${theme.name}/$name${if (n > 0) ".${n + 1}" else ""}.png")
-                    if (spec.kind == OwlKind.App || spec.kind == OwlKind.Panel || spec.kind == OwlKind.Keybar) {
+                    if (!onHome(spec)) {
                         previews.renderScreen(spec, inst, dm.widthPixels, dm.heightPixels, out, ready)
                     } else {
                         previews.render(spec, inst, shownCells(cells), w, h, out, ready)
@@ -1046,6 +1083,8 @@ class WidgetEngine(
         // Over a Linux window too, while home is hidden.
         if (spec.kind == OwlKind.Keybar) return keybarShown > 0
         if (!visible) return false
+        // The strip shows with home, the one of strip.owl and the stock strip that home shows.
+        if (spec.kind == OwlKind.Strip) return LauncherStyle.recentApps && stripSpec()?.file?.name == spec.file.name
         // Its screen is open: it's on screen wherever the pages are.
         if (spec.file.name == openScreen) return true
         if (spec.kind == OwlKind.Panel) return spec.file.name in shownPanels || spec.file.name in gesturePanels()
@@ -1212,9 +1251,10 @@ class WidgetEngine(
             for (name in assets.list("widgets/docs").orEmpty()) add(asset("widgets/docs/$name", File(dir, "docs/$name"), Policy.Owned))
             for (name in assets.list("widgets/examples").orEmpty()) add(asset("widgets/examples/$name", File(dir, "examples/$name"), Policy.Seeded))
             for (name in assets.list("widgets").orEmpty().filter { it.endsWith(".owl") }) add(asset("widgets/$name", File(dir, name), Policy.Seeded))
-            // Always as this launcher ships them, whatever became of drawer.owl and keybar.owl.
+            // Always as this launcher ships them, whatever became of drawer.owl, keybar.owl and strip.owl.
             add(asset("widgets/$DRAWER", File(dir, STOCK_DRAWER), Policy.Owned))
             add(asset("widgets/$KEYBAR", File(dir, STOCK_KEYBAR), Policy.Owned))
+            add(asset("widgets/$STRIP", File(dir, STOCK_STRIP), Policy.Owned))
         }
     }
 
@@ -1249,6 +1289,14 @@ class WidgetEngine(
 
         /** The extra keys as this launcher ships them, kept that way: the fallback, and what an edited keybar.owl compares with. */
         const val STOCK_KEYBAR = ".stock-keybar.owl"
+
+        /** The strip of apps above home's prompt bar: the user's to change, like the drawer. */
+        const val STRIP = "strip.owl"
+
+        /** The strip as this launcher ships it, kept that way: the fallback, and what an edited strip.owl compares with. */
+        const val STOCK_STRIP = ".stock-strip.owl"
+        private const val STRIP_HEIGHT = "strip_height_px"
+        private const val STRIP_WIDTH = "strip_width_px"
         private const val TERMINAL_PREFIX = "terminal-"
         private const val AGENT_PREFIX = "agent-"
 
@@ -1261,14 +1309,16 @@ class WidgetEngine(
                 "It's Arch Linux ARM under proot, not a booted system: you are root already (no sudo needed), and there is " +
                 "no systemd (systemctl, services and timers don't work), no cron, no Docker and no kernel modules. A server, " +
                 "bot or gateway keeps running in the background, but only as long as the terminal or window it was started in " +
-                "stays open, and nothing starts it again: run it in the foreground there. Install " +
+                "stays open, and nothing starts it again: run it in the foreground there. An agent's own scheduler is such a " +
+                "program: Hermes's cron jobs and messaging bots only run while a window with Hermes is open. Install " +
                 "packages with pacman or yay, command-line tools with mise. A Chromium that a tool downloads (Playwright, " +
                 "an agent's browser) needs --no-sandbox, as you are root, and its libraries from pacman: nss at-spi2-core " +
                 "libcups libxcomposite libxdamage libxrandr mesa cairo pango. /sdcard is the phone's own storage, but it shows only " +
                 "the files Linux put there itself: save files for the user's other apps in /sdcard/Download or /sdcard/Documents " +
                 "(pictures in /sdcard/Pictures). The user's other files are in the phone folders they let Linux reach, which have " +
                 "no path: `omalauncher folders` lists them, `omalauncher ls`, `get` and `put` list and copy files in and out, and " +
-                "`omalauncher pick` lets the user choose any file on the phone. xdg-open opens http(s) links in Android's browser; `omarchy-edit <file>` opens a file in the " +
+                "`omalauncher pick` lets the user choose any file on the phone. What the user shares to Linux from another app's " +
+                "share sheet is saved in ~/Downloads, text and links as a shared-<date>-<time>.txt file. xdg-open opens http(s) links in Android's browser; `omarchy-edit <file>` opens a file in the " +
                 "launcher's editor and `omarchy-files [folder]` its file manager; GUI apps (Wayland) open as windows on the launcher.\n\n" +
                 "Home-screen widgets are `.owl` files in " +
                 "~/$GUEST_DIR, written in a small declarative language documented in README.md there (and docs/ next to it); so are apps for the " +
@@ -1278,6 +1328,8 @@ class WidgetEngine(
                 ".stock-drawer.owl is that drawer as this launcher ships it. With owl panel for swiping up, the panel picked shows in its place. " +
                 "Likewise keybar.owl (`keybar \"name\" { }`) is the terminal key bar over the soft keyboard while typing in a terminal, " +
                 "and .stock-keybar.owl the bar as shipped; while style.toml sets terminal.extra-keys, those keys show instead. " +
+                "strip.owl (`strip \"name\" { }`) is the strip of recent apps above home's prompt bar (unless style.toml's " +
+                "home.dock puts the dock there), and .stock-strip.owl the strip as shipped. " +
                 "Saved files show up on the phone within seconds. After saving, run `owl-check <file>`: it prints the errors " +
                 "and the path of a PNG of the tile or view, drawn with live data; look at it to check the layout. " +
                 "examples/ holds more widgets to learn from or move up to use. Scripts and hooks can set a running " +

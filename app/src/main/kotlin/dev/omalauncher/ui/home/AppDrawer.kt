@@ -1,5 +1,23 @@
 package dev.omalauncher.ui.home
 
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import dev.omalauncher.widgets.render.WidgetStrip
+import dev.omalauncher.widgets.runtime.WidgetInstance
+import dev.omalauncher.widgets.lang.Bool
+import dev.omalauncher.widgets.lang.Obj
+import androidx.compose.foundation.layout.safeDrawingPadding
+import dev.omalauncher.ui.HomeGap
 import androidx.compose.ui.input.pointer.pointerInput
 import java.io.File
 import androidx.compose.runtime.getValue
@@ -436,7 +454,7 @@ internal fun appIconOf(
     }
 }
 
-/** Height of the recent apps strip; home keeps this much room for it above the bar, even while it's empty. */
+/** The stock strip's height, which home keeps for the strip above the bar until the strip has measured its own. */
 val RecentStripHeight = 56.dp
 
 /** The strip's height on home in portrait: the dock's own (home.dock-height) while it holds the dock. */
@@ -462,7 +480,7 @@ internal fun AppStrip(
     /** Where keys go from its apps toward the grid; see [RecentStrip]. */
     home: FocusRequester? = null,
     side: HomeSide? = null,
-) = if (LauncherStyle.dock) DockStrip(runtime, state, handlers, modifier, vertical, home, side) else RecentStrip(runtime, handlers, modifier, vertical, home, side)
+) = if (LauncherStyle.dock) DockStrip(runtime, state, handlers, modifier, vertical, home, side) else RecentStrip(runtime, modifier, vertical, home, side)
 
 /**
  * The dock: up to [DOCK_SLOTS] apps you picked, each in its own slot spread across the strip (down it in landscape),
@@ -541,53 +559,102 @@ private fun DockStrip(
 }
 
 /**
- * The apps opened lately, on home right above the bar, scrolling sideways; [vertical] stands it up
- * beside the grid in landscape, scrolling down. A home tile like the others: frame, fill and gaps,
- * or bare when home icons are. Can be hidden in themes.
+ * The room home keeps for the strip: as tall as it measured above the bar, or as wide as it measured [vertical] beside
+ * the grid; [RecentStripHeight] until it has. The file decides, so home's tiles make way for a taller strip.
+ */
+@Composable
+internal fun stripRoom(
+    runtime: Runtime,
+    vertical: Boolean,
+): Dp {
+    val px = if (vertical) runtime.widgets.stripWidthPx else runtime.widgets.stripHeightPx
+    // 0 is a strip that draws nothing, which gives its room back.
+    return if (px >= 0) with(LocalDensity.current) { px.toDp() } else RecentStripHeight
+}
+
+/**
+ * The most of the screen the strip may take: a third of its height above the bar, a quarter of its width beside the
+ * grid. Whatever a file asks for, home's tiles and the bar stay on screen; a strip laid out only for portrait, which
+ * would fill the whole side in landscape, scrolls in a quarter of it instead.
+ */
+@Composable
+private fun stripMax(vertical: Boolean): Dp {
+    val config = LocalConfiguration.current
+    return if (vertical) (config.screenWidthDp / 4).dp else (config.screenHeightDp / 3).dp
+}
+
+/**
+ * The strip above the bar on home, strip.owl (`strip "…" { }`, else the stock one): the apps opened lately, scrolling
+ * sideways, as the stock file draws them. [vertical] stands it up beside the grid in landscape, which `android.strip`
+ * tells the file. Can be hidden in settings › style.
  */
 @Composable
 internal fun RecentStrip(
     runtime: Runtime,
-    handlers: AppHandlers,
     modifier: Modifier = Modifier,
     vertical: Boolean = false,
     /**
-     * Where keys go from its apps toward the grid: Up, or stood up on [side], across to it. On each, as the list's own
-     * focus group keeps it from reaching them from outside.
+     * Where keys go from its apps toward the grid: Up, or stood up on [side], across to it. Compose's own search doesn't
+     * find home's tiles from the strip, so an arrow that has nowhere further to go in the strip goes there.
      */
     home: FocusRequester? = null,
     side: HomeSide? = null,
 ) {
-    // Not before every kind of app is listed: the ones missing would push in as their kind arrived.
-    val apps = if (runtime.appsListed) recentApps(runtime, 20) else emptyList()
-    // Nothing opened yet: no strip, but its room stays, so home doesn't shift when the first app shows up.
-    if (apps.isEmpty()) {
-        Spacer(if (vertical) modifier.width(RecentStripHeight) else modifier.height(RecentStripHeight))
+    val widgets = runtime.widgets
+    LaunchedEffect(widgets, vertical) { widgets.stripVertical = vertical }
+    val inst = widgets.stripInstance()
+    // Not while the file still lays itself out for the other way: `vertical` in android.strip reaches it some frames
+    // after home has turned, and a Column as tall as the screen above the bar, or a Row as wide beside the grid, would
+    // take all the strip may have and squeeze home's tiles until it did. Its room stays as it last measured this way.
+    val turning = ((inst?.androidValue("strip") as? Obj)?.fields?.get("vertical") as? Bool)?.let { it.v != vertical } == true
+    if (inst == null || turning) {
+        val room = stripRoom(runtime, vertical)
+        Spacer(if (vertical) modifier.width(room) else modifier.height(room))
         return
     }
-    val bare = LauncherStyle.bareAppIcons
-    val listState = rememberLazyListState()
-    // Back on home, the strip starts at the app opened last, wherever it was scrolled to before.
-    LaunchedEffect(runtime.usage.settled) { listState.scrollToItem(0) }
-    Box(
-        modifier
-            .then(if (vertical) Modifier.fillMaxHeight().width(RecentStripHeight) else Modifier.padding(horizontal = EdgeGap).fillMaxWidth().height(RecentStripHeight))
-            .then(if (bare) Modifier else Modifier.tile()),
-        contentAlignment = if (vertical) Alignment.TopCenter else Alignment.CenterStart,
-    ) {
-        val cells: LazyListScope.() -> Unit = {
-            items(apps, key = { it.key }) { hit ->
-                val (icon, mask) = hit.icons(runtime)
-                Box(if (home != null) Modifier.focusProperties { toHome(side, home) } else Modifier) {
-                    StripCell(hit.name(runtime), icon, mask, onClick = { handlers.launch(hit) }, actions = { hit.actions(handlers) }, shortcuts = { hit.shortcutMenu(handlers) }, spoken = hit.spoken, paused = hit.paused(runtime))
-                }
+    val focusManager = LocalFocusManager.current
+    val inside = remember { booleanArrayOf(false) }
+    val (towardHome, direction) =
+        when (side) {
+            null -> Key.DirectionUp to FocusDirection.Up
+            HomeSide.Left -> Key.DirectionRight to FocusDirection.Right
+            HomeSide.Right -> Key.DirectionLeft to FocusDirection.Left
+        }
+    val keys =
+        if (home == null) {
+            Modifier
+        } else {
+            Modifier.onFocusChanged { inside[0] = it.hasFocus }.onKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown || e.key != towardHome) return@onKeyEvent false
+                // Further within the strip first, as in a strip of several rows; else on to home's tiles.
+                if (!(focusManager.moveFocus(direction) && inside[0])) home.requestFocus()
+                true
             }
         }
-        if (vertical) {
-            LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, content = cells)
-        } else {
-            LazyRow(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically, content = cells)
-        }
+    // Back on home, the strip starts again at its beginning, wherever it was scrolled to before: the app opened last
+    // is first now.
+    key(runtime.usage.settled) {
+        WidgetStrip(
+            inst,
+            vertical,
+            modifier
+                .then(if (vertical) Modifier.fillMaxHeight() else Modifier.padding(horizontal = EdgeGap).fillMaxWidth())
+                .then(if (vertical) Modifier.widthIn(max = stripMax(true)) else Modifier.heightIn(max = stripMax(false)))
+                .clipToBounds()
+                .onSizeChanged { widgets.stripMeasured(vertical, if (vertical) it.width else it.height) }
+                .then(keys),
+        )
+    }
+}
+
+/** The strip where home has it, above the bar at the bottom of a screen, for owl-check's picture of it. */
+@Composable
+internal fun StripPreview(inst: WidgetInstance) {
+    Box(
+        Modifier.fillMaxSize().background(Palette.background).safeDrawingPadding().padding(bottom = PromptBarHeight + HomeGap + EdgeGap),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        WidgetStrip(inst, vertical = false, Modifier.padding(horizontal = EdgeGap).fillMaxWidth())
     }
 }
 
@@ -808,7 +875,7 @@ private fun MissingDockCell(onRemove: () -> Unit) {
     }
 }
 
-/** An app in the recent strip, drawn like a pinned app's tile: the icon alone, or on a badge when bare. */
+/** An app in the dock, drawn like a pinned app's tile: the icon alone, or on a badge when bare. */
 @Composable
 private fun StripCell(
     label: String,

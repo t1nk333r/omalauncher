@@ -166,11 +166,6 @@ class Bootstrap(
 
     val isInstalled get() = _state.value == LinuxState.Installed
 
-    /** Reports an installed system as installed without running its steps, for a session the user stopped. */
-    fun restoreInstalled() {
-        if (wanted) _state.value = LinuxState.Installed
-    }
-
     /** An install was started (and may still need to finish), or one finished. */
     val wanted get() = journal.setupComplete || choiceFile.exists()
 
@@ -266,6 +261,16 @@ class Bootstrap(
                 _state.value = LinuxState.Failed(stage, e.message ?: e.toString(), log.toList())
             }
         }
+
+    /**
+     * For a Linux stopped in settings: an installed system reports [LinuxState.Installed] without running a guest
+     * command; its update steps wait for [run] when it's started. False, and nothing changes, if setup never completed.
+     */
+    fun installedWhileStopped(): Boolean {
+        if (!journal.setupComplete) return false
+        _state.value = LinuxState.Installed
+        return true
+    }
 
     @Volatile private var cancelled = false
 

@@ -65,6 +65,8 @@ import dev.omalauncher.widgets.lang.KeyNames
 import dev.omalauncher.widgets.lang.Lst
 import dev.omalauncher.widgets.lang.Null
 import dev.omalauncher.widgets.lang.Num
+import dev.omalauncher.widgets.lang.Col
+import androidx.compose.ui.graphics.toArgb
 import dev.omalauncher.widgets.lang.Obj
 import dev.omalauncher.widgets.lang.Pins
 import dev.omalauncher.widgets.lang.Str
@@ -160,6 +162,9 @@ private val REDIRECTS = setOf(301, 302, 303, 307, 308)
  */
 private const val DRAWER_EVERY_MS = 200L
 
+/** How many recent apps `android.strip` lists, as the strip always has. */
+private const val STRIP_APPS = 20
+
 /** How many shortcuts from shortcuts(...) stay openable by key: a few menus' worth. */
 private const val MAX_OFFERED = 64
 
@@ -190,7 +195,8 @@ class WidgetServices(
     /** What's playing on the phone. */
     val media = Media(context)
     private val notifications = Notifications(context, media, ::profileKind)
-    private val volume = Volume(context)
+    /** android.volume and volume(...); volume("request") asks the activity in front for Bluetooth, for the battery. */
+    val volume = Volume(context)
     private val alarm = Alarm(context)
     private val modes = Modes(context)
     private val sim = Sim(context)
@@ -199,7 +205,7 @@ class WidgetServices(
     val airpods = AirPods(context, scope)
     private val panels = SystemPanels(context)
 
-    /** Opens launcher screens ("style" or "themes", "agents", "drawer"); set by the UI. */
+    /** Opens launcher screens ("style" or "themes", "agents", "store" or "store:apps", "drawer"); set by the UI. */
     var launcherAction: ((String) -> Unit)? = null
 
     /** What the drawer's long-press menu does, for appAction(...); set by the UI. */
@@ -248,6 +254,7 @@ class WidgetServices(
             "agents" -> agents()
             "recent" -> recent()
             "drawer" -> drawer()
+            "strip" -> strip()
             "modifiers" -> modifiers()
             else -> throw WidgetError("unknown android source $name")
         }
@@ -275,6 +282,7 @@ class WidgetServices(
             "apps" -> snapshotFlow { apps() }.flowOn(Dispatchers.Default)
             "agents" -> snapshotFlow { agents() }
             "recent" -> snapshotFlow { recent() }
+            "strip" -> snapshotFlow { strip() }
             "modifiers" -> snapshotFlow { modifiers() }
             // Linux's state is a flow of its own, not Compose state: a change of its word starts the drawer's anew.
             "drawer" -> runtime.bootstrap.state.map(::linuxWord).distinctUntilChanged().flatMapLatest { snapshotFlow { drawer() } }
@@ -354,6 +362,8 @@ class WidgetServices(
 
     override fun launcherIcon(key: String) =
         offered[key]?.let { (_, s) -> if (LauncherStyle.monochromeIcons) s.mask else s.icon } ?: appIconOf(runtime, key, LauncherStyle.monochromeIcons)
+
+    override fun launcherMask(key: String) = offered[key]?.let { (_, s) -> s.mask } ?: appIconOf(runtime, key, mono = true)
 
     /**
      * Shortcuts handed out by shortcuts(...), by the key they got ("x:3"): open(...), appAction("pin", ...) and
@@ -562,6 +572,69 @@ class WidgetServices(
             },
         )
 
+    /** One app as `android.drawer` and `android.strip` list them; see [drawer]. */
+    private fun appValue(hit: AppHit): Value {
+        val now = System.currentTimeMillis()
+        // Yours (customize) when you named it, with the app's own name still finding it.
+        val name = hit.name(runtime)
+        val renamed = runtime.customs.name(hit.key) != null
+        val score = runtime.usage.score(hit.key, now)
+        val dot = hit.hasDot
+        val spoken = if (renamed) name else hit.spoken
+        return Obj(
+            mapOf(
+                "key" to Str(hit.key),
+                "kind" to Str(hit.kind),
+                "name" to Str(name),
+                "label" to Str(if (dot) context.getString(R.string.home_app_has_notifications, spoken) else spoken),
+                "dot" to bool(dot),
+                "icon" to Str("icon:" + hit.key),
+                // Its silhouette whether or not icons are monochrome, to tint any color (owl 24).
+                "mask" to Str("mask:" + hit.key),
+                "profile" to (hit.profileKind?.let(::Str) ?: Null),
+                "alias" to ((if (renamed) hit.alias ?: hit.label else hit.alias)?.let(::Str) ?: Null),
+                "paused" to bool(hit.paused(runtime)),
+                // Whether `icon` draws anything: its silhouette, with monochrome icons. Without one, the drawer shows the initials.
+                "hasIcon" to bool(appIconOf(runtime, hit.key, LauncherStyle.monochromeIcons) != null),
+                "initials" to Str(initials(name)),
+                "actions" to Lst(hit.actionWords().map(::Str)),
+                "score" to Num(Math.round(score * 10.0) / 10.0),
+                "last" to (runtime.usage.last(hit.key)?.let { Num((it / 1000).toDouble()) } ?: Null),
+                // Phone build: what the phone's drawer lists and its menu offers beyond upstream's.
+                "work" to bool(hit.isWork),
+                "hidden" to bool(hit.key in runtime.hiddenApps),
+                "docked" to bool(hit.key in runtime.dock),
+                "letter" to Str(railLetter(name).toString()),
+                "installed" to Num((hit.installed / 1000).toDouble()),
+                "isNew" to bool(LauncherStyle.drawerNewBadge && isNew(hit.installed, score, now)),
+                "category" to (hit.category?.let(::Str) ?: Null),
+                "smart" to (hit.smart?.let(::Str) ?: Null),
+                "smartExtra" to (hit.smartExtra?.let(::Str) ?: Null),
+            ),
+        )
+    }
+
+    /**
+     * The strip above home's prompt bar for `source s = android.strip` (owl 24): `{apps, vertical, monochrome, bare,
+     * border}`. `apps` are the recent apps, last opened first, each as `android.drawer` lists its apps; like
+     * `android.recent` they reorder only once home is out of sight. `vertical` while the strip stands beside the grid in
+     * landscape; `monochrome` while icons are silhouettes; `bare` while home's apps show as icons only, without a tile
+     * (settings › style › home apps); `border` the color of the tiles' outline.
+     */
+    private fun strip(): Value {
+        // Not before every kind of app is listed: the ones missing would push in as their kind arrived.
+        val apps = if (runtime.appsListed) recentApps(runtime, STRIP_APPS) else emptyList()
+        return Obj(
+            mapOf(
+                "apps" to Lst(apps.map(::appValue)),
+                "vertical" to bool(runtime.widgets.stripVertical),
+                "monochrome" to bool(LauncherStyle.monochromeIcons),
+                "bare" to bool(LauncherStyle.bareAppIcons),
+                "border" to Col(null, LauncherStyle.tileBorder.toArgb()),
+            ),
+        )
+    }
+
     /**
      * The drawer for `source d = android.drawer`: `{apps, linux, monochrome, work, updates}`. `apps` is every app in the drawer's
      * order (owl apps, Linux apps, shortcuts, Android apps, then the work profile's shortcuts and apps), each
@@ -577,50 +650,11 @@ class WidgetServices(
     private fun drawer(): Value {
         val apps = runtime.androidApps
         val hits =
-            runtime.widgets.apps().map { AppHit.Owl(it) } + runtime.linuxApps.apps.map { AppHit.Linux(it) } +
+            // By name, as Linux and Android apps come: the files' order put a sideloaded app's shared- name among the rest.
+            runtime.widgets.apps().sortedBy { it.name.lowercase() }.map { AppHit.Owl(it) } + runtime.linuxApps.apps.map { AppHit.Linux(it) } +
                 apps.shortcuts.filter { !it.work }.map { AppHit.Shortcut(it) } + apps.apps.filter { !it.work }.map { AppHit.Android(it) } +
                 apps.shortcuts.filter { it.work }.map { AppHit.Shortcut(it) } + apps.apps.filter { it.work }.map { AppHit.Android(it) }
-        val now = System.currentTimeMillis()
-        val hidden = runtime.hiddenApps
-        val dock = runtime.dock
-        val list =
-            hits.take(Builtins.MAX_LIST).map { hit ->
-                // Yours (customize) when you named it, with the app's own name still finding it.
-                val name = hit.name(runtime)
-                val renamed = runtime.customs.name(hit.key) != null
-                val score = runtime.usage.score(hit.key, now)
-                val dot = hit.hasDot
-                val spoken = if (renamed) name else hit.spoken
-                Obj(
-                    mapOf(
-                        "key" to Str(hit.key),
-                        "kind" to Str(hit.kind),
-                        "name" to Str(name),
-                        "label" to Str(if (dot) context.getString(R.string.home_app_has_notifications, spoken) else spoken),
-                        "dot" to bool(dot),
-                        "icon" to Str("icon:" + hit.key),
-                        "profile" to (hit.profileKind?.let(::Str) ?: Null),
-                        "alias" to ((if (renamed) hit.alias ?: hit.label else hit.alias)?.let(::Str) ?: Null),
-                        "paused" to bool(hit.paused(runtime)),
-                        // Whether `icon` draws anything: its silhouette, with monochrome icons. Without one, the drawer shows the initials.
-                        "hasIcon" to bool(appIconOf(runtime, hit.key, LauncherStyle.monochromeIcons) != null),
-                        "initials" to Str(initials(name)),
-                        "actions" to Lst(hit.actionWords().map(::Str)),
-                        "score" to Num(Math.round(score * 10.0) / 10.0),
-                        "last" to (runtime.usage.last(hit.key)?.let { Num((it / 1000).toDouble()) } ?: Null),
-                        // Phone build: what the phone's drawer lists and its menu offers beyond upstream's.
-                        "work" to bool(hit.isWork),
-                        "hidden" to bool(hit.key in hidden),
-                        "docked" to bool(hit.key in dock),
-                        "letter" to Str(railLetter(name).toString()),
-                        "installed" to Num((hit.installed / 1000).toDouble()),
-                        "isNew" to bool(LauncherStyle.drawerNewBadge && isNew(hit.installed, score, now)),
-                        "category" to (hit.category?.let(::Str) ?: Null),
-                        "smart" to (hit.smart?.let(::Str) ?: Null),
-                        "smartExtra" to (hit.smartExtra?.let(::Str) ?: Null),
-                    ),
-                )
-            }
+        val list = hits.take(Builtins.MAX_LIST).map(::appValue)
         val work = if (apps.workProfiles.isEmpty()) Null else Obj(mapOf("paused" to bool(apps.workProfiles.any { apps.paused(it) })))
         // Phone build: the drawer's settings (style's drawer.*), your groups, the dock and where the bar's Enter goes.
         val style =
@@ -649,7 +683,7 @@ class WidgetServices(
                 "updates" to Num((runtime.updates.pending?.count ?: 0).toDouble()),
                 "style" to style,
                 "groups" to groups,
-                "dock" to Obj(mapOf("shown" to bool(LauncherStyle.dockShown), "full" to bool(dock.full))),
+                "dock" to Obj(mapOf("shown" to bool(LauncherStyle.dockShown), "full" to bool(runtime.dock.full))),
                 "asks" to bool(barAsksAgent(runtime, linux == LinuxState.Installed)),
                 "web" to Str(webSearchName(LauncherStyle.style[Style.WEB_SEARCH])),
                 // Phone build: Smart Launcher's own category icons while it's on the phone, as res: sources by category.
