@@ -44,6 +44,9 @@ class LauncherState {
     /** The menu from long-pressing empty home space. */
     var homeMenuOpen by mutableStateOf(false)
 
+    /** Phone build: the home menu asked to close the gaps on the page showing; home does it and sets this back. */
+    var autoSortAsked by mutableStateOf(false)
+
     /** The open drawer or a full-screen panel hides the home screen; animated widgets stop ticking under it. */
     val homeCovered: Boolean
         get() = drawer.value > 0.99f || appWidgetsOpen || shared != null || sharing != null

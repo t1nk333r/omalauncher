@@ -577,3 +577,28 @@ internal fun fitIntoRows(
     return moved
 }
 
+/**
+ * Closes the gaps between [tiles], one page's, on a grid of [cols] and [rows] (phone build: home menu › auto sort).
+ * In reading order (top to bottom, left to right) each tile takes the first free spot of its shown size, so they pack
+ * up and to the left and keep their order. Returns the cell of each tile that moved, or null when one wouldn't fit:
+ * then nothing moves, rather than a tile falling off the page.
+ */
+internal fun closeGaps(
+    tiles: List<FitTile>,
+    cols: Int,
+    rows: Int,
+): Map<String, Cell>? {
+    val taken = ArrayList<Cell>()
+    val moved = LinkedHashMap<String, Cell>()
+    val down = maxOf(rows, tiles.maxOfOrNull { it.shown.bottom } ?: 0)
+    for (t in tiles.sortedWith(compareBy({ it.shown.y }, { it.shown.x }))) {
+        val w = t.shown.w.coerceIn(1, cols)
+        val h = t.shown.h.coerceIn(1, down)
+        val spot =
+            (0..down - h).asSequence().flatMap { y -> (0..cols - w).asSequence().map { x -> Cell(x, y, w, h) } }
+                .firstOrNull { c -> taken.none { it.overlaps(c) } } ?: return null
+        taken += spot
+        if (spot != t.shown) moved[t.key] = spot
+    }
+    return moved
+}

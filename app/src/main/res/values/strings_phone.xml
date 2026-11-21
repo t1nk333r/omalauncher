@@ -217,6 +217,10 @@
     <string name="phone_settings_strip">settings</string>
     <string name="phone_settings_strip_action">open settings</string>
 
+    <!-- Home's menu: packs the page showing up and to the left, closing the gaps between its tiles. -->
+    <string name="phone_home_menu_auto_sort">auto sort</string>
+    <string name="phone_home_auto_sort_no_room">these tiles don\'t pack without one falling off the page, so nothing moved</string>
+
     <!-- Home's menu: Linux apps' windows already open. -->
     <string name="phone_home_menu_windows">running windows</string>
     <string name="phone_home_menu_windows_hint">Return to an existing window, not a new app launch.</string>

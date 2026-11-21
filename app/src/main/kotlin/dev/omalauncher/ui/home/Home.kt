@@ -702,6 +702,8 @@ fun HomeScreen(
                 showPage = page
             },
             onRelocate = engine::moveToPage,
+            autoSortAsked = state.autoSortAsked,
+            onAutoSorted = { state.autoSortAsked = false },
             // An app carried down onto the dock moves into it: off home, into the slot it's dropped on.
             dockHeight = if (side == null && LauncherStyle.dockShown) stripHeight else 0.dp,
             dockSlotFor = { app, slot -> dockKeyOf(app.key)?.let { landingSlot(runtime.dock.keys, it, slot) }?.takeIf { LauncherStyle.dockShown } },

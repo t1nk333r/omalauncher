@@ -120,6 +120,11 @@ fun HomeMenu(
             state.homeMenuOpen = false
             state.show(SettingsPage.Store)
         }
+        // Phone build: packs the page showing up and to the left, its tiles in the order they're in.
+        MenuItem(stringResource(R.string.phone_home_menu_auto_sort)) {
+            state.homeMenuOpen = false
+            state.autoSortAsked = true
+        }
         MenuItem("android widget") {
             state.homeMenuOpen = false
             state.appWidgetsOpen = true

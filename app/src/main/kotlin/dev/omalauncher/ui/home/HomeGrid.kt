@@ -27,6 +27,7 @@ import dev.omalauncher.widgets.reorderCells
 import dev.omalauncher.widgets.Cell
 import dev.omalauncher.widgets.FitTile
 import dev.omalauncher.widgets.fitIntoRows
+import dev.omalauncher.widgets.closeGaps
 import dev.omalauncher.widgets.isFacePage
 import dev.omalauncher.widgets.Folder
 import dev.omalauncher.widgets.Shortcut
@@ -67,6 +68,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -411,6 +413,9 @@ internal fun HomeGrid(
     /** Where the strip and the bar stand beside the grid; null for below it. */
     side: HomeSide? = null,
     per: Int = 1,
+    /** Phone build: close the gaps on the page(s) showing (home menu › auto sort), then [onAutoSorted]. */
+    autoSortAsked: Boolean = false,
+    onAutoSorted: () -> Unit = {},
 ) {
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -503,6 +508,22 @@ internal fun HomeGrid(
                 if (per == 1) grid else Grid(constraints.maxWidth, height, gap, pad, cols, turned, if (turned) layout.portraitRows(windowSize) else null, grid.rows)
             }
         if (!turned) SideEffect { layout.setPortraitRows(windowSize, grid.rows) }
+        // Phone build: auto sort packs each tile page the pager shows, in reading order; a face's page has nothing to sort.
+        val context = LocalContext.current
+        LaunchedEffect(autoSortAsked) {
+            if (!autoSortAsked) return@LaunchedEffect
+            for (page in slots.getOrElse(pager.currentPage) { listOf(1) }) {
+                if (full(page)) continue
+                val tiles = itemsOn(page).mapNotNull { item -> if (item.isFace) null else layout.cell(item.key)?.let { FitTile(item.key, page, it, item.resizable) } }
+                val moved = closeGaps(tiles, cols, grid.rows)
+                if (moved == null) {
+                    android.widget.Toast.makeText(context, R.string.phone_home_auto_sort_no_room, android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    layout.setAll(moved)
+                }
+            }
+            onAutoSorted()
+        }
         // Previews draw tiles at the size they have here.
         SideEffect {
             layout.geometry = Triple(grid.cellW, grid.cellH, gap)
