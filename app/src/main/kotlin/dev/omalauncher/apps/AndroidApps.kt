@@ -286,7 +286,7 @@ class AndroidAppCatalog(
 
                 override fun onPackageRemoved(packageName: String, user: UserHandle) = reload(evict = packageName)
 
-                // Updates can change the icon, so drop the cached one.
+                // Updates can change the icon, so draw it again.
                 override fun onPackageChanged(packageName: String, user: UserHandle) = reload(evict = packageName)
 
                 override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload()
@@ -537,9 +537,11 @@ class AndroidAppCatalog(
         loading =
             scope.launch {
                 if (evict != null) {
-                    // In every profile: an update in one doesn't say which, and reloading an icon is cheap.
-                    icons.keys.removeAll { it.startsWith("$evict/") }
-                    masks.keys.removeAll { it.startsWith("$evict/") }
+                    // In every profile: an update in one doesn't say which, and reloading an icon is cheap. Marked stale
+                    // rather than dropped, so the old icon shows until the new one swaps in: apps using WorkManager
+                    // toggle a component as they go to the background, and the change arrived as their initials
+                    // flashing on home just after leaving them. A removed app still loses its icon below.
+                    drawnIn.keys.removeAll { it.startsWith("$evict/") }
                 }
                 // The icon pack itself updated or removed is a package change too.
                 if (withContext(Dispatchers.IO) { iconPacks.changedOnDisk() }) iconGeneration++
